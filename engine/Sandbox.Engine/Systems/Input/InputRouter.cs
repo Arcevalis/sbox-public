@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using Sandbox.Internal;
 using Sandbox.UI;
 
@@ -105,6 +105,8 @@ internal static partial class InputRouter
 		bool mouseCaptureMode = activeMouse is not null && activeMouse.MouseState == InputContext.InputState.Game;
 		mouseCaptureMode = mouseCaptureMode || (activeMouse?.MouseCapture ?? false);
 
+		mouseCaptureMode = AllowMouseCapture( mouseCaptureMode );
+
 		MouseCursorVisible = !mouseCaptureMode && (activeMouse is not null && activeMouse.MouseState == InputContext.InputState.UI);
 		if ( !WindowInput.HasMouseFocus() ) MouseCursorVisible = true;
 
@@ -152,6 +154,75 @@ internal static partial class InputRouter
 		{
 			context.TargetUISystem?.Tooltips.SetHovered( context == activeMouse ? activeMouse.MouseFocusPanel as Panel : null, MouseCursorPosition );
 		}
+	}
+
+	/// <summary>
+	/// How long a mouse capture may deliver nothing at all before we assume it is broken and let go.
+	/// A working capture produces motion almost immediately, so this only ever fires on a capture
+	/// that has taken the cursor and gone silent.
+	/// </summary>
+	const float CaptureWatchdogSeconds = 2.0f;
+
+	static bool captureWatchdogArmed;
+	static bool captureWatchdogSatisfied;
+	static bool captureWatchdogTripped;
+	static int captureWatchdogEventCount;
+	static RealTimeSince timeSinceCaptureBegan;
+
+	/// <summary>
+	/// Guards against mouse capture locking the user out of the editor.
+	/// <para>
+	/// On Linux the editor's input reaches the engine only by way of the Qt→SDL bridge. When the
+	/// game takes the mouse, SDL grabs and confines the pointer, which takes pointer events away
+	/// from Qt - and if nothing is coming back the other way, there is no route left to generate
+	/// the Escape that would release it. The cursor is stuck inside the viewport, the Stop button
+	/// cannot be clicked, and the only way out is to kill the editor.
+	/// </para>
+	/// <para>
+	/// So: if a capture delivers no input at all for <see cref="CaptureWatchdogSeconds"/>, refuse
+	/// it for the rest of this capture request. The game keeps running and the editor stays usable.
+	/// </para>
+	/// </summary>
+	static bool AllowMouseCapture( bool wantsCapture )
+	{
+		if ( !OperatingSystem.IsLinux() ) return wantsCapture;
+
+		// The request dropped - forget everything, so a later capture gets a fresh chance.
+		if ( !wantsCapture )
+		{
+			captureWatchdogArmed = false;
+			captureWatchdogSatisfied = false;
+			captureWatchdogTripped = false;
+			return false;
+		}
+
+		if ( captureWatchdogTripped ) return false;
+		if ( captureWatchdogSatisfied ) return true;
+
+		if ( !captureWatchdogArmed )
+		{
+			captureWatchdogArmed = true;
+			captureWatchdogEventCount = DeliveredEventCount;
+			timeSinceCaptureBegan = 0;
+			return true;
+		}
+
+		// Something arrived, so the capture is delivering. Stop watching it.
+		if ( DeliveredEventCount != captureWatchdogEventCount )
+		{
+			captureWatchdogSatisfied = true;
+			return true;
+		}
+
+		if ( timeSinceCaptureBegan < CaptureWatchdogSeconds )
+			return true;
+
+		captureWatchdogTripped = true;
+
+		Log.Warning( $"Mouse capture delivered no input for {CaptureWatchdogSeconds}s - releasing the cursor so the editor stays usable. " +
+			"The game is still running; F5 stops it, F8 ejects to the editor camera." );
+
+		return false;
 	}
 
 	static void SetCursorPosition( Vector2 pos )
