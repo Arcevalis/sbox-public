@@ -386,7 +386,65 @@ namespace Editor
 		public bool TransparentForMouseEvents
 		{
 			get => HasFlag( Flag.WA_TransparentForMouseEvents );
-			set => SetFlag( Flag.WA_TransparentForMouseEvents, value );
+			set
+			{
+				SetFlag( Flag.WA_TransparentForMouseEvents, value );
+				RefreshInputRegion();
+			}
+		}
+
+		bool _inputRegionShaped;
+
+		/// <summary>
+		/// Re-apply this window's X11 input region. Only does anything for a click-through top
+		/// level window on Linux: Qt implements <see cref="TransparentForMouseEvents"/> by walking
+		/// up to the parent widget, and a top level has no parent to walk to, so the server keeps
+		/// handing it clicks that Qt then drops. The region we install here is the union of the
+		/// visible children - everything else passes through to whatever is underneath.
+		///
+		/// Call this after adding, moving, resizing, showing or hiding a child of a click-through
+		/// window. Cheap and idempotent, so calling it from a frame hook is fine; that also covers
+		/// Qt destroying and recreating the native handle when the window is reparented.
+		/// </summary>
+		public void RefreshInputRegion()
+		{
+			if ( !OperatingSystem.IsLinux() ) return;
+			if ( !_widget.isWindow() ) return;
+
+			var transparent = HasFlag( Flag.WA_TransparentForMouseEvents );
+
+			// Nothing to undo, and asking for winId() would force Qt to create the native window
+			// earlier than it otherwise would. Leave untouched windows completely alone.
+			if ( !transparent && !_inputRegionShaped ) return;
+
+			var handle = _widget.winId();
+			if ( handle == IntPtr.Zero ) return;
+
+			if ( !transparent )
+			{
+				X11InputRegion.Reset( handle, Size * DpiScale );
+				_inputRegionShaped = false;
+				return;
+			}
+
+			_inputRegionShaped = true;
+
+			var scale = DpiScale;
+			var rects = new List<Rect>();
+
+			foreach ( var child in Children )
+			{
+				if ( !child.IsValid() ) continue;
+				if ( !child.Visible ) continue;
+				if ( child.TransparentForMouseEvents ) continue;
+
+				var rect = new Rect( child.Position * scale, child.Size * scale );
+				if ( rect.Width <= 0 || rect.Height <= 0 ) continue;
+
+				rects.Add( rect );
+			}
+
+			X11InputRegion.Set( handle, rects.ToArray() );
 		}
 
 		public bool ShowWithoutActivating
