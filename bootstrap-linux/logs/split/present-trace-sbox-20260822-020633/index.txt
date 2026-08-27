@@ -1,0 +1,8 @@
+source     /home/joshua/Documents/GitHub/master/sbox-public/bootstrap-linux/logs/present-trace-sbox-20260822-020633.log
+hits       36 (20 with backtraces, 16 past the dump cap)
+signatures 2
+offsets    UNRESOLVED (no module_base lines - re-run with the current present-trace.py)
+
+16 further hit(s) past the dump cap, no backtrace: 02:13:41 -> 02:13:56
+group-01-55a4042b2c.log       19 occurrence(s)  02:07:46 -> 02:13:40  [VKRenderThread, sbox]
+group-02-483a0b2790.log        1 occurrence(s)  02:07:54 -> 02:07:54  [SDLAudioP15, VKRenderThread, sbox]
