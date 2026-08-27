@@ -50,11 +50,24 @@ public class SceneOverlayWidget : Widget
 			return;
 
 		// this wasn't always being triggered properly when relying on widget events from the parent (causing HUGE jank)
+		// The children are in the hash too: we're a click-through top level window, so on X11 our
+		// input region has to be kept as the union of whatever children still want clicks.
 		int geometryHash = HashCode.Combine( Parent.ScreenPosition, Parent.Size );
+
+		foreach ( var child in Children )
+		{
+			if ( !child.IsValid() || !child.Visible ) continue;
+			geometryHash = HashCode.Combine( geometryHash, child.Position, child.Size );
+		}
+
 		if ( lastGeometryHash != geometryHash )
 		{
 			Position = Parent.ScreenPosition;
 			Size = Parent.Size;
+
+			// Also covers Qt destroying and recreating our native handle when a viewport is docked
+			// or undocked - the fresh window comes back with a full, blocking input region.
+			RefreshInputRegion();
 		}
 
 		lastGeometryHash = geometryHash;
