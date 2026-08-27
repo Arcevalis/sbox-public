@@ -8,8 +8,16 @@ internal static partial class InputRouter
 {
 	static RealTimeSince timeSinceWindowActive;
 
-	internal static void OnMouseButton( ButtonCode button, bool down )
+	/// <summary>
+	/// Bumped by every real input event that reaches us. Frame() uses it to tell a mouse capture
+	/// that is delivering from one that has taken the cursor and gone silent.
+	/// </summary>
+	internal static int DeliveredEventCount { get; private set; }
+
+	internal static void OnMouseButton( ButtonCode button, bool down, int ikeymods )
 	{
+		DeliveredEventCount++;
+
 		SetButtonState( button, down );
 
 		var modifiers = GetCurrentModifiers();
@@ -76,6 +84,8 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static void OnMouseMotion( float dx, float dy )
 	{
+		DeliveredEventCount++;
+
 		var delta = new Vector2( dx, dy );
 
 		MouseCursorDelta += delta;
@@ -95,6 +105,8 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static void OnMousePositionChange( float x, float y, float dx, float dy )
 	{
+		DeliveredEventCount++;
+
 		MouseCursorPosition = new Vector2( x, y );
 
 		if ( WindowInput.GetRelativeMouseMode() )
@@ -264,6 +276,8 @@ internal static partial class InputRouter
 
 	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat )
 	{
+		DeliveredEventCount++;
+
 		if ( !repeat )
 		{
 			SetButtonState( scanButtonCode, down );
