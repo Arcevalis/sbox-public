@@ -1,4 +1,4 @@
-namespace Sandbox.Engine;
+﻿namespace Sandbox.Engine;
 
 /// <summary>
 /// Diagnostics for the input path, gated on the <c>SBOX_INPUT_DEBUG</c> environment variable.
