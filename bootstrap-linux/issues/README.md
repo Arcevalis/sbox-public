@@ -28,7 +28,7 @@ Four independent issues, written to be pasted into GitHub as-is. All from repo c
 
 | Tool | Purpose |
 | --- | --- |
-| `run-sbox-gdb.sh` | Launches `game/sbox` under gdb with .NET-safe signal handling |
+| `launch/run-sbox-gdb.sh` | Launches `game/sbox` under gdb with .NET-safe signal handling |
 | `bootstrap-linux/gdb/present-trace.py` | Breaks on tier0 `Warning`, filters by message, dumps all threads, auto-continues |
 | `bootstrap-linux/gdb/split-trace.py` | Groups occurrences by stack signature into one file per distinct stall |
 
