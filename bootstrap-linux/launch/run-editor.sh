@@ -18,8 +18,10 @@
 #                            force everything onto that copy instead)
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GAME_DIR="$SCRIPT_DIR/game"
+# This lives in bootstrap-linux/launch/, so the repo root is two levels up.
+LAUNCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$LAUNCH_DIR/../.." && pwd)"
+GAME_DIR="$ROOT/game"
 NATIVE_DIR="$GAME_DIR/bin/linuxsteamrt64"
 
 EXE_NAME="${SBOX_EXE:-sbox-dev}"

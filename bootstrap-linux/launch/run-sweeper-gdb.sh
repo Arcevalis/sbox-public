@@ -31,11 +31,11 @@
 # exactly run-sbox-gdb.sh's; see the header there.
 #
 # Usage:
-#   ./run-sweeper-gdb.sh                          editor on game/samples/sweeper
-#   ./run-sweeper-gdb.sh /path/to/.sbproj         some other project (dir works too)
-#   ./run-sweeper-gdb.sh --mode server            headless dedicated server on sweeper
-#   ./run-sweeper-gdb.sh -- -someflag             pass extra args to the exe
-#   ./run-sweeper-gdb.sh --dry-run                print the setup and launch nothing
+#   bootstrap-linux/launch/run-sweeper-gdb.sh                          editor on game/samples/sweeper
+#   bootstrap-linux/launch/run-sweeper-gdb.sh /path/to/.sbproj         some other project (dir works too)
+#   bootstrap-linux/launch/run-sweeper-gdb.sh --mode server            headless dedicated server on sweeper
+#   bootstrap-linux/launch/run-sweeper-gdb.sh -- -someflag             pass extra args to the exe
+#   bootstrap-linux/launch/run-sweeper-gdb.sh --dry-run                print the setup and launch nothing
 #
 # Env overrides:
 #   SBOX_MODE=server            same as --mode
@@ -45,7 +45,9 @@
 #                               inferior, same as any other var you export first
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This lives in bootstrap-linux/launch/, so the repo root is two levels up.
+LAUNCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$LAUNCH_DIR/../.." && pwd)"
 GAME_DIR="$ROOT/game"
 GDB_DIR="$ROOT/bootstrap-linux/gdb"
 LOG_DIR="$ROOT/bootstrap-linux/logs"
@@ -130,7 +132,7 @@ done
 
 # Take LD_PRELOAD / LD_LIBRARY_PATH from run-editor.sh rather than duplicating the
 # HarfBuzz reasoning here - it prints exactly the env it would have exec'd with.
-ENV_DUMP="$( SBOX_EXE="$EXE_NAME" "$ROOT/run-editor.sh" --print-env )"
+ENV_DUMP="$( SBOX_EXE="$EXE_NAME" "$LAUNCH_DIR/run-editor.sh" --print-env )"
 export LD_PRELOAD="$( sed -n 's/^LD_PRELOAD=//p' <<<"$ENV_DUMP" )"
 export LD_LIBRARY_PATH="$( sed -n 's/^LD_LIBRARY_PATH=//p' <<<"$ENV_DUMP" )"
 EXE="$( sed -n 's/^exec //p' <<<"$ENV_DUMP" )"
