@@ -427,7 +427,8 @@ confined** to the viewport, and could be panned off it, so a 360° turn was impo
 `run-editor-debug.sh` has always grepped for. Everything logs **on change only**, or rate-limited to
 1 Hz; §5 is the standing warning about logging from `Frame()`.
 
-One sweeper session, `./run-editor-debug.sh` (no SDL spy), trimmed to the transitions:
+One sweeper session, `bootstrap-linux/launch/run-editor-debug.sh` (no SDL spy), trimmed to the
+transitions:
 
 ```
 42.03  [gamemode]  SetPlayWidget winId=92274730 size=1179,736 focused=True
@@ -611,13 +612,15 @@ Stack overflow.
 - `game/addons/` compiles at runtime as a **separate assembly** and can only see `public` API
   from `Sandbox.Tools`. Referencing an `internal` type there fails the whole addon compile with
   "inaccessible due to its protection level".
-- `run-editor.sh` `cd`s to `game/` first, so a relative `-project` path resolves against `game/`.
+- `launch/run-editor.sh` `cd`s to `game/` first, so a relative `-project` path resolves against
+  `game/`.
 - `sbox-dev` without `-project` re-execs `sbox-launcher` as a separate process
   (`engine/Launcher/SboxDev/Launcher.cs:23-36`) — the editor you end up looking at is not the one
   you launched, and no environment variable reaches it.
 - `SBOX_INPUT_DEBUG` **works now** — `InputDebug` emits `[routerdbg]` from `InputRouter` and
   `[gamemode]` from the play handover, into `game/logs/sbox-dev.log`. (`[inputdbg]`, the scene
-  viewport tag, is still unclaimed.) `./run-editor-debug.sh` no longer preloads `libsdlspy.so` —
+  viewport tag, is still unclaimed.) `launch/run-editor-debug.sh` no longer preloads `libsdlspy.so`
+  —
   the spy is opt-in behind `SPY=1`, because it interposes `SDL_PushEvent` and
   `SDL_SetWindowRelativeMouseMode`, which is the render-path hazard warned about below. Reach for
   `SPY=1` only for what managed code cannot see: whether the bridge is emitting at all, the actual
