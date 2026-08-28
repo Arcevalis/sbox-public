@@ -194,6 +194,18 @@ internal static class ManagedTools
 		}
 		else
 		{
+			// While the play widget holds keyboard focus the running game owns the keyboard, so an
+			// editor shortcut must not claim the key. On Linux this is the difference between the
+			// game seeing the key and losing it outright: the Qt bridge is the game's only source
+			// of input there (INPUT-ARCHITECTURE.md 5.2), whereas on Windows SDL gets its own copy
+			// through the window procedure and swallowing here is merely a double-dispatch.
+			if ( OperatingSystem.IsLinux() && GameMode.GameHasKeyboardFocus && !IsEditorReservedKey( key ) )
+			{
+				// Still track the release, or a key held into play mode stays latched down
+				if ( !press ) EditorShortcuts.Release( ev.Name.ToUpperInvariant() );
+				return false;
+			}
+
 			if ( press )
 			{
 				var modifiers = ev.KeyboardModifiers;
@@ -227,6 +239,17 @@ internal static class ManagedTools
 		}
 
 		return false;
+	}
+
+	/// <summary>
+	/// Keys the editor keeps even while the running game holds keyboard focus, because they are how
+	/// you get back out. F1-F12 are what the engine itself hands to the tools ahead of any input
+	/// context (<c>InputRouter.Input.cs</c>), and cover F5 stop-play and F8 eject; Escape releases
+	/// mouse capture. Everything else belongs to the game while it has focus.
+	/// </summary>
+	static bool IsEditorReservedKey( KeyCode key )
+	{
+		return key == KeyCode.Escape || (key >= KeyCode.F1 && key <= KeyCode.F12);
 	}
 
 	internal static bool GlobalShortcutPressed()

@@ -9,8 +9,9 @@ every measurement has a runnable command in the [appendix](#appendix--reproducin
 
 Companion documents: [`bootstrap-linux/linux-input.md`](bootstrap-linux/linux-input.md) — the
 known editor-input defects on Linux, with their measurements.
-For a live dependency and symbol-version report on the shipped natives, run
-[`./check-linux-deps.sh`](check-linux-deps.sh) rather than trusting any checked-in symbol list.
+For a live dependency check on the shipped natives, run [`./bootstrap.sh`](bootstrap.sh) — it
+reports every binary as OK or FAIL before building — rather than trusting any checked-in symbol
+list.
 
 ---
 
@@ -628,18 +629,25 @@ for both platforms.
 - **§5 `SetRelativeMouseMode` re-asserted every frame — fixed.** Measured live at ~150 calls/s.
   Debounced to fire only on change. This mattered more than it looked: SDL's grab path retries for
   five seconds and then latches `broken_pointer_grab` for the life of the process.
-- **§7 game view receives nothing — open.** The bridge stops pushing the instant play mode starts,
-  and because the engine sets `SDL_VIDEO_X11_EXTERNAL_WINDOW_INPUT = 0` (§5.2) SDL has no
-  independent source to fall back on. Root cause narrowed, fix not yet found.
+- **§7 game view — partially working, root cause identified.** When the game takes the mouse, SDL
+  grabs and confines the pointer; an active X11 grab redirects pointer events to the grabbing
+  client, so **Qt goes blind and the bridge is starved** — and because the engine sets
+  `SDL_VIDEO_X11_EXTERNAL_WINDOW_INPUT = 0` (§5.2), SDL never selected input on that window either,
+  so nothing picks the events up. A watchdog in `InputRouter.AllowMouseCapture()` now refuses a
+  capture that delivers nothing for 2 s, which stops play mode trapping the editor; input then
+  arrives intermittently as capture engages and is released. That is a safety net, not a fix.
 
 §2–§4 (look discarded on `HasMouseFocus()`, the `QCursor::pos()`-read vs `SetNativeCursorPos`-write
 mismatch, the wrap-returns-`true` delta zeroing) remain confirmed in source but not re-measured.
 Note §2's premise leaned on the event-mask claim corrected in §5.2 and should be re-derived before
 it is trusted.
 
-**`SBOX_INPUT_DEBUG` is currently a no-op.** `run-editor-debug.sh` exports it and greps for
-`[inputdbg]` / `[routerdbg]` / `[gamemode]`, but no `.cs` file in the tree reads the variable or
-emits those tags — that script yields `libsdlspy.so` counters and nothing else.
+**`SBOX_INPUT_DEBUG` is implemented.** `engine/Sandbox.Engine/Systems/Input/InputDebug.cs` reads the
+variable and emits `[routerdbg]` (capture state, watchdog, `HasMouseFocus`, SDL relative mode, event
+delivery rate) and `[gamemode]` (the play handover, focus changes, Qt mouse-move rate) into
+`game/logs/sbox-dev.log`. `[inputdbg]`, the scene-viewport tag `run-editor-debug.sh` also greps for,
+is still unclaimed. Everything logs on change or at 1 Hz — an unconditional log from
+`InputRouter.Frame()` is the mistake `linux-input.md` §5 records.
 
 ---
 
@@ -698,8 +706,9 @@ sed -n '329,333p' engine/Sandbox.Engine/Systems/UI/UISystem.cs
 sed -n '22,45p'   engine/Sandbox.Tools/GameMode.cs
 sed -n '99,105p'  engine/Definitions/tools/QtMisc/QApp.def
 
-# Nothing reads SBOX_INPUT_DEBUG
-grep -rn 'SBOX_INPUT_DEBUG' --include='*.cs' engine game        # no output
+# What reads SBOX_INPUT_DEBUG, and what emits the tags
+grep -rn 'SBOX_INPUT_DEBUG' --include='*.cs' engine game
+grep -rn 'InputDebug\.' --include='*.cs' engine
 ```
 
 Against the local upstream checkouts (`~/Documents/GitHub/SDL`, `~/Documents/GitHub/qt`):
