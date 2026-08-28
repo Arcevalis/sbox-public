@@ -30,6 +30,13 @@ enum PipelineTextureSlot
     PipelineTextureSlotAO = 0,
     PipelineTextureSlotSSR = 1
 };
+
+// A bindless index that varies across a wave - e.g instanced data
+struct NonUniform
+{
+    int index;
+};
+
 struct Bindless
 {
 
@@ -43,9 +50,11 @@ struct Bindless
     static inline Texture2DArray GetTexture2DArray( int nIndex ) { return g_bindless_Texture2DArray[ NonUniformResourceIndex(nIndex) ]; }
     static inline TextureCubeArray GetTextureCubeArray( int nIndex ) { return g_bindless_TextureCubeArray[ NonUniformResourceIndex(nIndex) ]; }
 
-    // Samplers don't need NonUniformResourceIndex - they're wave-uniform and NUI on samplers crashes AMD RDNA 1/2 drivers
-    static inline SamplerState GetSampler( int nIndex ) { return g_bindless_Sampler[ nIndex ]; }
-    static inline SamplerComparisonState GetSamplerComparison( int nIndex ) { return g_bindless_SamplerComparison[ nIndex ]; }
+    // Samplers can't take NonUniformResourceIndex unconditionally - it crashes AMD RDNA 1/2 drivers
+    static inline SamplerState GetSampler( dynamic_uniform int nIndex ) { return g_bindless_Sampler[ nIndex ]; }
+    static inline SamplerComparisonState GetSamplerComparison( dynamic_uniform int nIndex ) { return g_bindless_SamplerComparison[ nIndex ]; }
+    static inline SamplerState GetSampler( NonUniform nIndex ) { return g_bindless_Sampler[ NonUniformResourceIndex(nIndex.index) ]; }
+    static inline SamplerComparisonState GetSamplerComparison( NonUniform nIndex ) { return g_bindless_SamplerComparison[ NonUniformResourceIndex(nIndex.index) ]; }
 #else
     // Non-Fragment doesn't have the same need for NonUniformResourceIndex and we can't even use it in some cases (e.g. compute shader UAVs) so just do a direct index.
     static inline Texture2D GetTexture2D( int nIndex, bool srgb = false ){ return g_bindless_Texture2D[nIndex + (srgb ? 1 : 0)]; }
@@ -55,8 +64,10 @@ struct Bindless
     static inline Texture2DArray GetTexture2DArray( int nIndex ) { return g_bindless_Texture2DArray[ nIndex ]; }
     static inline TextureCubeArray GetTextureCubeArray( int nIndex ) { return g_bindless_TextureCubeArray[ nIndex ]; }
 
-    static inline SamplerState GetSampler( int nIndex ) { return g_bindless_Sampler[ nIndex ]; }
-    static inline SamplerComparisonState GetSamplerComparison( int nIndex ) { return g_bindless_SamplerComparison[ nIndex ]; }
+    static inline SamplerState GetSampler( dynamic_uniform int nIndex ) { return g_bindless_Sampler[ nIndex ]; }
+    static inline SamplerComparisonState GetSamplerComparison( dynamic_uniform int nIndex ) { return g_bindless_SamplerComparison[ nIndex ]; }
+    static inline SamplerState GetSampler( NonUniform nIndex ) { return g_bindless_Sampler[ nIndex.index ]; }
+    static inline SamplerComparisonState GetSamplerComparison( NonUniform nIndex ) { return g_bindless_SamplerComparison[ nIndex.index ]; }
 #endif
 
     static inline int GetPipelineTextureIndex( PipelineTextureSlot slot ) { return g_PipelineTextureIndices[slot]; }

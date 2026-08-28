@@ -63,6 +63,7 @@ CS
 		float3 Velocity;
 		float4 BlendSheetUV;
 		float2 Offset;
+		uint CameraFade;
 	};
 	StructuredBuffer<SpriteData> SpriteBuffer < Attribute( "Sprites" ); >;
 	RWStructuredBuffer<SpriteData> SpriteBufferOut < Attribute( "SpriteBufferOut" ); >;

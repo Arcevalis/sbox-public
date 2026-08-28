@@ -54,6 +54,7 @@ COMMON
 		float3 Velocity;
 		float4 BlendSheetUV;
 		float2 Offset;
+		uint CameraFade;
 	};
 
 	StructuredBuffer<SpriteData> Sprites < Attribute( "Sprites" ); >;
@@ -384,6 +385,16 @@ PS
 			float dist = distance( pos, spriteWorldPos );
 			float feather = clamp(dist / sprite.DepthFeather, 0.0, 1.0 );
 			col.a *= feather;
+		}
+
+		float cameraFadeNear = f16tof32( sprite.CameraFade & 0xFFFF );
+		float cameraFadeFar = f16tof32( sprite.CameraFade >> 16 );
+		if ( cameraFadeFar > cameraFadeNear )
+		{
+			float3 spriteWorldPos = i.vPositionWithOffsetWs.xyz + g_vHighPrecisionLightingOffsetWs.xyz;
+
+			float dist = distance( spriteWorldPos, g_vCameraPositionWs.xyz );
+			col.a *= clamp( ( dist - cameraFadeNear ) / ( cameraFadeFar - cameraFadeNear ), 0.0, 1.0 );
 		}
 
 		if(hasLighting)

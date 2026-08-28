@@ -31,6 +31,8 @@ internal interface IBatchedParticleSpriteRenderer : ISpriteRenderGroup
 	bool Lighting { get; }
 	Vector2 Pivot { get; }
 	float DepthFeather { get; }
+	float CameraFadeNear { get; }
+	float CameraFadeFar { get; }
 	float FogStrength { get; }
 	FilterMode TextureFilter { get; }
 
@@ -84,6 +86,7 @@ internal interface IBatchedParticleSpriteRenderer : ISpriteRenderGroup
 
 		var packedFogAndAlpha = SpriteData.PackFogAndAlphaCutout( this.FogStrength, 0.001f );
 		var depthFeather = DepthFeather;
+		var packedCameraFade = SpriteData.PackCameraFade( CameraFadeNear, CameraFadeFar );
 		var blurOpacity = BlurOpacity;
 		var origin = Pivot;
 		var renderFlags = SpriteFlags.None;
@@ -171,6 +174,7 @@ internal interface IBatchedParticleSpriteRenderer : ISpriteRenderGroup
 				spritePtr->FogStrengthCutout = packedFogAndAlpha;
 				spritePtr->Lighting = packedExponent;
 				spritePtr->DepthFeather = depthFeather;
+				spritePtr->CameraFade = packedCameraFade;
 				spritePtr->SamplerIndex = samplerIndex;
 				spritePtr->Splots = splots;
 				spritePtr->RotationOffset = rotationOffsetValue;

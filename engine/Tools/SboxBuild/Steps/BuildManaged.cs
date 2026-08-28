@@ -188,7 +188,7 @@ internal class BuildManaged( bool clean = false )
 	/// /usr/bin pointing at the real root, and it is the root we want.</summary>
 	private static string FindDotnetOnPath()
 	{
-		foreach ( var dir in ( Environment.GetEnvironmentVariable( "PATH" ) ?? "" )
+		foreach ( var dir in (Environment.GetEnvironmentVariable( "PATH" ) ?? "")
 			.Split( Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries ) )
 		{
 			var candidate = Path.Combine( dir, "dotnet" );

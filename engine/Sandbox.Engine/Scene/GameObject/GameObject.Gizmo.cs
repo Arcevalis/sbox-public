@@ -182,7 +182,7 @@ public partial class GameObject
 
 				Components.ForEach( "DrawGizmos", false, c =>
 				{
-					if ( c.OverridesDrawGizmos && !c.Flags.Contains( ComponentFlags.Hidden ) )
+					if ( c.OverridesDrawGizmos && !c.Flags.Contains( ComponentFlags.Hidden ) && Gizmo.Settings.IsGizmoEnabled( c.GetType() ) )
 					{
 						using var scope = Gizmo.Scope();
 						c.DrawGizmosInternal();

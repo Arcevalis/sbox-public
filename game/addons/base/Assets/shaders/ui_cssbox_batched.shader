@@ -272,7 +272,7 @@ PS
 			return 0.0;
 
 		Texture2D maskTex = Bindless::GetTexture2D( inst.TextMaskIndex );
-		return saturate( maskTex.Sample( Bindless::GetSampler( inst.TextMaskSamplerIndex ), uv ).a );
+		return saturate( maskTex.Sample( Bindless::GetSampler( NonUniform( inst.TextMaskSamplerIndex ) ), uv ).a );
 	}
 
 	// Which side's colour a border pixel takes. CSS splits each corner along the line from the box corner
@@ -298,7 +298,7 @@ PS
 		return lerp( c1, c2, t );
 	}
 
-	float4 AddImageBorder( float2 texCoord, float2 boxSize, float4 borderWidth, int borderImageIndex, int borderImageSamplerIndex, int borderImageMode, int borderImageFill, float4 borderImageSlice )
+	float4 AddImageBorder( float2 texCoord, float2 boxSize, float4 borderWidth, int borderImageIndex, NonUniform borderImageSamplerIndex, int borderImageMode, int borderImageFill, float4 borderImageSlice )
 	{
 		float4 BorderImageWidth = borderWidth;
 		Texture2D borderTex = Bindless::GetTexture2D( borderImageIndex );
@@ -651,7 +651,7 @@ PS
 				vUV = RotateTexCoord( vUV, inst.BackgroundAngle );
 
 				Texture2D tex = Bindless::GetTexture2D( inst.TextureIndex );
-				vImage = tex.Sample( Bindless::GetSampler( inst.SamplerIndex ), vUV );
+				vImage = tex.Sample( Bindless::GetSampler( NonUniform( inst.SamplerIndex ) ), vUV );
 			}
 			else
 			{
@@ -707,7 +707,7 @@ PS
 			biTint.rgb = UIDecodeColor( biTint.rgb );
 			biTint.a = saturate( biTint.a );
 			float4 vBoxBorder = AddImageBorder( i.vTexCoord.xy, boxSize, borderWidth, inst.BorderImageIndex,
-				inst.BorderImageSamplerIndex, inst.BorderImageMode, inst.BorderImageFill, inst.BorderImageSlice ) * biTint;
+				NonUniform( inst.BorderImageSamplerIndex ), inst.BorderImageMode, inst.BorderImageFill, inst.BorderImageSlice ) * biTint;
 			col = AlphaBlend( vBoxBorder, col );
 			flMask = max( flMask, saturate( vBoxBorder.a ) );
 		}
