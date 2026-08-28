@@ -39,8 +39,14 @@ patches/              C shims and probes, built on demand
   probe.c             dumps the X11 window tree with each window's ShapeInput region
   drive.c             XTest input driver + X11 pointer-grab state reporter
 
+launch/               the run-*.sh entry points; everything is launched through these
+  run-editor.sh       the base - HarfBuzz preload, LD_LIBRARY_PATH, cd into game/
+  run-editor-debug.sh run-editor.sh plus SBOX_INPUT_DEBUG, and SPY=1 for the SDL shim
+  run-sbox-gdb.sh     game/sbox under gdb, .NET-safe signals
+  run-sweeper-gdb.sh  same, pointed at a project instead of the launcher menu
+
 gdb/                  gdb drivers for native traces
-  present-trace.gdb   signal disposition + driver, sourced by ../run-sbox-gdb.sh
+  present-trace.gdb   signal disposition + driver, sourced by launch/run-sbox-gdb.sh
   present-trace.py    auto-backtrace on the Vulkan present stall
 
 issues/               issue drafts, written to be pasted into GitHub as-is
@@ -55,7 +61,7 @@ the shipped natives, run `../bootstrap.sh`: it reports every binary in `game/bin
 as OK or FAIL, lists what is missing, and prompts before building. That measures the current
 binaries rather than repeating a checked-in symbol list that goes stale. `--skip-deps` skips it.
 
-`libsdlspy.so` is built by `SPY=1 ../run-editor-debug.sh`; the others are one-liners:
+`libsdlspy.so` is built by `SPY=1 launch/run-editor-debug.sh`; the others are one-liners:
 
 ```bash
 gcc -D_GNU_SOURCE -O1 -o probe probe.c -lXext -lX11
@@ -78,8 +84,9 @@ int SDL_PushEvent( void *e )
 }
 ```
 
-Load it ahead of the engine with `LD_PRELOAD`. `run-editor-debug.sh` does this while preserving
-the HarfBuzz preload that `run-editor.sh` needs — order matters, HarfBuzz stays first.
+Load it ahead of the engine with `LD_PRELOAD`. `launch/run-editor-debug.sh` does this while
+preserving the HarfBuzz preload that `launch/run-editor.sh` needs — order matters, HarfBuzz stays
+first.
 
 Symbol versioning is not an obstacle: SDL exports `SDL_PushEvent@@SDL3_0.0.0`, and an
 unversioned definition in a preloaded object still interposes it.
@@ -132,9 +139,9 @@ stopped, so triggers belong there.
 ## Running the editor with diagnostics
 
 ```bash
-./run-editor-debug.sh                    # sweeper sample, managed diagnostics
-./run-editor-debug.sh --dry-run          # print the setup, launch nothing
-SPY=1 ./run-editor-debug.sh              # also preload the SDL spy - see below
+bootstrap-linux/launch/run-editor-debug.sh              # sweeper, managed diagnostics
+bootstrap-linux/launch/run-editor-debug.sh --dry-run    # print the setup, launch nothing
+SPY=1 bootstrap-linux/launch/run-editor-debug.sh        # also preload the SDL spy - see below
 ```
 
 `SBOX_INPUT_DEBUG=1` is always set, giving `[routerdbg]` and `[gamemode]` lines in

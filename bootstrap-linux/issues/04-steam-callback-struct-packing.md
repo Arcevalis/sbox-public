@@ -5,7 +5,7 @@
 | | |
 | --- | --- |
 | Repo commit | `70647f994acb16cf780654dcfe3b5fee738a9f15` |
-| Binary | `game/sbox` (game client), under `run-sbox-gdb.sh` |
+| Binary | `game/sbox` (game client), under `launch/run-sbox-gdb.sh` |
 | .NET | 10.0.111 |
 | Run | 2026-08-23 22:36:39 → 22:38:20 |
 | Engine log | `game/logs/sbox-2026-08-23.2.log` |

@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The public source distribution of **s&box** — Facepunch's game engine: Valve's Source 2 native
 core with a .NET 10 managed layer and a Qt-based editor. Upstream targets Windows; this checkout
-also carries **Linux port work** (see *Linux* below), which is why `bootstrap.sh`, `run-*.sh`,
-and `bootstrap-linux/` exist alongside the upstream `Bootstrap.bat`.
+also carries **Linux port work** (see *Linux* below), which is why `bootstrap.sh` and
+`bootstrap-linux/` (shims, gdb helpers, and the `launch/` scripts) exist alongside the upstream
+`Bootstrap.bat`.
 
 **The native C++ source is not in this repo.** There is no `src/`. `game/bin/win64/` and
 `game/bin/linuxsteamrt64/` hold prebuilt, stripped binaries; the build detects a public
@@ -160,9 +161,9 @@ analysis are fine, patches are not.
 - **`sbox-dev` with no `-project` re-execs `sbox-launcher` as a separate process** and returns.
   The editor you end up looking at is then not the one you launched and receives none of your
   environment. Always pass `-project <.sbproj>` when debugging.
-- `bootstrap-linux/launch/run-editor-debug.sh` adds `SBOX_INPUT_DEBUG=1` (and `SPY=1` opts into the `libsdlspy.so` SDL
-  shim); `bootstrap-linux/launch/run-sbox-gdb.sh` / `bootstrap-linux/launch/run-sweeper-gdb.sh` run under gdb with .NET-safe signal handling
-  and auto-backtrace on the Vulkan present stall.
+- Also in `bootstrap-linux/launch/`: `run-editor-debug.sh` adds `SBOX_INPUT_DEBUG=1` (and `SPY=1`
+  opts into the `libsdlspy.so` SDL shim); `run-sbox-gdb.sh` / `run-sweeper-gdb.sh` run under gdb
+  with .NET-safe signal handling and auto-backtrace on the Vulkan present stall.
 - **`bootstrap.sh` checks the native dependencies first.** It reports each binary in
   `game/bin/linuxsteamrt64/` as OK or FAIL, lists any missing shared libraries and unsatisfiable
   symbol versions, then prompts `y/N` before building. `-y` skips the prompt, `--skip-deps` skips
