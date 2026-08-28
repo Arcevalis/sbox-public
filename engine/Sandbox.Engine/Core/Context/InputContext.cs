@@ -38,6 +38,7 @@ internal sealed class InputContext
 	/// This fixes problems where you hold a key, open a UI, and the held key generates text input
 	/// </summary>
 	List<ButtonCode> _blockingTextInput = [];
+	RealTimeSince _blockingTextInputSince;
 
 	public Action<Vector2> OnGameMouseWheel { get; set; }
 
@@ -105,8 +106,17 @@ internal sealed class InputContext
 		// so we just block text input until it's released
 		if ( _blockingTextInput.Any() )
 		{
-			//Log.Info( $"In_Text blocked [{text}] {string.Join( ",", _blockingTextInput )}" );
-			return;
+			if ( OperatingSystem.IsLinux()
+				&& ((KeyboardFocusPanel as Panel)?.AcceptsImeInput == true || TargetUISystem?.CurrentFocus?.AcceptsImeInput == true)
+				&& _blockingTextInputSince > 0.5f )
+			{
+				Log.Warning( $"IN_Text latch recovered — clearing stuck block [{string.Join( ",", _blockingTextInput )}] for '{input}'" );
+				_blockingTextInput.Clear();
+			}
+			else
+			{
+				return;
+			}
 		}
 
 		foreach ( var c in text )
@@ -131,6 +141,7 @@ internal sealed class InputContext
 	{
 		_blockingTextInput.Clear();
 		_blockingTextInput.AddRange( _pressed.Where( x => !IsMouseButton( x ) ) );
+		_blockingTextInputSince = 0;
 
 		// Log.Info( $"BLOCKING TEXT UNTIL UP {string.Join( ",", _blockingTextInput )}" );
 	}
@@ -256,7 +267,10 @@ internal sealed class InputContext
 
 		if ( pressed && KeyboardState == InputState.UI )
 		{
-			TargetUISystem.InputEventQueue.AddButtonTyped( keyButtonCode, modifiers );
+			if ( repeat || !_pressed.Contains( scanButtonCode ) )
+			{
+				TargetUISystem.InputEventQueue.AddButtonTyped( keyButtonCode, modifiers );
+			}
 		}
 
 		// We reserve some buttons that we handle ourselves, like function keys and ESCAPE.
@@ -399,6 +413,12 @@ internal sealed class InputContext
 		if ( KeyboardFocusPanel != keyboardFocus || KeyboardState != keyboardState )
 		{
 			BlockTextInputUntilButtonsReleased();
+
+			if ( OperatingSystem.IsLinux() && (keyboardFocus as Panel)?.AcceptsImeInput == true )
+			{
+				_blockingTextInput.Clear();
+			}
+
 			KeyboardFocusPanel = keyboardFocus;
 			KeyboardState = keyboardState;
 		}
