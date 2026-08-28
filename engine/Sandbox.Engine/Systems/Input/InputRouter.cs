@@ -304,11 +304,20 @@ internal static partial class InputRouter
 	/// </summary>
 	const float CaptureWatchdogSeconds = 2.0f;
 
+	/// <summary>
+	/// How long a tripped watchdog stays tripped before letting capture try again. Long enough that
+	/// a genuinely broken capture is not retried in a tight loop, short enough to recover.
+	/// </summary>
+	const float CaptureRetrySeconds = 10.0f;
+
 	static bool captureWatchdogArmed;
 	static bool captureWatchdogSatisfied;
 	static bool captureWatchdogTripped;
 	static int captureWatchdogEventCount;
 	static RealTimeSince timeSinceCaptureBegan;
+
+	static int lastReportedEventCount;
+	static RealTimeSince timeSinceDeliveryReport;
 
 	/// <summary>
 	/// Guards against mouse capture locking the user out of the editor.
@@ -337,7 +346,18 @@ internal static partial class InputRouter
 			return false;
 		}
 
-		if ( captureWatchdogTripped ) return false;
+		// A trip used to latch for as long as the request stood, and in game view the request never
+		// drops - UISystem holds mouseState=Game for the whole session - so one trip disabled capture
+		// permanently (measured: tripped at +2s, still tripped 18s later). Re-arm periodically so a
+		// capture that becomes viable can engage again.
+		if ( captureWatchdogTripped )
+		{
+			if ( timeSinceCaptureBegan < CaptureRetrySeconds ) return false;
+
+			captureWatchdogArmed = false;
+			captureWatchdogTripped = false;
+		}
+
 		if ( captureWatchdogSatisfied ) return true;
 
 		if ( !captureWatchdogArmed )
@@ -379,6 +399,9 @@ internal static partial class InputRouter
 		if ( relativeMouseMode == state ) return;
 
 		relativeMouseMode = state;
+
+		InputDebug.Event( "routerdbg", $"SetRelativeMouseMode( {state} ) -> SDL grab" );
+
 		NativeEngine.InputSystem.SetRelativeMouseMode( state );
 	}
 
