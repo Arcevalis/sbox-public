@@ -313,6 +313,11 @@ internal static partial class InputRouter
 	internal static void OnText( uint key )
 	{
 		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState == InputContext.InputState.UI );
+		if ( keyboard is null )
+		{
+			keyboard = Contexts.FirstOrDefault( x => (x.KeyboardFocusPanel as Sandbox.UI.Panel)?.AcceptsImeInput == true );
+		}
+
 		if ( keyboard is not null )
 		{
 			keyboard.IN_Text( (char)key );
