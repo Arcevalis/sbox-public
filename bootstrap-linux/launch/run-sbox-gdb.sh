@@ -19,9 +19,9 @@
 # every occurrence.
 #
 # Usage:
-#   ./run-sbox-gdb.sh                    launch game/sbox
-#   ./run-sbox-gdb.sh -somearg           pass args through to sbox
-#   ./run-sbox-gdb.sh --dry-run          print the setup and exit
+#   bootstrap-linux/launch/run-sbox-gdb.sh                    launch game/sbox
+#   bootstrap-linux/launch/run-sbox-gdb.sh -somearg           pass args through to sbox
+#   bootstrap-linux/launch/run-sbox-gdb.sh --dry-run          print the setup and exit
 #
 # Env overrides (see bootstrap-linux/gdb/present-trace.py for the full set):
 #   SBOX_EXE=sbox-dev        trace the editor instead of the client
@@ -33,7 +33,9 @@
 #   SBOX_GDB_STOP_SEGV=1     halt on SIGSEGV/SIGBUS instead of passing them through
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# This lives in bootstrap-linux/launch/, so the repo root is two levels up.
+LAUNCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$LAUNCH_DIR/../.." && pwd)"
 GAME_DIR="$ROOT/game"
 GDB_DIR="$ROOT/bootstrap-linux/gdb"
 LOG_DIR="$ROOT/bootstrap-linux/logs"
@@ -58,7 +60,7 @@ done
 
 # Take LD_PRELOAD / LD_LIBRARY_PATH from run-editor.sh rather than duplicating the
 # HarfBuzz reasoning here - it prints exactly the env it would have exec'd with.
-ENV_DUMP="$( SBOX_EXE="$EXE_NAME" "$ROOT/run-editor.sh" --print-env )"
+ENV_DUMP="$( SBOX_EXE="$EXE_NAME" "$LAUNCH_DIR/run-editor.sh" --print-env )"
 export LD_PRELOAD="$( sed -n 's/^LD_PRELOAD=//p' <<<"$ENV_DUMP" )"
 export LD_LIBRARY_PATH="$( sed -n 's/^LD_LIBRARY_PATH=//p' <<<"$ENV_DUMP" )"
 EXE="$( sed -n 's/^exec //p' <<<"$ENV_DUMP" )"

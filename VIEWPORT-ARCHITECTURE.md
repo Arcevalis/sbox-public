@@ -581,11 +581,12 @@ The label next to it reports the actual backbuffer size, `Renderer.Size * Render
   (`SceneViewWidget.Game.cs:23`). There is no selection of which pane plays.
 - **On Linux, the game view depends on the Qt→SDL bridge; the scene view does not.** Scene view
   needs only that Qt delivers events and that `QCursor::pos()` and `SetNativeCursorPos` agree —
-  that half now works (`linux-input.md` §1, fixed). Game view additionally needs the bridge to keep
-  forwarding once play starts, and it does not: it goes silent at the play transition, and because
-  the engine sets `SDL_VIDEO_X11_EXTERNAL_WINDOW_INPUT = 0` for every window it wraps, SDL has no
-  independent source to fall back on (`linux-input.md` §7, open). The cursor-warp defects
-  (`linux-input.md` §3, §4) remain, in the scene-view half.
+  that half now works (`linux-input.md` §1, fixed). Game view additionally needs input to survive
+  the play handover, and it only partly does: `SetPlayWidget` leads to SDL grabbing and confining
+  the pointer, which takes pointer events away from Qt and starves the bridge, while SDL itself
+  never selected input on that window (`SDL_VIDEO_X11_EXTERNAL_WINDOW_INPUT = 0`). A capture
+  watchdog keeps the editor usable, so input arrives intermittently (`linux-input.md` §7). The
+  cursor-warp defects (`linux-input.md` §3, §4) remain, in the scene-view half.
 - **`Renderer.IsUnderMouse` and `IsActiveWindow` are the hover contract.** The deliberate move
   away from `Application.HoveredWidget` (`SceneViewportWidget.cs:164-167`) means fractional-DPI
   hover bugs surface as a pane that will not take the camera, not as missing events.
