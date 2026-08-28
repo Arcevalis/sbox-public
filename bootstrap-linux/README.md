@@ -50,11 +50,12 @@ linux-input.md        known editor-input defects on Linux, with their measuremen
 ```
 
 The architecture these sit under — the three executables, the Qt→SDL bridge, why it is
-Linux-only — is [`../INPUT-ARCHITECTURE.md`](../INPUT-ARCHITECTURE.md). For a dependency and
-symbol-version report on the shipped natives, run `../check-linux-deps.sh`, which measures the
-current binaries rather than repeating a checked-in symbol list that goes stale.
+Linux-only — is [`../INPUT-ARCHITECTURE.md`](../INPUT-ARCHITECTURE.md). For a dependency check on
+the shipped natives, run `../bootstrap.sh`: it reports every binary in `game/bin/linuxsteamrt64`
+as OK or FAIL, lists what is missing, and prompts before building. That measures the current
+binaries rather than repeating a checked-in symbol list that goes stale. `--skip-deps` skips it.
 
-`libsdlspy.so` is built automatically by `../run-editor-debug.sh`; the others are one-liners:
+`libsdlspy.so` is built by `SPY=1 ../run-editor-debug.sh`; the others are one-liners:
 
 ```bash
 gcc -D_GNU_SOURCE -O1 -o probe probe.c -lXext -lX11
@@ -131,10 +132,18 @@ stopped, so triggers belong there.
 ## Running the editor with diagnostics
 
 ```bash
-./run-editor-debug.sh                    # sweeper sample, diagnostics + SDL spy
+./run-editor-debug.sh                    # sweeper sample, managed diagnostics
 ./run-editor-debug.sh --dry-run          # print the setup, launch nothing
-NO_SPY=1 ./run-editor-debug.sh           # managed diagnostics only
+SPY=1 ./run-editor-debug.sh              # also preload the SDL spy - see below
 ```
+
+`SBOX_INPUT_DEBUG=1` is always set, giving `[routerdbg]` and `[gamemode]` lines in
+`game/logs/sbox-dev.log`. The `libsdlspy.so` preload is **opt-in**: it interposes
+`SDL_PushEvent` and `SDL_SetWindowRelativeMouseMode`, and interposing on the render path has
+produced a Vulkan present failure and a fatal Wayland disconnect (`linux-input.md` gotchas). Use it
+only for what managed code structurally cannot see — whether the Qt→SDL bridge is emitting at all,
+the actual `SDL_SetWindowMouseGrab`, and which SDL window id events are stamped with — and re-verify
+any finding against a no-spy run.
 
 It always launches via `-project`, because `sbox-dev` without one re-execs `sbox-launcher` as a
 **separate process** and returns — the editor you end up looking at is not the one you launched,
