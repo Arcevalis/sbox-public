@@ -645,7 +645,7 @@ it is trusted.
 **`SBOX_INPUT_DEBUG` is implemented.** `engine/Sandbox.Engine/Systems/Input/InputDebug.cs` reads the
 variable and emits `[routerdbg]` (capture state, watchdog, `HasMouseFocus`, SDL relative mode, event
 delivery rate) and `[gamemode]` (the play handover, focus changes, Qt mouse-move rate) into
-`game/logs/sbox-dev.log`. `[inputdbg]`, the scene-viewport tag `run-editor-debug.sh` also greps for,
+`game/logs/sbox-dev.log`. `[inputdbg]`, the scene-viewport tag `launch/run-editor-debug.sh` also greps for,
 is still unclaimed. Everything logs on change or at 1 Hz — an unconditional log from
 `InputRouter.Frame()` is the mistake `linux-input.md` §5 records.
 
