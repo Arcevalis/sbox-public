@@ -3,7 +3,7 @@ namespace Sandbox.Engine;
 /// <summary>
 /// Diagnostics for the input path, gated on the <c>SBOX_INPUT_DEBUG</c> environment variable.
 /// <para>
-/// <c>run-editor-debug.sh</c> has always exported that variable and grepped the log for the
+/// <c>bootstrap-linux/launch/run-editor-debug.sh</c> exports that variable and greps the log for the
 /// <c>[routerdbg]</c> / <c>[gamemode]</c> / <c>[inputdbg]</c> tags, but until now nothing emitted
 /// them. This is the missing half.
 /// </para>
