@@ -185,8 +185,55 @@ public ref struct KeyEvent
 
 	string GetKeyName()
 	{
-		// Check if the key is a native key that isn't supported by KeyCode
-		switch ( NativeKeyCode )
+		// Check if the key is a native key that isn't supported by KeyCode. NativeKeyCode is
+		// whatever the platform plugin put in QKeyEvent::nativeVirtualKey() - a Win32 virtual-key
+		// code on Windows, an X11 keysym under xcb. The two overlap in the ASCII range without
+		// agreeing: an unmodified 'a' is VK_A (0x41) on Windows but XK_a (0x61) on X11, and 0x61
+		// is VK_NUMPAD1, so each platform needs its own table.
+		var nativeName = OperatingSystem.IsWindows() ? NameFromVirtualKey( NativeKeyCode ) : NameFromKeysym( NativeKeyCode );
+		if ( nativeName is not null )
+			return nativeName;
+
+		// If it's a Keycode, then remap a few keys to their more common names
+		switch ( Key )
+		{
+			case KeyCode.Delete: return "Del";
+			case KeyCode.Escape: return "Esc";
+			case KeyCode.Insert: return "Ins";
+			case KeyCode.Control: return "Ctrl";
+			case KeyCode.BracketLeft: return "[";
+			case KeyCode.BracketRight: return "]";
+			case KeyCode.Equal: return "=";
+			case KeyCode.Minus: return "-";
+			case KeyCode.Comma: return ",";
+			case KeyCode.Period: return ".";
+			case KeyCode.Semicolon: return ";";
+			case KeyCode.Apostrophe: return "'";
+			case KeyCode.Backslash: return "\\";
+			case KeyCode.AsciiTilde: return "`";
+			case KeyCode.Slash: return "/";
+			case KeyCode.Enter: return "Enter";
+		}
+
+		// Otherwise, just return the name of the Enum
+		var keyName = Enum.GetName( typeof( KeyCode ), Key );
+
+		// If keyName is null then we likely have a non-english keyboard layout
+		if ( keyName is null )
+		{
+			// Try to get the key name from the text
+			keyName = Text;
+		}
+
+		return keyName;
+	}
+
+	/// <summary>
+	/// Win32 virtual-key code to a key name, or <see langword="null"/> if it isn't one we name here.
+	/// </summary>
+	static string NameFromVirtualKey( uint virtualKey )
+	{
+		switch ( virtualKey )
 		{
 			case 0x0D: return "Enter"; // Enter
 			case 0x20: return "Space"; // Spacebar
@@ -252,38 +299,62 @@ public ref struct KeyEvent
 			case 0xDE: return "'"; // Apostrophe
 		}
 
-		// If it's a Keycode, then remap a few keys to their more common names
-		switch ( Key )
+		return null;
+	}
+
+	/// <summary>
+	/// X11 keysym to the same names <see cref="NameFromVirtualKey"/> produces, or
+	/// <see langword="null"/> if it isn't one we name here. Printable ASCII keysyms are the ASCII
+	/// code itself, so a letter arrives lowercase unless shift is held and is named by its
+	/// uppercase letter either way; the keypad lives up at 0xFF80-0xFFB9.
+	/// </summary>
+	static string NameFromKeysym( uint keysym )
+	{
+		switch ( keysym )
 		{
-			case KeyCode.Delete: return "Del";
-			case KeyCode.Escape: return "Esc";
-			case KeyCode.Insert: return "Ins";
-			case KeyCode.Control: return "Ctrl";
-			case KeyCode.BracketLeft: return "[";
-			case KeyCode.BracketRight: return "]";
-			case KeyCode.Equal: return "=";
-			case KeyCode.Minus: return "-";
-			case KeyCode.Comma: return ",";
-			case KeyCode.Period: return ".";
-			case KeyCode.Semicolon: return ";";
-			case KeyCode.Apostrophe: return "'";
-			case KeyCode.Backslash: return "\\";
-			case KeyCode.AsciiTilde: return "`";
-			case KeyCode.Slash: return "/";
-			case KeyCode.Enter: return "Enter";
+			case >= 0x61 and <= 0x7A: return ((char)(keysym - 0x20)).ToString(); // XK_a - XK_z
+			case >= 0x41 and <= 0x5A: return ((char)keysym).ToString(); // XK_A - XK_Z
+			case >= 0x30 and <= 0x39: return ((char)keysym).ToString(); // XK_0 - XK_9
+
+			case 0x20: return "Space"; // XK_space
+			case 0x27: return "'"; // XK_apostrophe
+			case 0x2C: return ","; // XK_comma
+			case 0x2D: return "-"; // XK_minus
+			case 0x2E: return "."; // XK_period
+			case 0x2F: return "/"; // XK_slash
+			case 0x3B: return ";"; // XK_semicolon
+			case 0x3D: return "="; // XK_equal
+			case 0x5B: return "["; // XK_bracketleft
+			case 0x5C: return "\\"; // XK_backslash
+			case 0x5D: return "]"; // XK_bracketright
+			case 0x60: return "`"; // XK_grave
+
+			case 0xFF0D: return "Enter"; // XK_Return
+			case 0xFF8D: return "Enter"; // XK_KP_Enter
+
+			// Keypad with num lock on
+			case >= 0xFFB0 and <= 0xFFB9: return $"KP_{keysym - 0xFFB0}"; // XK_KP_0 - XK_KP_9
+			case 0xFFAA: return "KP_Multiply"; // XK_KP_Multiply
+			case 0xFFAB: return "KP_Add"; // XK_KP_Add
+			case 0xFFAD: return "KP_Minus"; // XK_KP_Subtract
+			case 0xFFAE: return "KP_Del"; // XK_KP_Decimal
+			case 0xFFAF: return "KP_Divide"; // XK_KP_Divide
+
+			// Keypad with num lock off, where the keysym is the key's secondary function
+			case 0xFF9E: return "KP_0"; // XK_KP_Insert
+			case 0xFF9C: return "KP_1"; // XK_KP_End
+			case 0xFF99: return "KP_2"; // XK_KP_Down
+			case 0xFF9B: return "KP_3"; // XK_KP_Next
+			case 0xFF96: return "KP_4"; // XK_KP_Left
+			case 0xFF9D: return "KP_5"; // XK_KP_Begin
+			case 0xFF98: return "KP_6"; // XK_KP_Right
+			case 0xFF95: return "KP_7"; // XK_KP_Home
+			case 0xFF97: return "KP_8"; // XK_KP_Up
+			case 0xFF9A: return "KP_9"; // XK_KP_Prior
+			case 0xFF9F: return "KP_Del"; // XK_KP_Delete
 		}
 
-		// Otherwise, just return the name of the Enum
-		var keyName = Enum.GetName( typeof( KeyCode ), Key );
-
-		// If keyName is null then we likely have a non-english keyboard layout
-		if ( keyName is null )
-		{
-			// Try to get the key name from the text
-			keyName = Text;
-		}
-
-		return keyName;
+		return null;
 	}
 }
 
