@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The public source distribution of **s&box** — Facepunch's game engine: Valve's Source 2 native
 core with a .NET 10 managed layer and a Qt-based editor. Upstream targets Windows; this checkout
 also carries **Linux port work** (see *Linux* below), which is why `bootstrap.sh`, `run-*.sh`,
-`check-linux-deps.sh` and `bootstrap-linux/` exist alongside the upstream `Bootstrap.bat`.
+and `bootstrap-linux/` exist alongside the upstream `Bootstrap.bat`.
 
 **The native C++ source is not in this repo.** There is no `src/`. `game/bin/win64/` and
 `game/bin/linuxsteamrt64/` hold prebuilt, stripped binaries; the build detects a public
@@ -152,17 +152,22 @@ SDL/src/dynapi/SDL_dynapi.sym                what is actually exported — check
 outright that AI must not be used to generate code for contributions to that project; reading and
 analysis are fine, patches are not.
 
-- **Launch through the scripts, not the binary.** `./run-editor.sh` `LD_PRELOAD`s the engine's
-  `libHarfBuzzSharp.so` — without it the system HarfBuzz pulled in by Qt/fontconfig collides on
-  the same unversioned `hb_*` symbols and glibc aborts with `free(): invalid pointer`. It also
-  sets `LD_LIBRARY_PATH` and `cd`s into `game/` (content paths are relative to the cwd).
+- **Launch through the scripts, not the binary.** They live in `bootstrap-linux/launch/`.
+  `run-editor.sh` `LD_PRELOAD`s the engine's `libHarfBuzzSharp.so` — without it the system
+  HarfBuzz pulled in by Qt/fontconfig collides on the same unversioned `hb_*` symbols and glibc
+  aborts with `free(): invalid pointer`. It also sets `LD_LIBRARY_PATH` and `cd`s into `game/`
+  (content paths are relative to the cwd).
 - **`sbox-dev` with no `-project` re-execs `sbox-launcher` as a separate process** and returns.
   The editor you end up looking at is then not the one you launched and receives none of your
   environment. Always pass `-project <.sbproj>` when debugging.
-- `./run-editor-debug.sh` adds `SBOX_INPUT_DEBUG=1` and the `libsdlspy.so` SDL shim;
-  `./run-sbox-gdb.sh` / `./run-sweeper-gdb.sh` run under gdb with .NET-safe signal handling and
-  auto-backtrace on the Vulkan present stall; `./check-linux-deps.sh` reports missing shared
-  libraries and symbol-version problems in `game/bin/linuxsteamrt64/`.
+- `bootstrap-linux/launch/run-editor-debug.sh` adds `SBOX_INPUT_DEBUG=1` (and `SPY=1` opts into the `libsdlspy.so` SDL
+  shim); `bootstrap-linux/launch/run-sbox-gdb.sh` / `bootstrap-linux/launch/run-sweeper-gdb.sh` run under gdb with .NET-safe signal handling
+  and auto-backtrace on the Vulkan present stall.
+- **`bootstrap.sh` checks the native dependencies first.** It reports each binary in
+  `game/bin/linuxsteamrt64/` as OK or FAIL, lists any missing shared libraries and unsatisfiable
+  symbol versions, then prompts `y/N` before building. `-y` skips the prompt, `--skip-deps` skips
+  the check. The check degrades gracefully on a fresh clone, where those binaries have not been
+  downloaded yet.
 - **Qt5, not Qt6.** `game/bin/linuxsteamrt64/` ships Qt 5.15 and the managed Qt enums were
   authored against it (`Editor.FileDialog.Option` is correct under Qt5, wrong under Qt6).
 - **`CDirWatcher` is not implemented on Linux** — the editor does not hot-reload addon source.
