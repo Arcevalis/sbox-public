@@ -135,6 +135,9 @@ public partial class EnumControl : BaseControl
 			dd.Options.Add( new Option( o.Title, o.Icon, o.ObjectValue ) );
 		}
 
+		// Show what the property is already set to, the same as the button group does
+		dd.Value = Property.GetValue<object>();
+
 		dd.ValueChanged = ( val ) => Property.SetValue( val );
 	}
 

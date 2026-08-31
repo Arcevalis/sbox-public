@@ -67,6 +67,10 @@ internal sealed class MenuDll : IMenuDll
 
 			FileSystem.Mounted.CreateAndMount( EngineFileSystem.Root, "/core/" );
 			FileSystem.Mounted.CreateAndMount( EngineFileSystem.Root, "/thirdpartylegalnotices/" );
+
+			// The editor's UI assets - stylesheets and the like - are visible while editing
+			if ( Application.IsEditor )
+				FileSystem.Mounted.CreateAndMount( EngineFileSystem.Root, "/addons/editor/assets/" );
 		}
 
 		//

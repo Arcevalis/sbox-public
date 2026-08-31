@@ -34,7 +34,8 @@ namespace Sandbox.UI
 
 				> .splitter
 				{
-					flex-grow: 1;
+					flex-grow: 0;
+					flex-shrink: 0;
 					width: 8px;
 					cursor: ew-resize;
 
@@ -173,7 +174,7 @@ namespace Sandbox.UI
 		{
 			if ( IsDragging )
 			{
-				var local = ScreenPositionToPanelDelta( Mouse.Position );
+				var local = ScreenPositionToPanelDelta( ScreenMousePosition );
 				UpdateSplitFraction( Vertical ? local.y : local.x );
 			}
 

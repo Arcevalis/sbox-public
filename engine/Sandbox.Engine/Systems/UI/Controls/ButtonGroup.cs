@@ -60,7 +60,7 @@ public class ButtonGroup : Panel
 
 	public ButtonGroup()
 	{
-
+		AddClass( "buttongroup" );
 	}
 
 

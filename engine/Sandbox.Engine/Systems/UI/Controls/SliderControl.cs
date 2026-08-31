@@ -372,7 +372,7 @@ public class SliderControl : BaseControl
 
 		if ( !HasActive || e.MouseButton == MouseButtons.Middle ) return;
 
-		Value = ScreenPosToValue( Mouse.Position );
+		Value = ScreenPosToValue( ScreenMousePosition );
 		OnValueChanged?.Invoke( Value );
 		e.StopPropagation();
 	}
@@ -384,7 +384,7 @@ public class SliderControl : BaseControl
 	{
 		base.OnMouseDown( e );
 
-		Value = ScreenPosToValue( Mouse.Position );
+		Value = ScreenPosToValue( ScreenMousePosition );
 		OnValueChanged?.Invoke( Value );
 		e.StopPropagation();
 

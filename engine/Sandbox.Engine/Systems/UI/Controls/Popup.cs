@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Sandbox.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -298,9 +298,12 @@ public partial class Popup : BasePopup
 
 	public override void OnLayout( ref Rect layoutRect )
 	{
+		var size = ScreenSurfaceSize;
+		if ( size.x < 1 || size.y < 1 ) return;
+
 		var padding = 10;
-		var h = Screen.Height - padding;
-		var w = Screen.Width - padding;
+		var h = size.y - padding;
+		var w = size.x - padding;
 
 		if ( layoutRect.Bottom > h )
 		{
@@ -319,11 +322,12 @@ public partial class Popup : BasePopup
 	{
 		var rect = PopupSource.Box.Rect * PopupSource.ScaleFromScreen;
 
-		var w = Screen.Width * PopupSource.ScaleFromScreen;
-		var h = Screen.Height * PopupSource.ScaleFromScreen;
+		var surface = ScreenSurfaceSize;
+		var w = surface.x * PopupSource.ScaleFromScreen;
+		var h = surface.y * PopupSource.ScaleFromScreen;
 
-
-		Style.MaxHeight = Screen.Height - 50;
+		if ( surface.y > 100 )
+			Style.MaxHeight = surface.y - 50;
 
 		switch ( Position )
 		{
@@ -414,8 +418,8 @@ public partial class Popup : BasePopup
 				{
 					if ( isInitial )
 					{
-						Style.Left = Mouse.Position.x * PopupSource.ScaleFromScreen;
-						Style.Top = (Mouse.Position.y + PopupSourceOffset) * PopupSource.ScaleFromScreen;
+						Style.Left = ScreenMousePosition.x * PopupSource.ScaleFromScreen;
+						Style.Top = (ScreenMousePosition.y + PopupSourceOffset) * PopupSource.ScaleFromScreen;
 					}
 					break;
 				}

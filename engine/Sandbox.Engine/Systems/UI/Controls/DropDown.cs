@@ -23,13 +23,18 @@ namespace Sandbox.UI
 				gap: 2px;
 				flex-grow: 1;
 				cursor: pointer;
-				justify-content: flex-end;
+
+				// Reads like a text box - icon then text from the left, chevron on the right
+				flex-direction: row;
+				justify-content: flex-start;
 				align-items: center;
 				padding: 0px 12px;
 
 				.button-right-column
 				{
 					flex-grow: 1;
+					flex-direction: row;
+					align-items: center;
 				}
 			}
 

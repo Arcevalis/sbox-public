@@ -58,6 +58,10 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 			{
 				FileSystem.Mounted.CreateAndMount( EngineFileSystem.Root, "/addons/citizen/Assets/" );
 			}
+
+			// The editor's UI assets - stylesheets and the like - are visible while editing
+			if ( Application.IsEditor )
+				FileSystem.Mounted.CreateAndMount( EngineFileSystem.Root, "/addons/editor/assets/" );
 		}
 
 		PackageLoader?.Dispose();

@@ -10,55 +10,49 @@ namespace Sandbox.UI;
 [CustomEditor( typeof( bool ) )]
 public class SwitchControl : BaseControl
 {
+	// A track with a knob that slides across it, and the label beside it. Colours come from
+	// the stylesheet - these are the neutral defaults for when nothing themes it.
 	const string Styles = """
 
 		.switchcontrol
 		{
 		    flex-direction: row;
-		    width: 100px;
-		    min-height: 24px;
 		    align-items: center;
+		    flex-shrink: 0;
 		    cursor: pointer;
 
 		    .switch-frame
 		    {
-		        flex-grow: 0;
-		        flex-shrink: 1;
-		        width: 48px;
-		        height: 16px;
-		        background-color: #fff1;
-		        margin: 0px 5px;
+		        flex-shrink: 0;
+		        width: 32px;
+		        height: 18px;
+		        padding: 2px;
+		        flex-direction: row;
 		        align-items: center;
-		        border-radius: 100px;
-		        transition: all 0.4s linear;
+		        border-radius: 9px;
+		        background-color: #ffffff20;
+		        transition: background-color 0.15s ease-out;
 
 		        .switch-inner
 		        {
-		            position: relative;
-		            flex-grow: 0;
-		            flex-shrink: 1;
-		            background-color: #999;
-		            width: 25px;
-		            height: 25px;
-		            border-radius: 100px;
-		            left: 20%;
-		            transform: translateX( -50% );
-		            transition: all 0.3s ease-out;
+		            width: 14px;
+		            height: 14px;
+		            border-radius: 7px;
+		            background-color: #8a8f98;
+		            transition: margin-left 0.15s ease-out, background-color 0.15s ease-out;
 		        }
+		    }
+
+		    .switch-label
+		    {
+		        margin-left: 9px;
+		        font-size: 12px;
 		    }
 
 		    &.active
 		    {
-		        .switch-frame
-		        {
-		            background-color: #fffa;
-		        }
-
-		        .switch-inner
-		        {
-		            left: 80%;
-		            background-color: #fff;
-		        }
+		        .switch-frame { background-color: #3273eb; }
+		        .switch-inner { margin-left: 14px; background-color: #ffffff; }
 		    }
 		}
 		""";

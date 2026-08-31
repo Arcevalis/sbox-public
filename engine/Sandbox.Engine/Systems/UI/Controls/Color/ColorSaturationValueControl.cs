@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Sandbox.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -118,6 +118,9 @@ public partial class ColorSaturationValueControl : BaseControl
 		base.OnMouseDown( e );
 
 		UpdateFromPosition( e.LocalPosition );
+
+		// This press belongs to us - without this a scrolling parent drags the page around
+		e.StopPropagation();
 	}
 
 	protected override void OnMouseMove( MousePanelEvent e )
@@ -128,6 +131,8 @@ public partial class ColorSaturationValueControl : BaseControl
 			return;
 
 		UpdateFromPosition( e.LocalPosition );
+
+		e.StopPropagation();
 	}
 
 	private void UpdateFromPosition( Vector2 localPosition )

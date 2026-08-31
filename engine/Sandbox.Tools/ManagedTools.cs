@@ -131,6 +131,9 @@ internal static class ManagedTools
 	{
 		stylesWatcher?.Dispose();
 
+		// Panel UI windows and their swap chains, before the render device goes away
+		PanelWindow.DisposeAll();
+
 		AssetSystem.Shutdown();
 	}
 
