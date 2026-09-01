@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using Sandbox.Internal;
 using Sandbox.UI;
 
@@ -97,7 +97,7 @@ internal sealed class InputContext
 		TrapCallback = null;
 	}
 
-	internal void IN_Text( char input )
+	internal void IN_Text( string text )
 	{
 		if ( TrappingKeys )
 			return;
@@ -119,7 +119,10 @@ internal sealed class InputContext
 			}
 		}
 
-		TargetUISystem.InputEventQueue.AddKeyTyped( (char)input );
+		foreach ( var c in text )
+		{
+			TargetUISystem.InputEventQueue.AddKeyTyped( c );
+		}
 	}
 
 	internal void IN_MouseWheel( Vector2 value, KeyboardModifiers modifiers )
@@ -143,19 +146,28 @@ internal sealed class InputContext
 		// Log.Info( $"BLOCKING TEXT UNTIL UP {string.Join( ",", _blockingTextInput )}" );
 	}
 
-	internal void IN_ImeStart()
+	bool _imeComposing;
+
+	internal void IN_ImeComposition( string text )
 	{
-		TargetUISystem.CurrentFocus?.CreateEvent( "onimestart" );
+		_imeComposing = ImeComposition.Update( TargetUISystem.CurrentFocus, _imeComposing, text );
 	}
 
-	internal void IN_ImeEnd()
+	/// <summary>
+	/// Files or text dropped in from the OS - lands as "ondrop" on the panel under the cursor.
+	/// </summary>
+	internal void IN_Drop( List<string> files, string text, Vector2 position )
 	{
-		TargetUISystem.CurrentFocus?.CreateEvent( "onimeend" );
-	}
+		var panel = TargetUISystem?.FindPanelAt( position );
+		if ( panel is null ) return;
 
-	internal void IN_ImeComposition( string text, bool final )
-	{
-		TargetUISystem.CurrentFocus?.CreateEvent( "onime", text );
+		panel.CreateEvent( new DropEvent( panel )
+		{
+			Files = files ?? (IReadOnlyList<string>)System.Array.Empty<string>(),
+			Text = text,
+			Position = position,
+			IsDrop = true,
+		} );
 	}
 
 	internal void In_MousePosition( Vector2 pos, Vector2 delta )
@@ -315,8 +327,7 @@ internal sealed class InputContext
 
 			if ( !pressed && clickCounter == 3 )
 			{
-				//Log.Info( "Triple Click" );
-				//OnTripleClick?.Invoke( button.ToString() );
+				TargetUISystem.InputEventQueue.AddTripleClick( button.ToString() );
 			}
 		}
 
@@ -363,36 +374,8 @@ internal sealed class InputContext
 		// not right now
 		if ( repeat ) return;
 
-		// equals is on purpose -
-		// we only want this if they don't have shift and alt etc
-		if ( modifiers == KeyboardModifiers.Ctrl && KeyboardState == InputState.UI )
-		{
-			if ( keyButtonCode == ButtonCode.KEY_C )
-			{
-				if ( !down ) return;
-				TargetUISystem.InputEventQueue.QueueInputEvent( new CopyEvent() );
-				return;
-			}
-
-			if ( keyButtonCode == ButtonCode.KEY_V )
-			{
-				if ( !down ) return;
-
-				if ( EngineGlobal.Plat_HasClipboardText() )
-				{
-					TargetUISystem.InputEventQueue.QueueInputEvent( new PasteEvent( EngineGlobal.Plat_GetClipboardText() ) );
-				}
-
-				return;
-			}
-
-			if ( keyButtonCode == ButtonCode.KEY_X )
-			{
-				if ( !down ) return;
-				TargetUISystem.InputEventQueue.QueueInputEvent( new CutEvent() );
-				return;
-			}
-		}
+		// Ctrl+C/V/X become clipboard events inside InputEventQueue.AddButtonTyped, the same
+		// place for every window
 
 		// always allow the actions to "release" when UI pops up,
 		// but don't allow new presses

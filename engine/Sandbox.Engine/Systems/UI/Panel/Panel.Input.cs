@@ -4,6 +4,26 @@
 public partial class Panel
 {
 	/// <summary>
+	/// Current mouse position in this panel's surface, top left is 0,0. This is the one to
+	/// use inside panel code - <see cref="Mouse.Position"/> is the game window's cursor,
+	/// which is a different window when the panel lives in a panel window.
+	/// </summary>
+	internal Vector2 ScreenMousePosition => FindRootPanel()?.MousePos ?? default;
+
+	/// <summary>
+	/// The size of this panel's surface in pixels. The one to use inside panel code -
+	/// <see cref="Screen"/> is the game window, which is a different window when the panel
+	/// lives in a panel window.
+	/// </summary>
+	internal Vector2 ScreenSurfaceSize => FindRootPanel()?.Box.Rect.Size ?? default;
+
+	/// <summary>
+	/// Where IME composition happens in this panel, so the candidate window can sit next to
+	/// the caret instead of covering it. The whole panel when there's no better answer.
+	/// </summary>
+	internal virtual Rect ImeCaretRect => Box.Rect;
+
+	/// <summary>
 	/// Current mouse position local to this panels top left corner.
 	/// </summary>
 	[Hide]
@@ -143,7 +163,7 @@ public partial class Panel
 	/// </summary>
 	public bool Focus()
 	{
-		return InputFocus.Set( this );
+		return UISystem.SetFocus( this );
 	}
 
 	/// <summary>
@@ -151,7 +171,7 @@ public partial class Panel
 	/// </summary>
 	public bool Blur()
 	{
-		return InputFocus.Clear( this );
+		return UISystem.ClearFocus( this );
 	}
 
 	/// <summary>

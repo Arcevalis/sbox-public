@@ -1,5 +1,4 @@
 @using MenuProject
-@using MenuProject.UiTest
 @using Sandbox.UI;
 @using Sandbox.UI.Navigation;
 @using Sandbox;
@@ -11,7 +10,7 @@
 <root>
 
     @* Double click the mark for the UI test section. Deliberately undiscoverable. *@
-    <Logo @ondoubleclick=@( () => UiTestSection.Open() ) />
+    <Logo />
 
     <div class="nav">
         <Button Href="/home" Icon="home">#menu.home</Button>

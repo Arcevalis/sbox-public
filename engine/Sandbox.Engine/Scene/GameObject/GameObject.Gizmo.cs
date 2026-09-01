@@ -257,6 +257,12 @@ public partial class GameObject
 
 			Gizmo.Hitbox.Sphere( new Sphere( 0, 0.4f ) );
 
+			if ( Gizmo.IsHovered || Gizmo.IsSelected )
+			{
+				var textPos = Gizmo.Transform.Position + Gizmo.CameraTransform.Up * 0.8f;
+				Gizmo.Draw.Text( Name, Gizmo.Transform.ToLocal( new Transform( textPos ) ), flags: TextFlag.Center );
+			}
+
 			if ( Gizmo.WasClicked )
 				GizmoSelect();
 		}
