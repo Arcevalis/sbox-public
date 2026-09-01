@@ -164,7 +164,12 @@ internal class BuildManaged( bool clean = false )
 
 		var framework = Path.Combine( dotnetRoot, "shared", "Microsoft.NETCore.App" );
 		var source = Directory.Exists( framework )
-			? Directory.GetDirectories( framework ).OrderBy( d => d ).LastOrDefault()
+			? Directory.GetDirectories( framework )
+				.Select( d => new { Dir = d, Version = new Version( Path.GetFileName( d ) ) } )
+				.Where( x => x.Version.Major == 10 )
+				.OrderBy( x => x.Version )
+				.LastOrDefault()
+				?.Dir
 			: null;
 
 		if ( source is null )
