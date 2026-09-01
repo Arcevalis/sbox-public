@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using Sandbox.Internal;
 using Sandbox.UI;
 
