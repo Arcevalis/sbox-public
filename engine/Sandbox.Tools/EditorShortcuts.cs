@@ -88,6 +88,13 @@ public static class EditorShortcuts
 			foreach ( var entry in group )
 			{
 				if ( GetKeys( entry.Identifier ) != keys ) continue;
+
+				// While the game is running the game owns the keyboard. Widget-scoped
+				// shortcuts gate on scene-view focus (which the play widget keeps alive),
+				// so skip them or they'd swallow the SDL key event on the Linux Qt->SDL bridge.
+				if ( Game.IsPlaying && entry.Attribute.Type == ShortcutType.Widget )
+					continue;
+
 				entry.IsDown = true;
 
 				if ( AllowShortcuts && !hasInvoked && entry.Invoke( force ) )
