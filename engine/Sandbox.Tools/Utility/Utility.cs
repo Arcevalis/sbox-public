@@ -234,10 +234,10 @@ public static partial class EditorUtility
 			return false;
 
 		var compiledPath = asset.GetCompiledFile( true );
-		var newCompiledPath = compiledPath.Replace( asset.Name, newName );
+		var newCompiledPath = WithFileName( compiledPath, asset.Name, newName );
 
 		var sourcePath = asset.GetSourceFile( true );
-		var newSourcePath = sourcePath.Replace( asset.Name, newName );
+		var newSourcePath = WithFileName( sourcePath, asset.Name, newName );
 
 		if ( string.Equals( asset.Name, newName, StringComparison.OrdinalIgnoreCase ) )
 		{
@@ -269,6 +269,32 @@ public static partial class EditorUtility
 			System.IO.File.Move( sourcePath, newSourcePath );
 
 		return true;
+	}
+
+	/// <summary>
+	/// Swap <paramref name="oldName"/> for <paramref name="newName"/> in the filename part of
+	/// <paramref name="path"/>, leaving the directories alone.
+	/// </summary>
+	/// <remarks>
+	/// Matched without case: an asset's Name is lowercased, but the paths name files on disk and
+	/// keep whatever casing the disk uses, so the two don't necessarily agree. Only the filename
+	/// is touched, so a directory that happens to contain the name isn't renamed along with it.
+	/// </remarks>
+	private static string WithFileName( string path, string oldName, string newName )
+	{
+		if ( string.IsNullOrEmpty( path ) )
+			return path;
+
+		var directory = System.IO.Path.GetDirectoryName( path );
+		var filename = System.IO.Path.GetFileName( path );
+		var at = filename.IndexOf( oldName, StringComparison.OrdinalIgnoreCase );
+
+		if ( at < 0 )
+			return path;
+
+		var renamed = string.Concat( filename.AsSpan( 0, at ), newName, filename.AsSpan( at + oldName.Length ) );
+
+		return string.IsNullOrEmpty( directory ) ? renamed : System.IO.Path.Combine( directory, renamed );
 	}
 
 	/// <summary>
