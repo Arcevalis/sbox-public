@@ -352,6 +352,22 @@ public static partial class AssetSystem
 		var extension = gameResourceType.Extension;
 		absoluteFilename = System.IO.Path.ChangeExtension( absoluteFilename, extension );
 
+		// Name the file in lower case. Resource paths are lower case throughout, and an
+		// on-demand recompile opens the source by that lower-cased path - so on a case
+		// sensitive filesystem a file named any other way can't be found and never compiles.
+		// The compiler already writes its own output this way ("3d object - cube.prefab_c"
+		// next to "3D Object - Cube.prefab"), and Asset.Name is lower-cased for display on
+		// every platform, so nothing the user sees changes. Directories keep their casing -
+		// those already exist and we don't own them.
+		{
+			var directory = System.IO.Path.GetDirectoryName( absoluteFilename );
+			var filename = System.IO.Path.GetFileName( absoluteFilename ).ToLowerInvariant();
+
+			absoluteFilename = string.IsNullOrEmpty( directory )
+				? filename
+				: System.IO.Path.Combine( directory, filename );
+		}
+
 		// try to find it first. If we find it, return it.
 		var found = AssetSystem.FindByPath( absoluteFilename );
 		if ( found is not null ) return found;
