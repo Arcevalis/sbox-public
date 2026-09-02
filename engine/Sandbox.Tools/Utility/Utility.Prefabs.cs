@@ -327,10 +327,16 @@ public static partial class EditorUtility
 			// Save instance transform for later
 			var instanceTransform = go.LocalTransform;
 
-			// The save dialog gives an absolute path, but a prefab loaded from disk is registered
-			// under its relative asset path - resolve it so we overwrite the live prefab file
-			// instead of building a fresh one that existing instances know nothing about.
-			saveLocation = AssetSystem.FindByPath( saveLocation )?.Path ?? saveLocation;
+			// A prefab loaded from disk is registered under its relative asset path, but a save
+			// dialog (or a drag onto the asset browser) gives an absolute one - and an absolute
+			// path can't be a resource path. Create the file so there's an asset to take a
+			// relative path from, rather than registering the absolute path as-is.
+			var asset = AssetSystem.FindByPath( saveLocation )
+				?? (!skipDiskWrite && System.IO.Path.IsPathRooted( saveLocation )
+					? AssetSystem.CreateResource( "prefab", saveLocation )
+					: null);
+
+			saveLocation = asset?.Path ?? saveLocation;
 
 			var prefabFile = ResourceLibrary.Get<PrefabFile>( saveLocation );
 			if ( !prefabFile.IsValid() )

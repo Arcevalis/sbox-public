@@ -68,12 +68,14 @@ internal class NativeAsset : Asset
 	/// <summary>
 	/// Returns the compiled file path, if the asset is compiled.
 	/// </summary>
-	/// <param name="absolute">Whether the path should be absolute or relative.</param>F
+	/// <param name="absolute">Whether the path should be absolute or relative.</param>
 	/// <returns>The compiled file path, or null if the asset was not compiled.</returns>
 	public override string GetCompiledFile( bool absolute = false )
 	{
+		// This names a file on disk and callers hand it straight to System.IO, so it keeps the
+		// case the disk uses - lower-casing it only works where the filesystem doesn't care.
 		if ( absolute )
-			return native.GetAbsolutePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false );
+			return Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( native.GetAbsolutePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false, false ) );
 
 		return native.GetRelativePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false );
 	}
@@ -85,8 +87,10 @@ internal class NativeAsset : Asset
 	/// <returns>The source file path, or null if the source files are not present.</returns>
 	public override string GetSourceFile( bool absolute = false )
 	{
+		// This names a file on disk and callers hand it straight to System.IO, so it keeps the
+		// case the disk uses - lower-casing it only works where the filesystem doesn't care.
 		if ( absolute )
-			return native.GetAbsolutePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false );
+			return Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( native.GetAbsolutePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false, false ) );
 
 		return native.GetRelativePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false );
 	}
