@@ -66,9 +66,9 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 
 		for ( var i = 0; i < components.Length; i++ )
 		{
-			var entries = GetDirectoryEntries( resolved );
+			var isLastComponent = i == components.Length - 1;
 
-			if ( entries is null || !entries.TryResolve( components[i], out var realName ) )
+			if ( !TryResolveComponent( resolved, components[i], isLastComponent, out var realName ) )
 			{
 				// Nothing more we can say about this path - keep whatever is left as-is, and
 				// don't cache it, it might well exist by the time we're asked again.
@@ -89,12 +89,50 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	}
 
 	/// <summary>
+	/// Resolve one component of a path to the casing it has on disk.
+	/// </summary>
+	/// <param name="directory">The real directory to look in.</param>
+	/// <param name="component">The name to resolve.</param>
+	/// <param name="mayBeStale">
+	/// Whether a miss is worth re-reading the directory for. True for the last component of a
+	/// path, which is usually a file: files written straight through System.IO never pass our
+	/// mutation overrides, so nothing invalidated the listing and it can be missing an entry
+	/// that exists on disk. Directories reach us through the filesystem, which does invalidate,
+	/// so a miss on one of those is a genuine miss and not worth the extra read.
+	/// </param>
+	/// <param name="realName">The name as it is spelled on disk, or null if it wasn't found.</param>
+	private bool TryResolveComponent( string directory, string component, bool mayBeStale, out string realName )
+	{
+		var entries = GetDirectoryEntries( directory );
+
+		if ( entries is not null && entries.TryResolve( component, out realName ) )
+			return true;
+
+		if ( mayBeStale )
+		{
+			entries = GetDirectoryEntries( directory, true );
+
+			if ( entries is not null && entries.TryResolve( component, out realName ) )
+				return true;
+		}
+
+		realName = null;
+		return false;
+	}
+
+	/// <summary>
 	/// The names inside <paramref name="directory"/>, or null if it doesn't exist.
 	/// </summary>
-	private DirectoryEntries GetDirectoryEntries( string directory )
+	/// <param name="directory">The real directory path to list.</param>
+	/// <param name="refresh">Read the directory again instead of trusting a cached listing.</param>
+	private DirectoryEntries GetDirectoryEntries( string directory, bool refresh = false )
 	{
-		if ( _directoryCache.TryGetValue( directory, out var entries ) )
-			return entries;
+		if ( refresh )
+			_directoryCache.TryRemove( directory, out _ );
+		else if ( _directoryCache.TryGetValue( directory, out var cached ) )
+			return cached;
+
+		DirectoryEntries entries;
 
 		if ( !Directory.Exists( directory ) )
 			return null;
