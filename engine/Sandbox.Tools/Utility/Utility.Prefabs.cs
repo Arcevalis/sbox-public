@@ -329,6 +329,13 @@ public static partial class EditorUtility
 
 			string relativePath = saveLocation.NormalizeFilename( false );
 
+			// A prefab loaded from disk is registered under its relative asset path, but a save
+			// dialog (or a drag onto the asset browser) gives an absolute one - and an absolute
+			// path can't be a resource path. Create the file so there's an asset to take a
+			// relative path from, rather than registering the absolute path as-is.
+			if ( !skipDiskWrite && System.IO.Path.IsPathRooted( saveLocation ) )
+				saveLocation = (AssetSystem.FindByPath( saveLocation ) ?? AssetSystem.CreateResource( "prefab", saveLocation ))?.Path ?? saveLocation;
+
 			var asset = AssetSystem.FindByPath( saveLocation );
 			if ( !skipDiskWrite )
 			{
