@@ -356,7 +356,15 @@ class LauncherWindow : Panel
 		var body = content.AddChild<Panel>();
 		body.AddClass( "body" );
 
-		projectsPanel = body.AddChild<Panel>();
+		var projectColumn = body.AddChild<Panel>();
+		projectColumn.AddClass( "project-column" );
+
+		var projectLabel = projectColumn.AddChild<Panel>();
+		projectLabel.AddClass( "sectionlabel" );
+		projectLabel.Add.Label( page == Page.Samples ? "SAMPLES" : "LOCAL PROJECTS", "text" );
+		projectLabel.AddChild<Panel>().AddClass( "rule" );
+
+		projectsPanel = projectColumn.AddChild<Panel>();
 		projectsPanel.AddClass( "projects" );
 
 		_ = FillNewsAsync( body );
@@ -405,13 +413,16 @@ class LauncherWindow : Panel
 		label.Add.Label( "LATEST NEWS", "text" );
 		label.AddChild<Panel>().AddClass( "rule" );
 
+		var newsList = rail.AddChild<Panel>();
+		newsList.AddClass( "news-list" );
+
 		foreach ( var post in posts )
 		{
 			var url = post.Url;
 			if ( url is not null && !url.StartsWith( "http" ) ) url = $"{Global.BackendUrl}{url}";
 			if ( url is not null ) url += url.Contains( '?' ) ? "&utm_source=launcher" : "?utm_source=launcher";
 
-			var card = rail.Add.Panel( "newscard" );
+			var card = newsList.Add.Panel( "newscard" );
 			card.AddEventListener( "onclick", () => Editor.EditorUtility.OpenFolder( url ) );
 
 			if ( !string.IsNullOrEmpty( post.Media ) )
@@ -444,7 +455,7 @@ class LauncherWindow : Panel
 			new( "Most Recent", () => SetSort( SortMethod.Date ), "calendar_month" ),
 			new( "Name", () => SetSort( SortMethod.Name ), "sort_by_alpha" ),
 			new( "Organization", () => SetSort( SortMethod.Org ), "groups" ),
-		} );
+		}, sortButton );
 	}
 
 	void SetSort( SortMethod method )
@@ -471,16 +482,7 @@ class LauncherWindow : Panel
 		var projects = ProjectList.GetAll().Where( x => !x.IsBuiltIn ).ToList();
 
 		// Samples ride along without being saved to the list
-		var samples = new List<Project>();
-
-		foreach ( var dir in System.IO.Directory.EnumerateDirectories( "samples/" ) )
-		{
-			var file = System.IO.Directory.EnumerateFiles( dir, "*.sbproj" ).FirstOrDefault();
-			if ( file is null ) continue;
-
-			var sample = ProjectList.TryAddFromFile( file );
-			if ( sample is not null ) samples.Add( sample );
-		}
+		var samples = FindSamples();
 
 		projects = sort switch
 		{
@@ -514,11 +516,39 @@ class LauncherWindow : Panel
 			topHit = local.OrderByDescending( x => x.Pinned ).FirstOrDefault();
 
 			AddGroup( "Pinned", local.Where( x => x.Pinned ) );
-			AddGroup( "Local Projects", local.Where( x => !x.Pinned ) );
+			AddGroup( null, local.Where( x => !x.Pinned ) );
 		}
 
 		if ( projectsPanel.ChildrenCount == 0 )
 			AddEmptyState();
+	}
+
+	/// <summary>
+	/// The sample projects that ship beside the engine. They are content rather than part of
+	/// the saved list, and the launcher has to come up without them - an install that never
+	/// got the content depot has no samples folder at all.
+	/// </summary>
+	List<Project> FindSamples()
+	{
+		var samples = new List<Project>();
+
+		try
+		{
+			foreach ( var dir in System.IO.Directory.EnumerateDirectories( "samples/" ) )
+			{
+				var file = System.IO.Directory.EnumerateFiles( dir, "*.sbproj" ).FirstOrDefault();
+				if ( file is null ) continue;
+
+				var sample = ProjectList.TryAddFromFile( file );
+				if ( sample is not null ) samples.Add( sample );
+			}
+		}
+		catch ( Exception e )
+		{
+			Log.Info( $"Couldn't read the samples folder: {e.Message}" );
+		}
+
+		return samples;
 	}
 
 	void AddGroup( string title, IEnumerable<Project> projects )
@@ -561,7 +591,9 @@ class LauncherWindow : Panel
 
 	void Stagger( Panel panel )
 	{
-		panel.Style.Set( "animation-delay", $"{animIndex * 0.025f:0.000}s" );
+		// Invariant - this is CSS, not something anyone reads. Formatted in a comma-decimal
+		// culture the delay would come back out as whole seconds
+		panel.Style.Set( "animation-delay", FormattableString.Invariant( $"{animIndex * 0.025f:0.000}s" ) );
 		animIndex++;
 	}
 
@@ -596,13 +628,11 @@ class LauncherWindow : Panel
 		var org = project.Config.Org == "local" ? "Local" : project.Package?.Org.Title ?? project.Config.Org;
 		text.Add.Label( $"{org} · {RelativeTime( project.LastOpened.LocalDateTime )}", "sub" );
 
-		row.AddChild<Panel>().AddClass( "grow" );
-
 		// Lit while an editor is open on this project - see WatchRunningEditorsAsync
 		var runningTag = row.AddChild<Panel>();
 		runningTag.AddClass( "runningtag" );
 		runningTag.Add.Icon( "circle", "icon" );
-		runningTag.Add.Label( "Running" );
+		runningTag.Add.Label( "Running", "running-label" );
 
 		var path = ProjectPath( project );
 		rowProjects[row] = path;

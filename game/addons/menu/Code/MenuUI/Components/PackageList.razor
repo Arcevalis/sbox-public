@@ -2,19 +2,19 @@
 @using Sandbox;
 @using Sandbox.UI;
 @using System.Threading
-@namespace Sandbox.UI
+@namespace MenuProject.UI
 @inherits Panel
 
 <root class="package-list">
 
     @if ( ShowFilters )
     {
-        <PackageFilters Result=@Result Query=@Query OnChange=@OnQueryUpdated></PackageFilters>
+        <MenuProject.UI.PackageFilters Result=@Result Query=@Query OnChange=@OnQueryUpdated></MenuProject.UI.PackageFilters>
     }
 
     @if ( FoundPackages == null )
     {
-        <LoaderFullScreen></LoaderFullScreen>
+        <MenuProject.UI.LoaderFullScreen></MenuProject.UI.LoaderFullScreen>
     }
     else if (FoundPackages.Count() == 0 )
     {
@@ -32,16 +32,16 @@
 					}
 					else
 					{
-                    <PackageCard RightClicked=@(() => OnMenu?.Invoke(package))
+                    <MenuProject.UI.PackageCard RightClicked=@(() => OnMenu?.Invoke(package))
                                  Clicked=@(() => OnSelected?.Invoke(package))
                                  Rotation=@Rotation
-                                 Package=@package></PackageCard>
+                                 Package=@package></MenuProject.UI.PackageCard>
 					}
                 }
             </Item>
         </VirtualGrid>
     }
-    
+
 </root>
 
 @code

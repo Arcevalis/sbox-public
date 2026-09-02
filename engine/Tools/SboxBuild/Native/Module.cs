@@ -71,6 +71,7 @@ public abstract class Module
 	public static bool Windows => NativePlatform.Current.IsWindows;
 	public static bool Linux => !Windows;
 	public static bool Retail { get; internal set; }
+	public static bool MemoryDebug { get; internal set; }
 
 	/// <summary>
 	/// A prebuilt third party library under src/thirdparty, named the way the platform being

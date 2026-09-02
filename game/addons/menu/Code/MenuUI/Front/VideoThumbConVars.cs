@@ -1,5 +1,6 @@
 using Sandbox;
 using Sandbox.UI;
+using PackageCard = MenuProject.UI.PackageCard;
 
 namespace MenuProject.MenuUI.Front;
 

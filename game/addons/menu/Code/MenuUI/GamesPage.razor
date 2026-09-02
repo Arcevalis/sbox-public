@@ -51,7 +51,7 @@
         </Left>
 
         <Body>
-            <PackageList @ref=PackageList ShowFilters="@false" Query=@($"type:game sort:{filterOrder} {Filter} {GetQuery()}") OnSelected=@Selected OnMenu=@Menu Take=@(200)></PackageList>
+            <MenuProject.UI.PackageList @ref=PackageList ShowFilters="@false" Query=@($"type:game sort:{filterOrder} {Filter} {GetQuery()}") OnSelected=@Selected OnMenu=@Menu Take=@(200)></MenuProject.UI.PackageList>
         </Body>
     </Page>
 </root>
@@ -101,7 +101,7 @@
     List<string> SelectedTags = new();
     Dictionary<string, string> SelectedCategory = new();
 
-    PackageList PackageList = default;
+    MenuProject.UI.PackageList PackageList = default;
 
     Package.FindResult Result => PackageList?.Result;
 

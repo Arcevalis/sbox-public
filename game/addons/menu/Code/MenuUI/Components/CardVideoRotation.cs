@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Sandbox;
+using Sandbox.UI;
 
-namespace Sandbox.UI;
+namespace MenuProject.UI;
 
 /// <summary>
 /// Decides which cards in a set play their video, keeping them apart on screen and handing

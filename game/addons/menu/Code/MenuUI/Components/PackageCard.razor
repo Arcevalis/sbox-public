@@ -1,7 +1,7 @@
 ﻿@using Sandbox;
 @using Sandbox.UI;
 @using System.Globalization
-@namespace Sandbox.UI
+@namespace MenuProject.UI
 @inherits Panel
 
 <root class=@BuildClass() @onrightclick=@OnCardRightClicked onclick=@OnCardClicked>
@@ -14,7 +14,7 @@
 
         @if ( Package != null && Package.Flair.IsEmpty == false)
         {
-            <PackageFlairBar Flair="@Package.Flair" />
+            <MenuProject.UI.PackageFlairBar Flair="@Package.Flair" />
         }
 
         @* Overlaid on the art as a pull quote - the mark is its own label so it can be set big. *@
@@ -175,7 +175,7 @@
     /// Called when the card is right clicked
     /// </summary>
     [Parameter] public Action RightClicked { get; set; }
-    
+
     void OnCardClicked() => Clicked?.Invoke();
     void OnCardRightClicked() => RightClicked?.Invoke();
 

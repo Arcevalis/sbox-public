@@ -2,7 +2,7 @@
 @using Sandbox;
 @using Sandbox.UI;
 @using System.Threading
-@namespace Sandbox.UI
+@namespace MenuProject.UI
 @inherits Panel
 
 @if ( Result == null )
@@ -18,14 +18,14 @@
     {
         filterFacets.TryGetValue( facet.Name, out var value );
 
-        <PackageFilterFacet Facet="@facet" Value="@value" OnChange="@OnFacetChanged"></PackageFilterFacet>
+        <MenuProject.UI.PackageFilterFacet Facet="@facet" Value="@value" OnChange="@OnFacetChanged"></MenuProject.UI.PackageFilterFacet>
     }
 
     </div>
 
     <div class="right">
 		<TextEntry Icon="search" OnTextEdited=@OnSearchEdited></TextEntry>
-        <PackageFilterOrder Orders="@Result.Orders" Value="@filterOrder" OnChange="@OnOrderChanged"></PackageFilterOrder>
+        <MenuProject.UI.PackageFilterOrder Orders="@Result.Orders" Value="@filterOrder" OnChange="@OnOrderChanged"></MenuProject.UI.PackageFilterOrder>
     </div>
 
 </root>
@@ -70,7 +70,7 @@
         var q = "";
 
         foreach (var t in filterTypes)
-            q += $" type:{t}";        
+            q += $" type:{t}";
 
         foreach (var t in filterFacets)
             q += $" {t.Key}:{t.Value}";

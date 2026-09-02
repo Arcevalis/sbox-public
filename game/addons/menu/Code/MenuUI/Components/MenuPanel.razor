@@ -1,5 +1,6 @@
 @using System
-@namespace Sandbox.UI
+@using Sandbox
+@namespace MenuProject.UI
 @inherits Panel
 
 <root>
@@ -49,7 +50,7 @@
     public void AddOption( string icon, string text, Action action )
     {
         options.Add( new( icon, text, action ) );
-    }    
+    }
 
     public void AddSpacer()
     {
