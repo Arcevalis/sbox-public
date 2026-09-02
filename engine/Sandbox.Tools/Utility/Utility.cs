@@ -229,7 +229,9 @@ public static partial class EditorUtility
 		if ( string.IsNullOrEmpty( newName ) )
 			return false;
 
-		newName = newName.Trim().GetFilenameSafe();
+		// Lower case for the same reason CreateResource does it - the compiler opens the source
+		// by its lower-cased resource path, so that's what the file has to be called on disk.
+		newName = newName.Trim().GetFilenameSafe().ToLowerInvariant();
 		if ( string.IsNullOrEmpty( newName ) )
 			return false;
 
