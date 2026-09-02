@@ -85,8 +85,10 @@ internal class NativeAsset : Asset
 	/// <returns>The source file path, or null if the source files are not present.</returns>
 	public override string GetSourceFile( bool absolute = false )
 	{
+		// This names a file on disk and callers hand it straight to System.IO, so it keeps the
+		// case the disk uses - lower-casing it only works where the filesystem doesn't care.
 		if ( absolute )
-			return native.GetAbsolutePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false );
+			return Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( native.GetAbsolutePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false, false ) );
 
 		return native.GetRelativePath_Transient( AssetLocation_t.Content ).NormalizeFilename( false );
 	}
