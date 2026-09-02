@@ -41,6 +41,7 @@ public class RotationEditorTool : EditorTool
 		// Stop updating the handle position if we're dragging
 
 		var origin = Gizmo.Pressed.Any ? handlePosition : centroid;
+		var rotateAsGroup = nonSceneGos.Count() > 1 && Gizmo.Settings.GlobalSpace;
 
 		using ( Gizmo.Scope( "Tool", new Transform( origin, basis ) ) )
 		{
@@ -55,9 +56,15 @@ public class RotationEditorTool : EditorTool
 				foreach ( var entry in startPoints )
 				{
 					var rot = basis * moveDelta * basis.Inverse;
-					var position = entry.Value.Position - handlePosition;
-					position *= rot;
-					position += handlePosition;
+					var position = entry.Value.Position;
+
+					if ( rotateAsGroup )
+					{
+						position -= handlePosition;
+						position *= rot;
+						position += handlePosition;
+					}
+
 					rot *= entry.Value.Rotation;
 					var scale = entry.Value.Scale;
 

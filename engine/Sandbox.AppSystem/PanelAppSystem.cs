@@ -3,6 +3,7 @@ using Sandbox.Engine;
 using Sandbox.UI;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -48,8 +49,10 @@ public class PanelAppSystem : AppSystem
 		_appSystem.SetSteamAppId( (uint)Application.AppId );
 
 		// No Steam - it costs startup time and injects the Fossilize pipeline layer into the
-		// device. No VR - nothing here renders in stereo.
-		var commandLine = Environment.CommandLine.Replace( ".dll", ".exe" ) + " -nosteam -novr";
+		// device. No VR - nothing here renders in stereo. -panelapp tells the engine nobody here
+		// is drawing a scene, so the fixed buffers and atlases that exist for one are sized down
+		// to what a scene panel might want instead of what a map needs.
+		var commandLine = Environment.CommandLine.Replace( ".dll", ".exe" ) + " -nosteam -novr -panelapp";
 
 		// Tools mode creates the render device but no window - our windows are our own
 		if ( !NativeEngine.EngineGlobal.SourceEnginePreInit( commandLine, _appSystem ) )
@@ -88,6 +91,20 @@ public class PanelAppSystem : AppSystem
 		DLLImportResolver.SetupResolvers();
 		Sandbox.Tasks.SyncContext.Init();
 		ThreadSafe.MarkMainThread();
+
+		// Same as Bootstrap.PreInit - the engine formats and parses in one culture everywhere,
+		// so an app that boots its own way rather than through PreInit has to say so too
+		if ( CultureInfo.CurrentCulture.Name != "en-US" )
+		{
+			var culture = CultureInfo.CreateSpecificCulture( "en-US" );
+
+			// Default* covers the thread pool as well, so work that ran off the main thread comes
+			// back with numbers the rest of the engine can read
+			CultureInfo.DefaultThreadCurrentCulture = culture;
+			CultureInfo.DefaultThreadCurrentUICulture = culture;
+			Thread.CurrentThread.CurrentCulture = culture;
+			Thread.CurrentThread.CurrentUICulture = culture;
+		}
 
 		ThreadPool.SetMinThreads( Environment.ProcessorCount, Environment.ProcessorCount );
 

@@ -36,22 +36,31 @@ class ProjectCreatorPanel : Panel
 	{
 		AddClass( "creator" );
 
-		this.Add.Label( "New Project", "heading" );
+		var container = this.Add.Panel( "creator-container" );
+		container.Add.Label( "New Project", "heading" );
+
+		var body = container.Add.Panel( "creator-body" );
+
+		var templates = body.Add.Panel( "template-pane" );
+		templates.Add.Label( "Choose a starting point", "section-heading" );
 
 		FindTemplates();
-		BuildTemplateGrid();
+		BuildTemplateGrid( templates );
 
-		var nameField = Field( "Title" );
+		var settings = body.Add.Panel( "settings" );
+		settings.Add.Label( "Project details", "section-heading" );
+
+		var nameField = Field( settings, "Title" );
 		_nameBox = nameField.AddChild<TextEntry>();
 		_nameBox.Placeholder = "My Project";
 		_nameBox.OnTextEdited = _ => UpdatePathPreview();
 
-		var folderField = Field( "Location" );
+		var folderField = Field( settings, "Location" );
 		_folderBox = folderField.AddChild<Editor.FolderSelector>();
 		_folderBox.Text = LauncherPreferences.DefaultProjectLocation;
 		_folderBox.ValueChanged = _ => UpdatePathPreview();
 
-		var otherField = Field( "Other" );
+		var otherField = Field( settings, "Other" );
 
 		_createGitIgnore = otherField.AddChild<Checkbox>();
 		_createGitIgnore.LabelText = "Create .gitignore";
@@ -60,7 +69,7 @@ class ProjectCreatorPanel : Panel
 		_setDefaultLocation = otherField.AddChild<Checkbox>();
 		_setDefaultLocation.LabelText = "Set as Default Project Location";
 
-		var buttons = this.Add.Panel( "buttons" );
+		var buttons = container.Add.Panel( "buttons" );
 
 		buttons.AddChild( new Button( "Back", null, "flatbutton", () => OnDone?.Invoke( null ) ) );
 
@@ -73,9 +82,9 @@ class ProjectCreatorPanel : Panel
 		UpdatePathPreview();
 	}
 
-	Panel Field( string title )
+	Panel Field( Panel parent, string title )
 	{
-		var field = this.AddChild<Panel>();
+		var field = parent.AddChild<Panel>();
 		field.AddClass( "field" );
 		field.Add.Label( title, "label" );
 		return field;
@@ -126,9 +135,9 @@ class ProjectCreatorPanel : Panel
 		_templates.Sort( ( a, b ) => a.Order.CompareTo( b.Order ) );
 	}
 
-	void BuildTemplateGrid()
+	void BuildTemplateGrid( Panel parent )
 	{
-		var grid = this.AddChild<Panel>();
+		var grid = parent.AddChild<Panel>();
 		grid.AddClass( "templates" );
 
 		var cells = new Dictionary<Template, Panel>();
@@ -153,7 +162,7 @@ class ProjectCreatorPanel : Panel
 			cells[current] = cell;
 		}
 
-		_description = this.Add.Label( "", "template-description" );
+		_description = parent.Add.Label( "", "template-description" );
 
 		_selected = _templates.FirstOrDefault();
 

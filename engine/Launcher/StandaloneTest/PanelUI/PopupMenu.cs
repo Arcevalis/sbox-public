@@ -26,18 +26,18 @@ static class PopupMenu
 	}
 
 	/// <summary>
-	/// Open a menu under the cursor.
+	/// Open a menu under its source control, or under the cursor when there is no source control.
 	/// </summary>
-	public static void Open( Editor.PanelWindow parent, IEnumerable<Item> items )
+	public static void Open( Editor.PanelWindow parent, IEnumerable<Item> items, Panel anchor = null )
 	{
 		Close();
 
 		if ( parent is null ) return;
 
 		var list = items.ToArray();
-		var rows = list.Count( x => x is not null );
+		var position = anchor?.Box.Rect.BottomLeft + new Vector2( 0, 6 ) ?? parent.MousePosition;
 
-		var popup = Editor.PanelWindow.Popup( parent, parent.MousePosition, new Vector2( 180, 12 + rows * 26 + (list.Length - rows) * 11 ) );
+		var popup = Editor.PanelWindow.Popup( parent, position );
 
 		// A click anywhere that isn't the menu dismisses it, same as an OS menu
 		popup.OnCloseRequested = Close;

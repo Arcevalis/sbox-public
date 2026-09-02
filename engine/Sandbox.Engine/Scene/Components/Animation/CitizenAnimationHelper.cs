@@ -449,7 +449,11 @@ public sealed class CitizenAnimationHelper : Component, Component.ExecuteInEdito
 		Floor1,
 		Floor2,
 		Floor3,
-		Floor4
+		Floor4,
+
+		// Compatibility aliases retain the values exposed by the original API.
+		[Hide, Obsolete( "Use a numbered sitting style instead." )] Chair = Chair1,
+		[Hide, Obsolete( "Use a numbered sitting style instead." )] Floor = Chair2
 	}
 
 	/// <summary>

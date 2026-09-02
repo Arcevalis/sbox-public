@@ -8,15 +8,6 @@ namespace Sandbox.MovieMaker;
 #nullable enable
 
 [Expose]
-file sealed class ComponentCapturer : ComponentCapturer<Component>
-{
-	protected override void OnCapture( IMovieTrackRecorder recorder, Component component )
-	{
-		recorder.Property( nameof( Component.Enabled ) ).Capture();
-	}
-}
-
-[Expose]
 file sealed class CameraCapturer : ComponentCapturer<CameraComponent>
 {
 	protected override void OnCapture( IMovieTrackRecorder recorder, CameraComponent component )

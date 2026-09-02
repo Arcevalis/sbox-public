@@ -91,12 +91,16 @@ partial class UISystem
 				{
 					Panel.Switch( PseudoClass.Focus, false, CurrentFocus, NextFocus );
 					CurrentFocus.CreateEvent( new PanelEvent( "onblur", CurrentFocus ) );
+					CurrentFocus.MarkRenderDirty();
 				}
 
 				CurrentFocus = NextFocus;
 
 				Panel.Switch( PseudoClass.Focus, true, CurrentFocus, null );
 				CurrentFocus?.CreateEvent( new PanelEvent( "onfocus", CurrentFocus ) );
+
+				// OnDraw can depend on HasFocus (TextEntry's caret), so both sides repaint
+				CurrentFocus?.MarkRenderDirty();
 			}
 		}
 

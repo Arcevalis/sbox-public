@@ -33,7 +33,7 @@
 
         <RailButton Href="/rewards" Icon="redeem" Text="Rewards" Badge="@RewardBadge" BadgeClass="reward" Progress="@RewardProgress" />
 
-        <Button @onmouseup=@Settings Icon="settings">Settings</Button>
+        <Button Href="/settings" Icon="settings">Settings</Button>
         <Button @onmouseup=@Quit class="quit" Icon="power_settings_new">Quit</Button>
     </div>
 
@@ -126,11 +126,6 @@
     {
         rewardState = await MenuUtility.Rewards.GetRewards();
         StateHasChanged();
-    }
-
-    void Settings()
-    {
-        Game.Overlay.ShowSettingsModal();
     }
 
     void Quit()
