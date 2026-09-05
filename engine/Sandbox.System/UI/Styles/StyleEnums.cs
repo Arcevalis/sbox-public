@@ -646,3 +646,18 @@ public enum BackgroundClip
 	/// <summary>Painted only where the element's text is, so the text shows through the glyphs.</summary>
 	Text = 3
 }
+
+/// <summary>
+/// Possible values for the <c>scrollbar-gutter</c> CSS property.
+/// </summary>
+public enum ScrollbarGutter
+{
+	/// <summary>No space is reserved, the scrollbar overlays the content.</summary>
+	Auto = 0,
+
+	/// <summary>Space for the scrollbar is reserved at the right edge, whether or not one is showing.</summary>
+	Stable = 1,
+
+	/// <summary>Space is reserved at both edges, so the content stays centred.</summary>
+	StableBothEdges = 2
+}

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Components;
+﻿using Microsoft.AspNetCore.Components;
 using Sandbox.Html;
 using System.Globalization;
 
@@ -242,6 +242,13 @@ namespace Sandbox.UI
 		/// </summary>
 		protected void CaretSantity()
 		{
+			// Nothing to clamp on a label nobody is editing, and counting text elements allocates
+			if ( CaretPosition == 0 && SelectionStart == 0 && SelectionEnd == 0 )
+			{
+				ClampScroll();
+				return;
+			}
+
 			if ( CaretPosition > TextLength )
 			{
 				CaretPosition = TextLength;
@@ -437,14 +444,6 @@ namespace Sandbox.UI
 				YogaNode.MarkDirty();
 			}
 
-			// The visible width is what scrolling measures against, so a resize - or the first
-			// layout, where there wasn't one yet - has to put the caret back on screen
-			if ( _scrolledSize != Box.RectInner.Size )
-			{
-				_scrolledSize = Box.RectInner.Size;
-				ScrollToCaret();
-			}
-
 			_textRect = Box.RectInner;
 
 			if ( ComputedStyle.TextAlign == TextAlign.Center )
@@ -466,6 +465,16 @@ namespace Sandbox.UI
 			}
 
 			_textRect.Size = _textBlock.BlockSize;
+
+			// Scrolling measures against the visible size, so a resize puts the caret back on screen.
+			// After the text rect is placed, because the caret rect comes from it.
+			if ( _scrolledSize != Box.RectInner.Size )
+			{
+				_scrolledSize = Box.RectInner.Size;
+				ScrollToCaret();
+			}
+
+			ScrollParentToCaret();
 		}
 
 		public override void OnDraw()

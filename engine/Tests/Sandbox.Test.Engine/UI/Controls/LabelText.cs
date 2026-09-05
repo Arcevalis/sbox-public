@@ -290,4 +290,71 @@ public class LabelTextTest
 		Assert.AreEqual( "World", label.Text );
 		Assert.AreEqual( 5, label.TextLength );
 	}
+
+	/// <summary>
+	/// Text that is only a newline collapses to nothing under the default white-space, leaving the
+	/// paragraph with no lines. Measuring used to index the last line for the trailing newline's
+	/// height and throw. Label's measure callback swallows the exception, so measure the block directly.
+	/// </summary>
+	[TestMethod]
+	public void NewlineOnlyTextMeasuresWithoutThrowing()
+	{
+		var root = CreateRoot();
+
+		var label = root.AddChild<Label>();
+		label.Text = "\n";
+		label.Style.Set( "font-size: 16px;" );
+
+		root.Layout();
+
+		var size = label._textBlock.Measure( 1000f, float.NaN );
+
+		Assert.AreEqual( 0f, size.y );
+	}
+
+	/// <summary>
+	/// A trailing newline that white-space collapsing strips never reaches the paragraph, so it must
+	/// not add a line to the measured height either.
+	/// </summary>
+	[TestMethod]
+	public void CollapsedTrailingNewlineAddsNoHeight()
+	{
+		var root = CreateRoot();
+
+		var plain = root.AddChild<Label>();
+		plain.Text = "Hello";
+		plain.Style.Set( "font-size: 16px;" );
+
+		var trailing = root.AddChild<Label>();
+		trailing.Text = "Hello\n";
+		trailing.Style.Set( "font-size: 16px;" );
+
+		root.Layout();
+
+		Assert.IsTrue( plain.Box.Rect.Height > 0 );
+		Assert.AreEqual( plain.Box.Rect.Height, trailing.Box.Rect.Height );
+	}
+
+	/// <summary>
+	/// When white-space preserves the trailing newline, the empty line after it counts towards the
+	/// measured height so the caret has somewhere to sit.
+	/// </summary>
+	[TestMethod]
+	public void PreservedTrailingNewlineAddsALine()
+	{
+		var root = CreateRoot();
+
+		var plain = root.AddChild<Label>();
+		plain.Text = "Hello";
+		plain.Style.Set( "font-size: 16px; white-space: pre;" );
+
+		var trailing = root.AddChild<Label>();
+		trailing.Text = "Hello\n";
+		trailing.Style.Set( "font-size: 16px; white-space: pre;" );
+
+		root.Layout();
+
+		Assert.IsTrue( plain.Box.Rect.Height > 0 );
+		Assert.IsTrue( trailing.Box.Rect.Height > plain.Box.Rect.Height );
+	}
 }

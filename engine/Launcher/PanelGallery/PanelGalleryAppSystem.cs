@@ -23,27 +23,26 @@ public class PanelGalleryAppSystem : PanelAppSystem
 		// The old default - the mock editor straight up, no gallery around it
 		if ( Environment.GetCommandLineArgs().Any( x => x.Equals( "-editor", StringComparison.OrdinalIgnoreCase ) ) )
 		{
-			var editor = new PanelWindow( "Panel Gallery", new Vector2( 1500, 940 ), new Vector2( -1, -1 ), true );
-			editor.Root.AddChild( new EditorWindow( editor ) );
-			_windows.Add( editor );
+			_windows.Add( EditorWindow.Open() );
 			return;
 		}
 
 		RegisterUiTests();
 
 		// Borderless - the title bar in this one is panels, same as everything else
-		var window = new PanelWindow( "Control Gallery", new Vector2( 1280, 860 ), new Vector2( -1, -1 ), true );
+		var window = new PanelWindow( "Panel Gallery", new Vector2( 1280, 860 ), new Vector2( -1, -1 ), true );
 		window.Root.AddChild( new GalleryWindow( window ) );
+		window.Maximize();
 		_windows.Add( window );
 	}
 
 	/// <summary>
 	/// The renderer test pages compile into this assembly - the type library finds their
-	/// stylesheet attributes, the mounted folder serves the scss.
+	/// stylesheet attributes, the mounted folder serves the scss the build copied there.
 	/// </summary>
 	void RegisterUiTests()
 	{
-		var path = System.IO.Path.GetFullPath( System.IO.Path.Combine( Environment.CurrentDirectory, "..", "engine", "Launcher", "PanelGallery", "UiTests" ) );
+		var path = System.IO.Path.Combine( Environment.CurrentDirectory, "addons", "editor", "assets", "uitests" );
 
 		RegisterCompiledPanelCode( typeof( PanelGalleryAppSystem ).Assembly, path );
 		UiTestPages.Register( typeof( PanelGalleryAppSystem ).Assembly );

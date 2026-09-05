@@ -196,6 +196,25 @@ internal sealed class YogaWrapper
 		}
 	}
 
+	Margin _gutter;
+
+	/// <summary>
+	/// Extra left and right space between the padding box and the border, for a scrollbar gutter.
+	/// Added to the Yoga border, which is always in points. <see cref="Border"/> includes it.
+	/// </summary>
+	public Margin Gutter
+	{
+		get => _gutter;
+		set
+		{
+			if ( _gutter.Left == value.Left && _gutter.Right == value.Right ) return;
+			_gutter = value;
+
+			SetBorder( YGEdge.YGEdgeLeft, _borderleft, Axis.Width );
+			SetBorder( YGEdge.YGEdgeRight, _borderright, Axis.Width );
+		}
+	}
+
 	void SetPosition( YGEdge edge, Length? value, Axis axis )
 	{
 		switch ( Resolve( value, axis, out var px ) )
@@ -208,11 +227,18 @@ internal sealed class YogaWrapper
 
 	void SetBorder( YGEdge edge, Length? value, Axis axis )
 	{
+		var gutter = edge switch
+		{
+			YGEdge.YGEdgeLeft => _gutter.Left,
+			YGEdge.YGEdgeRight => _gutter.Right,
+			_ => 0,
+		};
+
 		switch ( Resolve( value, axis, out var px ) )
 		{
 			case YogaUnit.Auto: break; // border is always a point value
-			case YogaUnit.Percent: Yoga.YGNodeStyleSetBorder( Node, edge, value.Value.GetPixels( Reference( axis ) ) ); break;
-			default: Yoga.YGNodeStyleSetBorder( Node, edge, px ); break;
+			case YogaUnit.Percent: Yoga.YGNodeStyleSetBorder( Node, edge, value.Value.GetPixels( Reference( axis ) ) + gutter ); break;
+			default: Yoga.YGNodeStyleSetBorder( Node, edge, float.IsNaN( px ) ? (gutter > 0 ? gutter : px) : px + gutter ); break;
 		}
 	}
 

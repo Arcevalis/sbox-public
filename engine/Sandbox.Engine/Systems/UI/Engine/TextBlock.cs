@@ -128,11 +128,53 @@ internal sealed class TextBlock : IDisposable
 			Block.MaxHeight = float.IsNaN( height ) ? null : (height + 1);
 		}
 
-		var s = new Vector2( Block.MeasuredWidth.CeilToInt(), Block.MeasuredHeight.CeilToInt() );
+		var measuredHeight = Block.MeasuredHeight;
+
+		// The paragraph gives a trailing newline's empty line no height, but the caret can sit on it
+		if ( EndsWithNewline && Block.Lines.Count > 0 ) measuredHeight += Block.Lines[^1].Height;
+
+		var s = new Vector2( Block.MeasuredWidth.CeilToInt(), measuredHeight.CeilToInt() );
 
 		SizeCache[hash] = s;
 
 		return s;
+	}
+
+	/// <summary>
+	/// The block's text ends with a line break. Checked on the collapsed text rather than <see cref="Text"/>,
+	/// since white-space collapsing can strip a trailing newline and leave the block with no line for it.
+	/// </summary>
+	bool EndsWithNewline;
+
+	static bool EndsWithLineBreak( string text ) => text is { Length: > 0 } && text[^1] is '\n' or '\u2029';
+
+	/// <summary>
+	/// Number of lines, including the empty one after a trailing newline
+	/// </summary>
+	public int LineCount => Block is null ? 0 : Block.Lines.Count + (EndsWithNewline ? 1 : 0);
+
+	/// <summary>
+	/// The line a caret position is on
+	/// </summary>
+	public int LineOf( int caretPosition )
+	{
+		var codepoint = CaretToCodePointIndex( caretPosition );
+
+		if ( EndsWithNewline && codepoint > 0 && codepoint == Block.Length )
+			return Block.Lines.Count;
+
+		return Block.GetCaretInfo( new CaretPosition { CodePointIndex = codepoint } ).LineIndex;
+	}
+
+	/// <summary>
+	/// The caret position nearest an x on a given line
+	/// </summary>
+	public int GetLetterAtLine( int line, float x )
+	{
+		if ( Block is null ) return -1;
+		if ( line >= Block.Lines.Count ) return Block.LookupCaretIndex( Block.Length );
+
+		return Block.LookupCaretIndex( Block.HitTestLine( line, x ).ClosestCodePointIndex );
 	}
 
 	void WaitTextureReady()
@@ -232,7 +274,7 @@ internal sealed class TextBlock : IDisposable
 		float xPosition = pos.CaretRectangle.Left;
 		float yPosition = pos.CaretRectangle.Top;
 
-		if ( codepoint > 0 && codepoint == Block.Length && Text.Length > 0 && Text[^1] == '\n' )
+		if ( codepoint > 0 && codepoint == Block.Length && EndsWithNewline )
 		{
 			xPosition = 0;
 			yPosition += Block.Lines[pos.LineIndex].Height;
@@ -414,6 +456,7 @@ internal sealed class TextBlock : IDisposable
 		}
 
 		Block.Clear();
+		EndsWithNewline = false;
 		Block.Alignment = (Topten.RichTextKit.TextAlignment)TextAlign;
 		Block.Overflow = (Topten.RichTextKit.TextOverflow)TextOverflow;
 		Block.WordBreak = (Topten.RichTextKit.WordBreakMode)WordBreak;
@@ -466,7 +509,9 @@ internal sealed class TextBlock : IDisposable
 		}
 		else
 		{
-			Block.AddText( FixedText( Text ), Style );
+			var text = FixedText( Text );
+			Block.AddText( text, Style );
+			EndsWithNewline = EndsWithLineBreak( text );
 		}
 
 
@@ -488,6 +533,7 @@ internal sealed class TextBlock : IDisposable
 		{
 			var startText = block.Length;
 			block.AddText( node.InnerHtml, style );
+			EndsWithNewline = EndsWithLineBreak( node.InnerHtml );
 			var endText = block.Length;
 
 			var span = new HtmlSpan( node?.ParentNode, startText, endText );
@@ -497,6 +543,7 @@ internal sealed class TextBlock : IDisposable
 		if ( node.Name == "br" )
 		{
 			block.AddText( "\n", style );
+			EndsWithNewline = true;
 			return;
 		}
 

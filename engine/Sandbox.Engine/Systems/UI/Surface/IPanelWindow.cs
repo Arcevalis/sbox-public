@@ -63,9 +63,22 @@ internal interface IPanelWindow
 	void RequestClose();
 
 	/// <summary>
-	/// A popup - a transient window like a menu, dismissed by a click anywhere else.
+	/// A popup - a transient window like a menu, dismissed by a click anywhere else. While one
+	/// that takes input is up it has the keyboard, so a window meant to stay up alongside its
+	/// parent should set <see cref="IgnoresInput"/> instead.
 	/// </summary>
 	bool IsPopup { get; }
+
+	/// <summary>
+	/// The window a popup hangs off. Null for a top-level window.
+	/// </summary>
+	IPanelWindow Parent { get; }
+
+	/// <summary>
+	/// A popup that never takes the mouse or the keyboard - a tooltip, say. Where the OS doesn't
+	/// pass the mouse through it for us, the routing here has to.
+	/// </summary>
+	bool IgnoresInput { get; }
 
 	/// <summary>
 	/// Let frames run inside a frame that's already running. An outgoing drag blocks in the

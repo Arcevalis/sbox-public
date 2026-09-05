@@ -122,11 +122,20 @@ internal class NativeAsset : Asset
 
 		if ( nativeEditor != null )
 		{
+			if ( !EngineTools.EnsureAvailable( nativeEditor ) )
+			{
+				return;
+			}
+
 			native.OpenInSecondaryTool( nativeEditor );
 			return;
 		}
 
 		if ( IAssetEditor.OpenInEditor( this, out _ ) )
+		{
+			return;
+		}
+		if ( AssetType == AssetType.Model && !EngineTools.EnsureAvailable( "modeldoc_editor" ) )
 		{
 			return;
 		}

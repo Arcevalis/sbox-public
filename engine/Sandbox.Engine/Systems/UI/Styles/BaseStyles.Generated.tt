@@ -152,7 +152,11 @@ var Members = new Dictionary<string, (string TypeName, string DefaultValue, bool
 	{ "OutlineWidth",				("Length?",				"0",							false)},
 	{ "OutlineColor",				("Color?",				"Color.Transparent",			false)},
 	{ "OutlineOffset",				("Length?",				"0",							false)},
-	{ "Isolation",					("Isolation?",			"UI.Isolation.Auto",			false)}
+	{ "Isolation",					("Isolation?",			"UI.Isolation.Auto",			false)},
+	{ "ScrollbarWidth",				("Length?",				"0",							true)},
+	{ "ScrollbarGutter",			("ScrollbarGutter?",	"UI.ScrollbarGutter.Auto",		false)},
+	{ "ScrollbarThumbColor",		("Color?",				"null",							true)},
+	{ "ScrollbarTrackColor",		("Color?",				"null",							true)}
 };
 
 // Members whose null means "same as this other member", so a transition lerps from that one

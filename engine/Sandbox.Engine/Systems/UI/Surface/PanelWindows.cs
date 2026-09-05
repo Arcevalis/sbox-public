@@ -23,16 +23,61 @@ internal static class PanelWindows
 	}
 
 	/// <summary>
-	/// Close every popup except <paramref name="except"/>. Popups are transient - a click that
-	/// isn't on them, or the focus leaving the app, takes them down the way an OS menu goes.
+	/// Close every popup except <paramref name="except"/> and the popups it hangs off - a click in
+	/// a submenu keeps its parents up. Popups are transient - a click that isn't on them, or the
+	/// focus leaving the app, takes them down the way an OS menu goes.
 	/// </summary>
 	internal static void DismissPopups( IPanelWindow except = null )
 	{
 		for ( int i = all.Count - 1; i >= 0; i-- )
 		{
 			var window = all[i];
-			if ( window.IsPopup && window != except ) window.RequestClose();
+			if ( !window.IsPopup ) continue;
+			if ( IsSelfOrAncestor( window, except ) ) continue;
+
+			window.RequestClose();
 		}
+	}
+
+	static bool IsSelfOrAncestor( IPanelWindow window, IPanelWindow of )
+	{
+		for ( var current = of; current is not null; current = current.Parent )
+		{
+			if ( current == window ) return true;
+		}
+
+		return false;
+	}
+
+	/// <summary>
+	/// Where a key pressed in <paramref name="window"/> belongs. While a popup that takes input is
+	/// open the keyboard is its - the way an open menu owns the arrow keys - whichever window the
+	/// OS thinks is focused. The deepest one wins: a submenu over the menu it came from.
+	/// </summary>
+	internal static IPanelWindow KeyboardTarget( IPanelWindow window )
+	{
+		var target = window;
+		var targetDepth = -1;
+
+		foreach ( var popup in all )
+		{
+			if ( !popup.IsPopup || !popup.IsOpen || popup.IgnoresInput ) continue;
+
+			var depth = Depth( popup );
+			if ( depth <= targetDepth ) continue;
+
+			target = popup;
+			targetDepth = depth;
+		}
+
+		return target;
+	}
+
+	static int Depth( IPanelWindow window )
+	{
+		int depth = 0;
+		for ( var current = window.Parent; current is not null; current = current.Parent ) depth++;
+		return depth;
 	}
 
 	/// <summary>

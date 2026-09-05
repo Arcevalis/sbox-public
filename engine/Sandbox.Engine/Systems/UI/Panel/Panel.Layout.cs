@@ -199,6 +199,12 @@ public partial class Panel
 		}
 
 
+		// Inherit from what we're styled under, if that's not where we're laid out
+		if ( StyleParent is { } styleParent && styleParent != Parent )
+		{
+			cascade.ParentStyles = styleParent.ComputedStyle;
+		}
+
 		ComputedStyle = Style.BuildFinal( ref cascade, out bool changed );
 		cascade.ParentStyles = ComputedStyle;
 
@@ -310,6 +316,8 @@ public partial class Panel
 		YogaNode.MarginTop = ComputedStyle.MarginTop;
 		YogaNode.MarginBottom = ComputedStyle.MarginBottom;
 
+		YogaNode.Gutter = ScrollbarGutter;
+
 		YogaNode.PaddingLeft = ComputedStyle.PaddingLeft;
 		YogaNode.PaddingRight = ComputedStyle.PaddingRight;
 		YogaNode.PaddingTop = ComputedStyle.PaddingTop;
@@ -389,11 +397,15 @@ public partial class Panel
 
 			Box.Padding = YogaNode.Padding;
 			Box.Margin = YogaNode.Margin;
-			Box.Border = YogaNode.Border;
+
+			// The scrollbar gutter rides on Yoga's border for layout, but it's inside the clip and doesn't draw
+			var border = YogaNode.Border;
+			var gutter = YogaNode.Gutter;
+			Box.Border = new Margin( border.Left - gutter.Left, border.Top, border.Right - gutter.Right, border.Bottom );
 
 			Box.RectOuter = Box.Rect.Grow( YogaNode.Margin.Left, YogaNode.Margin.Top, YogaNode.Margin.Right, YogaNode.Margin.Bottom );
 			Box.RectInner = Box.Rect.Shrink( YogaNode.Padding.Left, YogaNode.Padding.Top, YogaNode.Padding.Right, YogaNode.Padding.Bottom );
-			Box.ClipRect = Box.Rect.Shrink( YogaNode.Border.Left, YogaNode.Border.Top, YogaNode.Border.Right, YogaNode.Border.Bottom );
+			Box.ClipRect = Box.Rect.Shrink( Box.Border.Left, Box.Border.Top, Box.Border.Right, Box.Border.Bottom );
 
 			UpdateLayer( ComputedStyle );
 
@@ -435,7 +447,8 @@ public partial class Panel
 
 		bool wasScrollatBottom = IsScrollAtBottom;
 
-		offset = Box.Rect.Position - ScrollOffset.SnapToGrid( 1.0f );
+		_laidOutScrollOffset = ScrollOffset.SnapToGrid( 1.0f );
+		offset = Box.Rect.Position - _laidOutScrollOffset;
 		FinalLayoutChildren( offset );
 
 		if ( wasScrollatBottom )
@@ -450,6 +463,11 @@ public partial class Panel
 	{
 		Length.CurrentFontSize = ComputedStyle.FontSize ?? Length.Pixels( 13 ).Value;
 	}
+
+	/// <summary>
+	/// The scroll offset the children were last laid out against
+	/// </summary>
+	Vector2 _laidOutScrollOffset;
 
 	/// <summary>
 	/// If true, we'll try to stay scrolled to the bottom when the panel changes size
@@ -515,6 +533,9 @@ public partial class Panel
 				if ( !child.IsVisible )
 					continue;
 
+				if ( child is ScrollBar )
+					continue;
+
 				var childRect = child.GetLayoutRect();
 
 				if ( hasContent ) content.Add( childRect );
@@ -525,7 +546,8 @@ public partial class Panel
 
 			if ( hasContent )
 			{
-				content.Right += Box.Padding.Right;
+				// Content scrolls up to the gutter, not under it
+				content.Right += Box.Padding.Right + YogaNode.Gutter.Right;
 				content.Bottom += Box.Padding.Bottom;
 				rect.Add( content );
 			}
@@ -597,6 +619,11 @@ public partial class Panel
 	}
 
 	/// <summary>
+	/// Reversed by flex-direction: *-reverse or justify-content: flex-end, when the scroll offset runs from -<see cref="ScrollSize"/> to zero
+	/// </summary>
+	internal bool IsScrollAxisReversed => ComputedStyle.JustifyContent == Justify.FlexEnd || ComputedStyle.FlexDirection == FlexDirection.RowReverse || ComputedStyle.FlexDirection == FlexDirection.ColumnReverse;
+
+	/// <summary>
 	/// Constrain <see cref="ScrollOffset">scrolling</see> to the given size.
 	/// </summary>
 	protected virtual void ConstrainScrolling( Vector2 size )
@@ -626,8 +653,7 @@ public partial class Panel
 		// add velocity
 		so += ScrollVelocity * RealTime.SmoothDelta * 60.0f;
 
-		// Reverse the axis if flex-direction: *-reverse or justify-content: flex-end;
-		var axisReversed = ComputedStyle.JustifyContent == Justify.FlexEnd || ComputedStyle.FlexDirection == FlexDirection.RowReverse || ComputedStyle.FlexDirection == FlexDirection.ColumnReverse;
+		var axisReversed = IsScrollAxisReversed;
 
 		IsScrollAtBottom = so.y + ScrollVelocity.y >= size.y;
 		if ( ScrollVelocity.y > 0 && IsScrollAtBottom ) so.y += heightChange;

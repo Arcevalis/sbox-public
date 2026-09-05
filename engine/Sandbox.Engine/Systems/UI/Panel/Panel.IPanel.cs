@@ -18,7 +18,6 @@ public partial class Panel
 	Rect IPanel.OuterRect => Box.RectOuter;
 	Rect IPanel.InnerRect => Box.RectInner;
 	Matrix? IPanel.GlobalMatrix => GlobalMatrix;
-	bool IPanel.HasTooltip => HasTooltip;
 	bool IPanel.WantsPointerEvents => (ComputedStyle?.PointerEvents ?? PointerEvents.None) == PointerEvents.All;
 
 	IPanel IPanel.GetPanelAt( Vector2 point, bool visibleOnly, bool needPointerEvents ) => GetPanelAt( point, visibleOnly, needPointerEvents );
@@ -52,25 +51,17 @@ public partial class Panel
 
 	int Depth => 1 + (Parent?.Depth ?? 0);
 
-	IPanel IPanel.CreateTooltip() => CreateTooltipPanel();
 	void IPanel.Delete( bool immediate ) => Delete( immediate );
 
 	/// <summary>
-	/// If the tooltip text changed, we'll update it here. I haven't exposed this to game code yet
-	/// because I doubt the usefulness to people that are manually creating tooltip panels.
+	/// Pin the panel to a spot on its UI, offset from a position - a tooltip beside the cursor.
+	/// The alignment says which side of the position the panel sits on. This wouldn't be needed
+	/// if we could expose the styles. Which we should do.
 	/// </summary>
-	void IPanel.UpdateTooltip( IPanel tooltipPanel )
+	internal void SetAbsolutePosition( TextFlag alignment, Vector2 position, float offset )
 	{
-		if ( tooltipPanel is not Panel p ) return;
-		if ( !p.HasChildren ) return;
-		if ( p.ChildrenCount != 1 ) return;
-		if ( p.Children.First() is not Sandbox.UI.Label textPanel ) return;
+		var size = UISystem.Size;
 
-		textPanel.Text = Tooltip;
-	}
-
-	void IPanel.SetAbsolutePosition( TextFlag alignment, Vector2 position, float offset )
-	{
 		Style.Left = null;
 		Style.Right = null;
 		Style.Top = null;
@@ -78,7 +69,7 @@ public partial class Panel
 
 		if ( (alignment & TextFlag.Left) != 0 )
 		{
-			Style.Right = ((Screen.Size.x - position.x) + offset) * ScaleFromScreen;
+			Style.Right = ((size.x - position.x) + offset) * ScaleFromScreen;
 		}
 
 		if ( (alignment & TextFlag.Right) != 0 )
@@ -87,7 +78,7 @@ public partial class Panel
 		}
 
 		if ( (alignment & TextFlag.Top) != 0 )
-			Style.Bottom = ((Screen.Size.y - position.y) + offset) * ScaleFromScreen;
+			Style.Bottom = ((size.y - position.y) + offset) * ScaleFromScreen;
 
 		if ( (alignment & TextFlag.Bottom) != 0 )
 			Style.Top = (offset + position.y) * ScaleFromScreen;

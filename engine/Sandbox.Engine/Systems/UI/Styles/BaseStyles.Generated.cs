@@ -2376,6 +2376,70 @@ public abstract partial class BaseStyles
 		}
 	}
 
+	internal Length? _scrollbarwidth;
+	
+	/// <summary>
+	/// Represents the <c>scrollbar-width</c> CSS property.
+	/// </summary>
+	public Length? ScrollbarWidth
+	{
+		get => _scrollbarwidth;
+		set
+		{
+			if ( _scrollbarwidth == value ) return;
+			_scrollbarwidth = value;
+			Dirty();
+		}
+	}
+
+	internal ScrollbarGutter? _scrollbargutter;
+	
+	/// <summary>
+	/// Represents the <c>scrollbar-gutter</c> CSS property.
+	/// </summary>
+	public ScrollbarGutter? ScrollbarGutter
+	{
+		get => _scrollbargutter;
+		set
+		{
+			if ( _scrollbargutter == value ) return;
+			_scrollbargutter = value;
+			Dirty();
+		}
+	}
+
+	internal Color? _scrollbarthumbcolor;
+	
+	/// <summary>
+	/// Represents the <c>scrollbar-thumb-color</c> CSS property.
+	/// </summary>
+	public Color? ScrollbarThumbColor
+	{
+		get => _scrollbarthumbcolor;
+		set
+		{
+			if ( _scrollbarthumbcolor == value ) return;
+			_scrollbarthumbcolor = value;
+			Dirty();
+		}
+	}
+
+	internal Color? _scrollbartrackcolor;
+	
+	/// <summary>
+	/// Represents the <c>scrollbar-track-color</c> CSS property.
+	/// </summary>
+	public Color? ScrollbarTrackColor
+	{
+		get => _scrollbartrackcolor;
+		set
+		{
+			if ( _scrollbartrackcolor == value ) return;
+			_scrollbartrackcolor = value;
+			Dirty();
+		}
+	}
+
 	/// <summary>
 	/// Copy over only the styles that are set.
 	/// </summary>
@@ -2615,6 +2679,7 @@ public abstract partial class BaseStyles
 		if ( a._backgroundpositiony != null ) _backgroundpositiony = a._backgroundpositiony;
 
 		if ( a._backgroundrepeat != null ) _backgroundrepeat = a._backgroundrepeat;
+
 		if ( a._backgroundclip != null ) _backgroundclip = a._backgroundclip;
 
 		if ( a._borderimagewidthleft != null ) _borderimagewidthleft = a._borderimagewidthleft;
@@ -2676,6 +2741,14 @@ public abstract partial class BaseStyles
 		if ( a._outlineoffset != null ) _outlineoffset = a._outlineoffset;
 
 		if ( a._isolation != null ) _isolation = a._isolation;
+
+		if ( a._scrollbarwidth != null ) _scrollbarwidth = a._scrollbarwidth;
+
+		if ( a._scrollbargutter != null ) _scrollbargutter = a._scrollbargutter;
+
+		if ( a._scrollbarthumbcolor != null ) _scrollbarthumbcolor = a._scrollbarthumbcolor;
+
+		if ( a._scrollbartrackcolor != null ) _scrollbartrackcolor = a._scrollbartrackcolor;
 
 	}
 
@@ -2832,6 +2905,10 @@ public abstract partial class BaseStyles
 		_outlinecolor = a._outlinecolor;
 		_outlineoffset = a._outlineoffset;
 		_isolation = a._isolation;
+		_scrollbarwidth = a._scrollbarwidth;
+		_scrollbargutter = a._scrollbargutter;
+		_scrollbarthumbcolor = a._scrollbarthumbcolor;
+		_scrollbartrackcolor = a._scrollbartrackcolor;
 
 	}
 
@@ -3184,6 +3261,15 @@ public abstract partial class BaseStyles
 		case "outline-offset":
 			OutlineOffset = Length.Parse( value );
 			return OutlineOffset.HasValue;
+		case "scrollbar-width":
+			ScrollbarWidth = Length.Parse( value );
+			return ScrollbarWidth.HasValue;
+		case "scrollbar-thumb-color":
+			ScrollbarThumbColor = Color.Parse( value );
+			return ScrollbarThumbColor.HasValue;
+		case "scrollbar-track-color":
+			ScrollbarTrackColor = Color.Parse( value );
+			return ScrollbarTrackColor.HasValue;
 		default:
 			return false;
 		}
@@ -3341,6 +3427,10 @@ public abstract partial class BaseStyles
 		hash.Add( _outlinecolor );
 		hash.Add( _outlineoffset );
 		hash.Add( _isolation );
+		hash.Add( _scrollbarwidth );
+		hash.Add( _scrollbargutter );
+		hash.Add( _scrollbarthumbcolor );
+		hash.Add( _scrollbartrackcolor );
 
 		return hash.ToHashCode();
 	}
@@ -3450,6 +3540,9 @@ public abstract partial class BaseStyles
 		LerpProperty( "outline-width", from, to, delta );
 		LerpProperty( "outline-color", from, to, delta );
 		LerpProperty( "outline-offset", from, to, delta );
+		LerpProperty( "scrollbar-width", from, to, delta );
+		LerpProperty( "scrollbar-thumb-color", from, to, delta );
+		LerpProperty( "scrollbar-track-color", from, to, delta );
 
 	}
 	
@@ -3760,6 +3853,15 @@ public abstract partial class BaseStyles
 			case "outline-offset":
 				Lerp( ref _outlineoffset, from._outlineoffset, to._outlineoffset, 0, delta );
 				break;
+			case "scrollbar-width":
+				Lerp( ref _scrollbarwidth, from._scrollbarwidth, to._scrollbarwidth, from._scrollbarwidth ?? 0, delta );
+				break;
+			case "scrollbar-thumb-color":
+				Lerp( ref _scrollbarthumbcolor, from._scrollbarthumbcolor, to._scrollbarthumbcolor, from._scrollbarthumbcolor ?? null, delta );
+				break;
+			case "scrollbar-track-color":
+				Lerp( ref _scrollbartrackcolor, from._scrollbartrackcolor, to._scrollbartrackcolor, from._scrollbartrackcolor ?? null, delta );
+				break;
 		}
 	}
 	
@@ -3917,6 +4019,10 @@ public abstract partial class BaseStyles
 		copy._outlinecolor = _outlinecolor;
 		copy._outlineoffset = _outlineoffset;
 		copy._isolation = _isolation;
+		copy._scrollbarwidth = _scrollbarwidth;
+		copy._scrollbargutter = _scrollbargutter;
+		copy._scrollbarthumbcolor = _scrollbarthumbcolor;
+		copy._scrollbartrackcolor = _scrollbartrackcolor;
 		copy.CssWide = CssWide == null ? null : new System.Collections.Generic.Dictionary<string, CssWideKeyword>( CssWide );
 		return copy;
 	}
@@ -3983,6 +4089,12 @@ public abstract partial class BaseStyles
 		if ( _imagerendering == null ) _imagerendering = parent._imagerendering;
 
 		if ( _fontsmooth == null ) _fontsmooth = parent._fontsmooth;
+
+		if ( _scrollbarwidth == null ) _scrollbarwidth = parent._scrollbarwidth;
+
+		if ( _scrollbarthumbcolor == null ) _scrollbarthumbcolor = parent._scrollbarthumbcolor;
+
+		if ( _scrollbartrackcolor == null ) _scrollbartrackcolor = parent._scrollbartrackcolor;
 
 	}
 
@@ -4208,6 +4320,7 @@ public abstract partial class BaseStyles
 		if ( !_backgroundpositiony.HasValue ) _backgroundpositiony = Length.Percent( 0 ).Value;
 
 		if ( !_backgroundrepeat.HasValue ) _backgroundrepeat = UI.BackgroundRepeat.Repeat;
+
 		if ( !_backgroundclip.HasValue ) _backgroundclip = UI.BackgroundClip.BorderBox;
 
 		if ( !_borderimagewidthleft.HasValue ) _borderimagewidthleft = 1;
@@ -4253,6 +4366,14 @@ public abstract partial class BaseStyles
 		if ( !_outlineoffset.HasValue ) _outlineoffset = 0;
 
 		if ( !_isolation.HasValue ) _isolation = UI.Isolation.Auto;
+
+		if ( !_scrollbarwidth.HasValue ) _scrollbarwidth = 0;
+
+		if ( !_scrollbargutter.HasValue ) _scrollbargutter = UI.ScrollbarGutter.Auto;
+
+		if ( !_scrollbarthumbcolor.HasValue ) _scrollbarthumbcolor = null;
+
+		if ( !_scrollbartrackcolor.HasValue ) _scrollbartrackcolor = null;
 
 	}
 
@@ -4408,6 +4529,10 @@ public abstract partial class BaseStyles
 			case "outline-color": return (_outlinecolor == Color.Transparent);
 			case "outline-offset": return (_outlineoffset == 0);
 			case "isolation": return (_isolation == UI.Isolation.Auto);
+			case "scrollbar-width": return (_scrollbarwidth == 0);
+			case "scrollbar-gutter": return (_scrollbargutter == UI.ScrollbarGutter.Auto);
+			case "scrollbar-thumb-color": return (_scrollbarthumbcolor == null);
+			case "scrollbar-track-color": return (_scrollbartrackcolor == null);
 		}
 		
 		throw new Exception( $"Invalid property name '{name}'" );

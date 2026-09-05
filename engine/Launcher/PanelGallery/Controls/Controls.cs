@@ -355,7 +355,7 @@ public class TextInput : Panel
 	/// </summary>
 	int LetterUnderCursor()
 	{
-		if ( ContextMenu.WindowOf( this ) is not { } window ) return label.TextLength;
+		if ( PanelWindow.FromPanel( this ) is not { } window ) return label.TextLength;
 
 		var letter = label.GetLetterAtScreenPosition( window.MousePosition );
 

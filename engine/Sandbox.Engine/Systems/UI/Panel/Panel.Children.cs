@@ -280,19 +280,25 @@ public partial class Panel
 		if ( count == 0 )
 			return;
 
+		// Scrollbars aren't siblings of the content, so the real last child keeps :last-child
+		var siblings = count - ScrollbarCount;
+
 		for ( int i = 0; i < count; i++ )
 		{
-			_children[i].UpdateSiblingIndex( i, count );
+			_children[i].UpdateSiblingIndex( i, siblings );
 		}
 	}
 
 	internal void UpdateSiblingIndex( int index, int siblings )
 	{
+		SiblingIndex = index;
+
+		if ( this is ScrollBar )
+			return;
+
 		Switch( PseudoClass.FirstChild, index == 0 );
 		Switch( PseudoClass.LastChild, index == siblings - 1 );
 		Switch( PseudoClass.OnlyChild, index == 0 && siblings == 1 );
-
-		SiblingIndex = index;
 	}
 
 	/// <summary>

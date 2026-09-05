@@ -47,6 +47,12 @@ internal sealed class UISurface : IDisposable
 	}
 
 	/// <summary>
+	/// Tooltips on this surface. Where they appear is up to whoever hosts the surface - a window
+	/// puts them in a window of their own.
+	/// </summary>
+	internal TooltipSystem Tooltips => System.Tooltips;
+
+	/// <summary>
 	/// Create a surface and its root panel.
 	/// </summary>
 	public UISurface()
@@ -54,6 +60,10 @@ internal sealed class UISurface : IDisposable
 		Input = new SurfaceInput( this );
 		System.Input = Input;
 		System.Size = new Vector2( 1024, 1024 );
+
+		// A surface is editor UI. Tooltips there wait for the cursor to settle, the way the
+		// desktop's do, rather than firing on everything the cursor crosses.
+		System.Tooltips.Delay = 0.5f;
 
 		Root = new SurfaceRootPanel( this, System );
 	}

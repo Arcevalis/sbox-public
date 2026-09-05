@@ -201,7 +201,7 @@ public partial class Panel : IPanel, IValid, IComponent
 	{
 		get
 		{
-			foreach ( var p in AncestorsAndSelf )
+			for ( var p = this; p is not null; p = p.StyleParent )
 			{
 				if ( p.StyleSheet.List == null ) continue;
 
@@ -210,6 +210,13 @@ public partial class Panel : IPanel, IValid, IComponent
 			}
 		}
 	}
+
+	/// <summary>
+	/// The panel this one is styled under - whose stylesheets apply, whose selectors it's a
+	/// descendant of, whose font and colour it inherits. Normally the parent. A popup that floats
+	/// somewhere else in the tree, or in a window of its own, styles itself under what opened it.
+	/// </summary>
+	internal virtual Panel StyleParent => Parent;
 
 	/// <summary>
 	/// Switch a pseudo class on or off.
@@ -349,6 +356,8 @@ public partial class Panel : IPanel, IValid, IComponent
 			// keep before and after updated
 			UpdateBeforeAfterElements();
 
+			UpdateScrollbars();
+
 			//
 			// If our style is dirty, or we're animating/transitioning then make sure we get layed out
 			//
@@ -382,6 +391,10 @@ public partial class Panel : IPanel, IValid, IComponent
 			}
 
 			RunPendingEvents();
+
+			// A child's event can delete this panel
+			if ( IsDeleted ) return;
+
 			Tick();
 			RunPendingEvents();
 

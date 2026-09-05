@@ -11,7 +11,7 @@ native static class PanelWindowGlue as NativeEngine.PanelWindowNative
 	void* Create( string title, int x, int y, int width, int height, bool borderless );
 	void Destroy( CastTo[void*] IntPtr window );
 
-	void* CreatePopup( CastTo[void*] IntPtr parent, int x, int y, int width, int height );
+	void Setup( CastTo[void*] IntPtr window );
 	void DestroyPopup( CastTo[void*] IntPtr window );
 
 	void SetTitle( CastTo[void*] IntPtr window, string title );
@@ -44,6 +44,8 @@ native static class PanelWindowGlue as NativeEngine.PanelWindowNative
 	void SetMinSize( CastTo[void*] IntPtr window, int width, int height );
 	void SetMaxSize( CastTo[void*] IntPtr window, int width, int height );
 	void SetCanMaximize( CastTo[void*] IntPtr window, bool canMaximize );
+	void SetDropShadow( CastTo[void*] IntPtr window, bool dropShadow );
+	void SetRoundedCorners( CastTo[void*] IntPtr window, bool rounded );
 
 	SwapChainHandle_t CreateSwapChain( CastTo[void*] IntPtr window, int nMSAAAmount, bool vsync );
 	void ResizeSwapChain( SwapChainHandle_t swapChain, int width, int height );
