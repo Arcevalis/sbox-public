@@ -211,7 +211,7 @@ internal static class ManagedTools
 						foreach ( var c in text )
 						{
 							if ( !char.IsControl( c ) )
-								InputRouter.OnText( c );
+								InputRouter.OnText( c.ToString() );
 						}
 					}
 				}
