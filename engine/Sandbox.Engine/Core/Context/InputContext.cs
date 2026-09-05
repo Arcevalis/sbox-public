@@ -110,7 +110,7 @@ internal sealed class InputContext
 				&& ((KeyboardFocusPanel as Panel)?.AcceptsImeInput == true || TargetUISystem?.CurrentFocus?.AcceptsImeInput == true)
 				&& _blockingTextInputSince > 0.5f )
 			{
-				Log.Warning( $"IN_Text latch recovered — clearing stuck block [{string.Join( ",", _blockingTextInput )}] for '{input}'" );
+				Log.Warning( $"IN_Text latch recovered — clearing stuck block [{string.Join( ",", _blockingTextInput )}] for '{text}'" );
 				_blockingTextInput.Clear();
 			}
 			else
