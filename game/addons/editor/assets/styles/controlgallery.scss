@@ -376,3 +376,13 @@ $wb-orange: #ff8800;
 .gallery-page .demo-tree .tree-row:hover .eye, .gallery-page .demo-tree .tree-row.hidden .eye { opacity: 1; }
 .gallery-page .demo-tree .tree-row .eye:hover { color: $text; }
 .gallery-page .demo-tree .tree-row.hidden .tree-label, .gallery-page .demo-tree .tree-row.hidden .tree-icon { opacity: 0.4; }
+
+// Windows page - the body of the test window it opens
+.test-window-body { flex-direction: column; padding: 20px; width: 100%; height: 100%; background-color: $surface; }
+.test-window-body .textentry { margin-top: 12px; }
+
+// Mouse capture page - two drag boxes, one that captures and one that doesn't
+.gallery-page .capture-arena { position: relative; width: 400px; height: 240px; flex-shrink: 0; border: 1px solid $line; border-radius: 8px; background-color: $surface; cursor: crosshair; overflow: hidden; }
+.gallery-page .capture-arena.dragging { border-color: $accent; }
+.gallery-page .capture-arena .dot { position: absolute; width: 12px; height: 12px; border-radius: 6px; background-color: $accent; pointer-events: none; }
+.gallery-page .capture-arena .readout { position: absolute; left: 10px; bottom: 8px; color: $text-muted; font-size: 11px; pointer-events: none; }

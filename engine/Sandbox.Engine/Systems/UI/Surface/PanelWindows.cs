@@ -10,6 +10,22 @@ internal static class PanelWindows
 
 	internal static IReadOnlyList<IPanelWindow> All => all;
 
+	/// <summary>
+	/// The window whose panel has the mouse captured, so its cursor is hidden and pinned and
+	/// motion arrives as deltas. Null when no panel window has a capture.
+	/// </summary>
+	internal static IPanelWindow CaptureWindow { get; set; }
+
+	/// <summary>
+	/// Mouse movement this frame while captured - what <see cref="Mouse.Delta"/> reads then.
+	/// </summary>
+	internal static Vector2 CaptureDelta { get; set; }
+
+	/// <summary>
+	/// Pinning the cursor warps it, and that warp arrives as the first delta.
+	/// </summary>
+	internal static bool SkipNextCaptureDelta { get; set; }
+
 	internal static void Register( IPanelWindow window )
 	{
 		if ( all.Contains( window ) ) return;
@@ -179,6 +195,9 @@ internal static class PanelWindows
 				Log.Warning( e, $"Exception drawing a panel window" );
 			}
 		}
+
+		// Every window has read this frame's delta; the next frame's starts from nothing
+		CaptureDelta = 0;
 
 		return presented;
 	}

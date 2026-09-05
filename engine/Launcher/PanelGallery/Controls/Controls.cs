@@ -152,14 +152,12 @@ public class NumberBox : Panel
 		dragging = true;
 		dragStartValue = Value;
 		dragStartX = MousePosition.x;
-		SetMouseCapture( true );
 		SetClass( "dragging", true );
 	}
 
 	protected override void OnMouseUp( MousePanelEvent e )
 	{
 		dragging = false;
-		SetMouseCapture( false );
 		SetClass( "dragging", false );
 	}
 
@@ -210,14 +208,12 @@ public class Slider : Panel
 	protected override void OnMouseDown( MousePanelEvent e )
 	{
 		dragging = true;
-		SetMouseCapture( true );
 		DragTo();
 	}
 
 	protected override void OnMouseUp( MousePanelEvent e )
 	{
 		dragging = false;
-		SetMouseCapture( false );
 	}
 
 	public override void Tick()
@@ -325,7 +321,6 @@ public class TextInput : Panel
 		label.ScrollToCaret();
 
 		dragging = true;
-		SetMouseCapture( true );
 	}
 
 	protected override void OnMouseMove( MousePanelEvent e )
@@ -340,7 +335,6 @@ public class TextInput : Panel
 	protected override void OnMouseUp( MousePanelEvent e )
 	{
 		dragging = false;
-		SetMouseCapture( false );
 	}
 
 	protected override void OnDoubleClick( MousePanelEvent e )
@@ -646,14 +640,12 @@ public class Splitter : Panel
 	{
 		dragging = true;
 		grabOffset = Cursor;
-		SetMouseCapture( true );
 		SetClass( "dragging", true );
 	}
 
 	protected override void OnMouseUp( MousePanelEvent e )
 	{
 		dragging = false;
-		SetMouseCapture( false );
 		SetClass( "dragging", false );
 	}
 

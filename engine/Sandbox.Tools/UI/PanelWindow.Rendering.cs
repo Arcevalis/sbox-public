@@ -70,10 +70,56 @@ public partial class PanelWindow
 	/// <summary>
 	/// Tick, input, layout. Returns false if there's nothing to draw afterwards.
 	/// </summary>
+	bool _relativeMouse;
+
+	/// <summary>
+	/// Whether the panel with the mouse captured is one of ours. While it is, the OS cursor is
+	/// hidden and pinned and <see cref="Mouse.Delta"/> reports the movement.
+	/// </summary>
+	bool HasMouseCapture => Panel.MouseCapture is { } captured && captured.FindRootPanel() == Surface?.Root;
+
+	void UpdateMouseCapture()
+	{
+		var wants = HasMouseCapture;
+		if ( wants == _relativeMouse ) return;
+
+		SetRelativeMouse( wants );
+	}
+
+	void SetRelativeMouse( bool relative )
+	{
+		_relativeMouse = relative;
+		if ( Handle != IntPtr.Zero ) PanelWindowNative.SetRelativeMouse( Handle, relative );
+
+		if ( relative )
+		{
+			PanelWindows.CaptureWindow = this;
+			PanelWindows.SkipNextCaptureDelta = true;
+		}
+		else if ( PanelWindows.CaptureWindow == this )
+		{
+			PanelWindows.CaptureWindow = null;
+		}
+
+		PanelWindows.CaptureDelta = 0;
+	}
+
+	/// <summary>
+	/// Drop a capture held by one of our panels. The window is going away or losing focus, and
+	/// a capture that outlives either leaves the cursor hidden with nothing to release it.
+	/// </summary>
+	void ReleaseMouseCapture()
+	{
+		if ( HasMouseCapture ) Panel.MouseCapture.SetMouseCapture( false );
+		if ( _relativeMouse ) SetRelativeMouse( false );
+	}
+
 	bool SimulateFrame()
 	{
 		var size = PixelSize;
 		if ( size.x < 1 || size.y < 1 ) return false;
+
+		UpdateMouseCapture();
 
 		if ( size != _swapChainSize )
 			PanelWindowNative.ResizeSwapChain( _swapChain, (int)size.x, (int)size.y );

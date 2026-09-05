@@ -17,9 +17,23 @@ internal static class PanelWindowInput
 	/// The cursor moved. SDL gives the position relative to the window it happened in, which is
 	/// the only frame it means anything in.
 	/// </summary>
-	internal static void OnMouseMove( IntPtr window, float x, float y )
+	internal static void OnMouseMove( IntPtr window, float x, float y, float dx, float dy )
 	{
 		if ( PanelWindows.Find( window ) is not { } target ) return;
+
+		// A pinned cursor doesn't go anywhere; the movement is the delta, and the first one after
+		// pinning is the warp that pinned it
+		if ( PanelWindows.CaptureWindow == target )
+		{
+			if ( PanelWindows.SkipNextCaptureDelta )
+			{
+				PanelWindows.SkipNextCaptureDelta = false;
+				return;
+			}
+
+			PanelWindows.CaptureDelta += new Vector2( dx, dy );
+			return;
+		}
 
 		PanelWindows.SetCursorPosition( target, target.ToSurface( new Vector2( x, y ) ) );
 	}
@@ -203,6 +217,8 @@ internal static class PanelWindowInput
 	{
 		if ( PanelWindows.Find( window ) is not { } target ) return;
 
+		target.FocusChanged( focused );
+
 		if ( !focused )
 		{
 			target.MouseInside = false;
@@ -227,16 +243,35 @@ internal static class PanelWindowInput
 	/// </summary>
 	internal static void OnResized( IntPtr window )
 	{
-		if ( PanelWindows.Find( window )?.Frame( interactiveResize: true ) == true )
+		if ( PanelWindows.Find( window ) is not { } target ) return;
+
+		target.Resized();
+
+		if ( target.Frame( interactiveResize: true ) )
 		{
 			PanelWindows.FrameEnd();
 		}
+	}
+
+	internal static void OnStateChanged( IntPtr window, int state )
+	{
+		PanelWindows.Find( window )?.StateChanged( state );
 	}
 
 	internal static void OnClose( IntPtr window )
 	{
 		_composing.Remove( window );
 		PanelWindows.Find( window )?.RequestClose();
+	}
+
+	internal static void OnMoved( IntPtr window )
+	{
+		PanelWindows.Find( window )?.Moved();
+	}
+
+	internal static void OnDisplayChanged( IntPtr window )
+	{
+		PanelWindows.Find( window )?.DisplayChanged();
 	}
 
 	/// <summary>
