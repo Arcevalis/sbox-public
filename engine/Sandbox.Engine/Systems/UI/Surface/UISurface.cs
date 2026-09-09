@@ -156,6 +156,7 @@ internal sealed class UISurface : IDisposable
 
 	internal static Panel FindPanelAt( Panel panel, Vector2 position, Func<Panel, bool> match )
 	{
+		if ( panel is RootPanel root && root.FindFixedPanelAt( position, match: match ) is { } overlayHit ) return overlayHit;
 		if ( !panel.IsVisible ) return null;
 		if ( panel.ComputedStyle is null ) return null;
 
@@ -167,7 +168,9 @@ internal sealed class UISurface : IDisposable
 		// Later children draw on top, so they win
 		for ( int i = panel.ChildrenCount - 1; i >= 0; i-- )
 		{
-			var hit = FindPanelAt( panel.GetChild( i ), position, match );
+			var child = panel.GetChild( i );
+			if ( child.IsFixed ) continue;
+			var hit = FindPanelAt( child, position, match );
 			if ( hit is not null ) return hit;
 		}
 

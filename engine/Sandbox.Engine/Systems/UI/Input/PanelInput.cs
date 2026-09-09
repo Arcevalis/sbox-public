@@ -291,8 +291,14 @@ internal class PanelInput
 		DropTarget = null;
 	}
 
-	bool CheckHover( Panel panel, Vector2 pos, ref Panel current )
+	internal static bool CheckHover( Panel panel, Vector2 pos, ref Panel current )
 	{
+		if ( panel is RootPanel root && root.FindFixedPanelAt( pos, needPointerEvents: true ) is { } overlayHit )
+		{
+			current = overlayHit;
+			return true;
+		}
+
 		bool found = false;
 
 		if ( !panel.IsVisible )
@@ -331,9 +337,11 @@ internal class PanelInput
 		}
 
 		int topIndex = -10000;
+		panel.SortRenderChildren();
 
 		foreach ( var child in CollectionsMarshal.AsSpan( panel._renderChildren ) )
 		{
+			if ( child.IsFixed ) continue;
 			var index = child.GetRenderOrderIndex();
 			if ( index < topIndex ) continue;
 

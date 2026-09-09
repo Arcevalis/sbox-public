@@ -64,7 +64,8 @@ public class GalleryWindow : Panel
 		WindowButton( bar, "contrast", null, ToggleTheme );
 		WindowButton( bar, "remove", null, _window.Minimize );
 		WindowButton( bar, "crop_square", null, _window.ToggleMaximized );
-		WindowButton( bar, "close", "close", _window.Dispose );
+		if ( _window.CanClose )
+			WindowButton( bar, "close", "close", _window.RequestClose );
 	}
 
 	static void WindowButton( Panel bar, string icon, string classname, Action onClick )

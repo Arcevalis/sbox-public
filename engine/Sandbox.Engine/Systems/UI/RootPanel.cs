@@ -96,6 +96,7 @@ public partial class RootPanel : Panel
 	public override void OnDeleted()
 	{
 		base.OnDeleted();
+		fixedOverlays.Clear();
 
 		UISystem.RemoveRoot( this );
 	}
@@ -204,26 +205,39 @@ public partial class RootPanel : Panel
 		PushRootValues();
 
 		PreLayout( cascade );
+		_ = FixedOverlays;
 	}
 
 	internal void CalculateLayout()
 	{
-		if ( YogaNode == null )
+		if ( LayoutTree == null )
 			return;
 
 		// Dirtiness propagates to the root, so a clean root means nothing to do
-		if ( !YogaNode.IsDirty )
+		if ( !LayoutTree.IsDirty )
 			return;
 
 		using var perfScope = Performance.Scope( "CalculateLayout" );
 		PushRootValues();
-		YogaNode.CalculateLayout();
+		LayoutTree.CalculateLayout();
 	}
 
 	internal void PostLayout()
 	{
 		PushRootValues();
 		FinalLayout( Vector2.Zero );
+		foreach ( var panel in FixedOverlays )
+		{
+			if ( !panel.IsVisible && !panel.HasIntro ) continue;
+			try
+			{
+				panel.FinalLayout( PanelBounds.Position );
+			}
+			catch ( Exception e )
+			{
+				Log.Warning( e );
+			}
+		}
 	}
 
 	internal void PushRootValues()

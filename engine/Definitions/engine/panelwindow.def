@@ -63,6 +63,8 @@ native static class PanelWindowGlue as NativeEngine.PanelWindowNative
 	void SetOwner( CastTo[void*] IntPtr window, CastTo[void*] IntPtr owner );
 	void SetModal( CastTo[void*] IntPtr window, bool modal );
 	void SetRelativeMouse( CastTo[void*] IntPtr window, bool relative );
+	void SetCanClose( CastTo[void*] IntPtr window, bool canClose );
+	void SetOverlayIcon( CastTo[void*] IntPtr window, int width, int height, CastTo[const void*] IntPtr pixels, string description );
 	SwapChainHandle_t CreateSwapChain( CastTo[void*] IntPtr window, int nMSAAAmount, bool vsync );
 	void ResizeSwapChain( SwapChainHandle_t swapChain, int width, int height );
 	void GetSwapChainSize( SwapChainHandle_t swapChain, out int width, out int height );

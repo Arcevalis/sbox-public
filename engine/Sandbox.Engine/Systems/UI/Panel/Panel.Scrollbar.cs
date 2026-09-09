@@ -72,7 +72,7 @@ public partial class Panel
 	{
 		get
 		{
-			var gutter = YogaNode?.Gutter ?? default;
+			var gutter = LayoutTree?.Gutter ?? default;
 			if ( gutter.Left == 0 && gutter.Right == 0 ) return Box.ClipRect;
 
 			return Box.ClipRect.Shrink( gutter.Left, 0, gutter.Right, 0 );

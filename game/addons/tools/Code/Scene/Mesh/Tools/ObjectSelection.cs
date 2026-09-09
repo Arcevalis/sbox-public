@@ -535,6 +535,7 @@ public sealed partial class ObjectSelection( MeshTool tool ) : SelectionTool( to
 	void UpdateSelectionMode()
 	{
 		if ( !Gizmo.HasMouseFocus ) return;
+		if ( !IsAllowedToSelect ) return;
 
 		if ( Gizmo.WasLeftMouseReleased && !Gizmo.Pressed.Any && !IsBoxSelecting )
 		{
@@ -548,6 +549,8 @@ public sealed partial class ObjectSelection( MeshTool tool ) : SelectionTool( to
 	void UpdateHovered()
 	{
 		if ( IsBoxSelecting ) return;
+
+		if ( !IsAllowedToSelect ) return;
 
 		var tr = MeshTrace.Run();
 

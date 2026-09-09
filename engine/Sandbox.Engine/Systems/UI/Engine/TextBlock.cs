@@ -6,7 +6,7 @@ using Topten.RichTextKit;
 
 namespace Sandbox.UI;
 
-internal sealed class TextBlock : IDisposable
+internal sealed partial class TextBlock : IDisposable
 {
 	[ConVar( ConVarFlags.Protected, Help = "Enable rendering text to textures" )]
 	public static bool ui_rendertext { get; set; } = true;
@@ -110,6 +110,17 @@ internal sealed class TextBlock : IDisposable
 
 
 	Dictionary<int, Vector2> SizeCache = new Dictionary<int, Vector2>();
+	Vector2? MinContentSize;
+
+	internal Vector2 MeasureMinContent( float? width = null )
+	{
+		if ( width is null && MinContentSize is { } cached ) return cached;
+
+		var size = Block.MeasureMinContent( width, WhiteSpace == UI.WhiteSpace.BreakSpaces, EndsWithNewline );
+		var result = new Vector2( size.Width.CeilToInt(), size.Height.CeilToInt() );
+		if ( width is null ) MinContentSize = result;
+		return result;
+	}
 
 	public Vector2 Measure( float width, float height )
 	{
@@ -220,20 +231,20 @@ internal sealed class TextBlock : IDisposable
 	/// </summary>
 	Rect GetTextureRect( Styles currentStyle, Rect textrect )
 	{
-		if ( currentStyle.TextAlign == TextAlign.Center )
+		if ( currentStyle?.TextAlign == TextAlign.Center )
 		{
 			textrect.Left += (textrect.Width - BlockSize.x) * 0.5f;
 		}
-		else if ( currentStyle.TextAlign == TextAlign.Right )
+		else if ( currentStyle?.TextAlign == TextAlign.Right )
 		{
 			textrect.Left = textrect.Right - BlockSize.x;
 		}
 
-		if ( currentStyle.AlignItems == Align.Center )
+		if ( currentStyle?.AlignItems == Align.Center )
 		{
 			textrect.Top += (textrect.Height - BlockSize.y) * 0.5f;
 		}
-		else if ( currentStyle.AlignItems == Align.FlexEnd )
+		else if ( currentStyle?.AlignItems == Align.FlexEnd )
 		{
 			textrect.Top = textrect.Bottom - BlockSize.y;
 		}
@@ -331,7 +342,7 @@ internal sealed class TextBlock : IDisposable
 		hash = HashCode.Combine( hash, style.TextStrokeWidth, style.TextStrokeColor, style.TextDecorationColor, style.TextDecorationThickness, style.TextDecorationSkipInk, style.TextDecorationStyle );
 		hash = HashCode.Combine( hash, style.TextUnderlineOffset, style.TextOverlineOffset, style.TextLineThroughOffset, style.TextGradient, style.TextOverflow, style.WordBreak, style.LineHeight );
 		hash = HashCode.Combine( hash, style.WordSpacing );
-		hash = HashCode.Combine( hash, Smooth, FontVariantNumeric );
+		hash = HashCode.Combine( hash, Smooth, FontVariantNumeric, NoWrap, IsHtml );
 
 		if ( FontHash == hash && Block != null )
 			return false;
@@ -460,7 +471,7 @@ internal sealed class TextBlock : IDisposable
 		Block.Alignment = (Topten.RichTextKit.TextAlignment)TextAlign;
 		Block.Overflow = (Topten.RichTextKit.TextOverflow)TextOverflow;
 		Block.WordBreak = (Topten.RichTextKit.WordBreakMode)WordBreak;
-		Block.NoWrap = NoWrap || WhiteSpace == UI.WhiteSpace.NoWrap;
+		Block.NoWrap = NoWrap || WhiteSpace is UI.WhiteSpace.NoWrap or UI.WhiteSpace.Pre;
 
 		if ( IsHtml && !string.IsNullOrWhiteSpace( Text ) )
 		{
@@ -485,7 +496,7 @@ internal sealed class TextBlock : IDisposable
 
 						sty.FontSize = (s.FontSize ?? style.FontSize ?? Length.Pixels( 13 ).Value).GetPixels( 100 );
 						sty.FontSize = MathF.Round( sty.FontSize * 32.0f ) / 32.0f;
-						sty.FontFamily = s.FontFamily;
+						sty.FontFamily = s.FontFamily ?? sty.FontFamily;
 						sty.TextColor = s.FontColor?.ToSkF() ?? sty.TextColor;
 						sty.BackgroundColor = s.BackgroundColor?.ToSkF() ?? sty.BackgroundColor;
 						IsHdr |= (s.FontColor?.IsHdr ?? false) || (s.BackgroundColor?.IsHdr ?? false);
@@ -507,7 +518,7 @@ internal sealed class TextBlock : IDisposable
 				Log.Warning( e );
 			}
 		}
-		else
+		else if ( !IsInlineParagraph )
 		{
 			var text = FixedText( Text );
 			Block.AddText( text, Style );
@@ -516,6 +527,7 @@ internal sealed class TextBlock : IDisposable
 
 
 		SizeCache.Clear();
+		MinContentSize = null;
 		ReleaseTexture();
 
 		return true;
@@ -626,7 +638,7 @@ internal sealed class TextBlock : IDisposable
 		}
 		else
 		{
-			Block.MaxWidth = WhiteSpace == UI.WhiteSpace.NoWrap ? null : (maxwidth.CeilToInt() + 1);
+			Block.MaxWidth = IsInlineParagraph ? _inlineWidth : WhiteSpace == UI.WhiteSpace.NoWrap ? null : (maxwidth.CeilToInt() + 1);
 		}
 
 		int width = Block.MeasuredWidth.CeilToInt().Clamp( 2, 4096 );
@@ -855,5 +867,6 @@ internal sealed class TextBlock : IDisposable
 		Block = null;
 		Style = null;
 		SizeCache = null;
+		_inlineLayout = null;
 	}
 }

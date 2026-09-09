@@ -41,8 +41,8 @@ public class TooltipLayoutTests
 
 	/// <summary>
 	/// Builds the tooltip the way the panel does and places it the way a tooltip window does: as
-	/// an ordinary child of the root, not an absolute one. Absolute is what breaks it - Yoga
-	/// measures an absolute panel before its max-width applies, so long text gets a one-line box.
+	/// an ordinary child of the root, not an absolute one. This guards against absolute measurement
+	/// happening before max-width applies, which would give long text a one-line box.
 	/// </summary>
 	static Panel MakeTooltip( RootPanel root, string text )
 	{

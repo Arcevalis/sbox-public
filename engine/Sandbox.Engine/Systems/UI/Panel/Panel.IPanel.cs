@@ -25,6 +25,7 @@ public partial class Panel
 
 	Panel GetPanelAt( Vector2 point, bool visibleOnly, bool needPointerEvents = false )
 	{
+		if ( this is RootPanel root && root.FindFixedPanelAt( point, visibleOnly, needPointerEvents ) is { } overlayHit ) return overlayHit;
 		if ( visibleOnly && !IsVisible ) return null;
 
 		point = LocalMatrix?.Transform( point ) ?? point;
@@ -35,6 +36,7 @@ public partial class Panel
 
 		foreach ( var child in Children.OrderByDescending( x => x.GetRenderOrderIndex() ).ThenByDescending( x => x.SiblingIndex ) )
 		{
+			if ( child.IsFixed ) continue;
 			var p = child.GetPanelAt( point, visibleOnly, needPointerEvents );
 
 			if ( !p.IsValid() ) continue;

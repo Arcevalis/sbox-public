@@ -21,7 +21,7 @@ public partial class Label
 
 			// This decides whether the text wraps, which is measured during layout - without
 			// this the block keeps wrapping until something else happens to dirty it
-			YogaNode?.MarkDirty();
+			LayoutTree?.MarkDirty();
 			SetNeedsPreLayout();
 		}
 	}

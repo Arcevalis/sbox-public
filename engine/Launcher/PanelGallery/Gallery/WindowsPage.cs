@@ -57,10 +57,13 @@ public class WindowsPage : GalleryPage
 			Say( w.Modal ? (w.Owner is null ? "modal, but with no owner there's nothing to block" : "modal - this window is blocked until it closes") : "not modal" );
 		} ) );
 
+		Button( ownership, "Toggle can close", () => With( w => { w.CanClose = !w.CanClose; Say( $"can close {w.CanClose} - try the X and Alt+F4" ); } ) );
 		Button( ownership, "Toggle hide on close", () => With( w => { w.HideOnClose = !w.HideOnClose; Say( $"hide on close {w.HideOnClose}" ); } ) );
 
 		var shell = Case( "Shell" );
 		Button( shell, "Toggle show in taskbar", () => With( w => { w.ShowInTaskbar = !w.ShowInTaskbar; Say( $"show in taskbar {w.ShowInTaskbar}" ); } ) );
+		Button( shell, "Set overlay icon", () => With( w => { w.SetOverlayIcon( MakeIcon(), "3 things need attention" ); Say( "overlay set - look at the taskbar button" ); } ) );
+		Button( shell, "Clear overlay icon", () => With( w => { w.SetOverlayIcon( null ); Say( "overlay cleared" ); } ) );
 		Button( shell, "Set icon", () => With( w => { w.SetIcon( MakeIcon() ); Say( "icon set - look at the title bar and the taskbar" ); } ) );
 
 		output = Output();

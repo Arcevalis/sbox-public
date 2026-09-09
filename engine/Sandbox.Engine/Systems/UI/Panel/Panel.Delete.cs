@@ -93,8 +93,12 @@ public partial class Panel
 				SetMouseCapture( false );
 			}
 
-			YogaNode?.Dispose();
-			YogaNode = null;
+			InlineOwner?.Invalidate();
+			InlineParagraph?.Dispose();
+			InlineParagraph = null;
+			InlineOwner = null;
+			LayoutTree?.Dispose();
+			LayoutTree = null;
 
 			// Destroy the razor render tree — Block.ElementPanel holds strong refs to
 			// dynamically-created child panels whose Style._styleBlocks keep parsed

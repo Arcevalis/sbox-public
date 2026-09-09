@@ -574,6 +574,21 @@ public partial class PanelWindow : IDisposable, IPanelWindow
 	}
 
 	/// <summary>
+	/// Whether the user can close the window: the caption button greys out and Alt+F4 does
+	/// nothing. Code can still close it. Windows drawing their own chrome check this for their
+	/// close button too.
+	/// </summary>
+	public bool CanClose
+	{
+		get => field;
+		set
+		{
+			field = value;
+			if ( Handle != IntPtr.Zero ) PanelWindowNative.SetCanClose( Handle, value );
+		}
+	} = true;
+
+	/// <summary>
 	/// Does this window have keyboard focus?
 	/// </summary>
 	public bool IsFocused => Handle != IntPtr.Zero && PanelWindowNative.IsFocused( Handle );
@@ -796,6 +811,9 @@ public partial class PanelWindow : IDisposable, IPanelWindow
 	/// </summary>
 	public void RequestClose()
 	{
+		if ( !CanClose )
+			return;
+
 		if ( OnCloseRequested is not null )
 		{
 			try
@@ -918,15 +936,18 @@ public partial class PanelWindow : IDisposable, IPanelWindow
 	}
 
 	/// <summary>
-	/// Centre the window on the usable part of its display.
+	/// Centre the window on its <see cref="Owner"/>, or on the usable part of its display when
+	/// it has none. Either way it ends up on screen.
 	/// </summary>
 	public void MoveToCenter()
 	{
 		if ( Handle == IntPtr.Zero ) return;
 
-		var area = DisplayWorkArea;
+		var area = Owner is { IsOpen: true } owner ? owner.DesktopBounds : DisplayWorkArea;
 		var bounds = DesktopBounds;
 		Position = area.Position + (area.Size - bounds.Size) * 0.5f;
+
+		SnapToDisplay();
 	}
 
 	/// <summary>
@@ -964,6 +985,32 @@ public partial class PanelWindow : IDisposable, IPanelWindow
 	{
 		if ( Handle == IntPtr.Zero ) return;
 		PanelWindowNative.Flash( Handle, 0 );
+	}
+
+	/// <summary>
+	/// A small icon over the corner of the window's taskbar button - a badge for a count, a
+	/// status. 16 pixels square is what the taskbar shows. Null clears it. The description is
+	/// what a screen reader says for it.
+	/// </summary>
+	public void SetOverlayIcon( Bitmap icon, string description = null )
+	{
+		if ( Handle == IntPtr.Zero ) return;
+
+		if ( icon is null )
+		{
+			PanelWindowNative.SetOverlayIcon( Handle, 0, 0, IntPtr.Zero, "" );
+			return;
+		}
+
+		var pixels = icon.GetPixels32();
+
+		unsafe
+		{
+			fixed ( Color32* p = pixels )
+			{
+				PanelWindowNative.SetOverlayIcon( Handle, icon.Width, icon.Height, (IntPtr)p, description ?? "" );
+			}
+		}
 	}
 
 	/// <summary>

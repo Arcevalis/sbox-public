@@ -74,18 +74,14 @@ public partial class Panel
 	/// </summary>
 	internal void BuildDescriptorsForChildren( PanelRenderer render, ref RenderState state )
 	{
-		if ( _renderChildrenDirty )
-		{
-			_renderChildren.Sort( ( x, y ) => x.GetRenderOrderIndex() - y.GetRenderOrderIndex() );
-			_renderChildrenDirty = false;
-		}
+		SortRenderChildren();
 
 		// Content clips short of the scrollbar gutter, the scrollbars clip to the whole padding box
 		using ( render.Clip( this, ContentClipRect ) )
 		{
 			for ( int i = 0; i < _renderChildren.Count; i++ )
 			{
-				if ( _renderChildren[i] is not ScrollBar )
+				if ( !_renderChildren[i].IsFixed && _renderChildren[i] is not ScrollBar )
 					render.BuildDescriptors( _renderChildren[i], state );
 			}
 		}
@@ -96,7 +92,7 @@ public partial class Panel
 		{
 			for ( int i = 0; i < _renderChildren.Count; i++ )
 			{
-				if ( _renderChildren[i] is ScrollBar )
+				if ( !_renderChildren[i].IsFixed && _renderChildren[i] is ScrollBar )
 					render.BuildDescriptors( _renderChildren[i], state );
 			}
 		}

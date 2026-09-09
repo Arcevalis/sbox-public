@@ -63,6 +63,8 @@ public partial class Panel
 	/// <param name="pos">The position to test, in screen coordinates.</param>
 	public bool IsInside( Vector2 pos )
 	{
+		if ( InlineOwner is not null ) return InlineOwner.Contains( this, pos );
+
 		var rect = Box.Rect;
 
 		if ( pos.x < rect.Left || pos.x > rect.Right ) return false;
@@ -260,6 +262,7 @@ public partial class Panel
 	/// </summary>
 	public virtual string GetClipboardValue( bool cut )
 	{
+		if ( InlineOwner is not null ) return InlineOwner.SelectedText;
 		if ( AllowChildSelection )
 			return CollectSelectedChildrenText( this );
 
