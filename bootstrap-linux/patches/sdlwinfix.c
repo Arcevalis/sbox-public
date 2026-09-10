@@ -13,6 +13,7 @@
 // degraded under per-frame load -> mass fail-open), per-reason fail counters,
 // per-window change-gated fail/move lines, SDL_PollEvent histogram (proves
 // whether the engine's mouse feed is alive while answers are faked).
+// v9: twin vector from X truth (XTranslateCoordinates origins), not timestamps.
 //
 // Build: gcc -shared -fPIC -O2 -o libsdlwinfix.so sdlwinfix.c -lX11 -lpthread -ldl
 #define _GNU_SOURCE
@@ -60,6 +61,8 @@ typedef struct
 	int lfail;
 	// Query count (identifies the window the engine sizes/cursors from).
 	unsigned nq;
+	// Live X xid (for screen-origin translation).
+	unsigned long xid;
 } WindowEntry;
 
 static WindowEntry windows[MAX_WINDOWS];
@@ -94,6 +97,7 @@ static unsigned long n_f_dpy = 0;
 static unsigned long n_f_query = 0;
 static unsigned long n_f_geo = 0;
 static unsigned long n_moved = 0;
+static unsigned long moved_seq = 0;
 // Event feed histogram (SDL_PollEvent interpose, observe-only).
 static unsigned long n_poll = 0;
 static unsigned long n_ev_motion = 0;
@@ -119,19 +123,14 @@ static float ev_py = 0;
 static int ev_pok = 0;
 static int ev_have = 0;
 static unsigned long n_ev_insane = 0;
-static unsigned ghost_wid = 0;
-static float pair_vx = 0;
-static float pair_vy = 0;
-static int have_pair = 0;
-static unsigned long long last_tracked_ts = 0;
-static float last_tracked_x = 0;
-static float last_tracked_y = 0;
-static unsigned last_tracked_wid = 0;
-static unsigned long long last_ghost_ts = 0;
-static float last_ghost_x = 0;
-static float last_ghost_y = 0;
-static unsigned last_ghost_wid = 0;
-static unsigned long n_pair = 0;
+#define MAX_GHOSTS 4
+static unsigned g_wid[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static float g_vx[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static float g_vy[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static int g_ok[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned g_main[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned long g_seq[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned long n_xvec = 0;
 static unsigned long n_remap_ev = 0;
 static unsigned long n_remap_state = 0;
 static unsigned focus_last_id = 0xFFFFFFFFu;
@@ -241,6 +240,19 @@ static WindowEntry *track_window( SDL_Window *window )
 	{
 		if ( windows[i].known && windows[i].ptr == window )
 		{
+			if ( real_GetWindowID )
+			{
+				unsigned fresh = real_GetWindowID( window );
+				if ( fresh != 0 && fresh != windows[i].id )
+				{
+					// Same pointer, new window incarnation: reset, re-init below.
+					SDL_Window *keep = windows[i].ptr;
+					memset( &windows[i], 0, sizeof( windows[i] ) );
+					windows[i].ptr = keep;
+					free_slot = i;
+					break;
+				}
+			}
 			return &windows[i];
 		}
 		if ( !windows[i].known && free_slot < 0 )
@@ -484,7 +496,7 @@ static WindowEntry *note_coords( void *ev, int is_button )
 	ev_py = y;
 	ev_pok = ( x == x && y == y && x <= 1e6f && x >= -1e6f && y <= 1e6f && y >= -1e6f );
 	WindowEntry *found = entry_for_id( wid );
-	if ( !found )
+	if ( !found || found->nq == 0 )
 	{
 		n_ev_nowid++;
 		for ( int k = 0; k < 4; k++ )
@@ -506,7 +518,7 @@ static WindowEntry *note_coords( void *ev, int is_button )
 				now_ms(), is_button ? "btn" : "motion", wid, x, y );
 		}
 	}
-	else
+	else if ( found->nq > 0 )
 	{
 		ev_last_wid = wid;
 	}
@@ -587,6 +599,7 @@ static void log_move( WindowEntry *e, int px, int py, int pw, int ph,
 	if ( e->have_parent )
 	{
 		n_moved++;
+		moved_seq++;
 		emitf( "t=%lld move id=%u \"%s\" win %d,%d,%dx%d par %d,%d,%dx%d -> %d,%d,%dx%d\n",
 			now_ms(), (unsigned)e->id, e->title,
 			wx, wy, ww, wh, e->ppx, e->ppy, e->ppw, e->pph, px, py, pw, ph );
@@ -612,6 +625,7 @@ static int query_parent( WindowEntry *e, int *px, int *py, int *pw, int *ph,
 	int r = x11_parent( e->ptr, px, py, pw, ph, xid, parent, wx, wy, ww, wh );
 	if ( r == 1 )
 	{
+		e->xid = *xid;
 		log_topo_once( e, *xid, *parent, *wx, *wy, *ww, *wh, *px, *py, *pw, *ph );
 		log_fail( e, FR_OK );
 		log_move( e, *px, *py, *pw, *ph, *wx, *wy, *ww, *wh );
@@ -768,99 +782,185 @@ int SDL_GetWindowPosition( SDL_Window *window, int *rx, int *ry )
 // Most-queried tracked window: the one the engine sizes/cursors from.
 static WindowEntry *main_entry( void )
 {
+	if ( !real_GetWindowFromID )
+	{
+		real_GetWindowFromID = dlsym( RTLD_NEXT, "SDL_GetWindowFromID" );
+	}
 	WindowEntry *best = 0;
 	for ( int i = 0; i < MAX_WINDOWS; i++ )
 	{
-		if ( windows[i].known && ( !best || windows[i].nq > best->nq ) )
+		if ( !windows[i].known || windows[i].nq == 0 )
+		{
+			continue;
+		}
+		if ( real_GetWindowFromID && real_GetWindowFromID( windows[i].id ) != windows[i].ptr )
+		{
+			continue; // destroyed window: most queries ever, but dead
+		}
+		if ( !best || windows[i].nq > best->nq )
 		{
 			best = &windows[i];
 		}
 	}
-	return ( best && best->nq > 0 ) ? best : 0;
+	return best;
 }
 
 // Ghost-twin unification. A never-queried window echoing same-timestamp
 // mouse events is a ghost twin living in a shifted space; pair it with the
 // main window on identical timestamps, then rewrite its coords into main
 // space (correct mode only - observe only logs the pair).
-static void pair_or_remap( void *ev, unsigned long long tsms )
+// Ghost-twin unification via X truth. A never-queried window echoing mouse
+// events is a ghost twin living in a shifted space; the shift is the exact
+// difference of the two windows' screen origins (XTranslateCoordinates to
+// root). Recomputed on main-geometry moves and periodically. Deterministic
+// across sessions and layout transitions - no pairing heuristics.
+static int ghost_slot( unsigned wid )
+{
+	for ( int k = 0; k < MAX_GHOSTS; k++ )
+	{
+		if ( g_wid[k] == wid )
+		{
+			return k;
+		}
+	}
+	for ( int k = 0; k < MAX_GHOSTS; k++ )
+	{
+		if ( g_wid[k] == 0 )
+		{
+			g_wid[k] = wid;
+			return k;
+		}
+	}
+	return -1;
+}
+
+static int screen_origin( unsigned long xid, int *sx, int *sy )
+{
+	Window child = 0;
+	int x = 0;
+	int y = 0;
+	if ( !XTranslateCoordinates( g_dpy, (Window)xid, DefaultRootWindow( g_dpy ), 0, 0, &x, &y, &child ) )
+	{
+		return 0;
+	}
+	*sx = x;
+	*sy = y;
+	return 1;
+}
+
+static void xvec_recompute( unsigned wid )
+{
+	int slot = ghost_slot( wid );
+	if ( slot < 0 )
+	{
+		return;
+	}
+	WindowEntry *main = main_entry();
+	if ( !main || !main->xid )
+	{
+		return;
+	}
+	if ( g_ok[slot] && g_seq[slot] == moved_seq && g_main[slot] == main->id )
+	{
+		return;
+	}
+	if ( !real_GetWindowFromID )
+	{
+		real_GetWindowFromID = dlsym( RTLD_NEXT, "SDL_GetWindowFromID" );
+	}
+	if ( !real_GetWindowProperties || !real_GetNumberProperty )
+	{
+		real_GetWindowProperties = dlsym( RTLD_NEXT, "SDL_GetWindowProperties" );
+		real_GetNumberProperty = dlsym( RTLD_NEXT, "SDL_GetNumberProperty" );
+	}
+	if ( !real_GetWindowFromID || !real_GetWindowProperties || !real_GetNumberProperty )
+	{
+		return;
+	}
+	SDL_Window *gp = real_GetWindowFromID( wid );
+	if ( !gp )
+	{
+		return;
+	}
+	SDL_PropertiesID props = real_GetWindowProperties( gp );
+	if ( !props )
+	{
+		return;
+	}
+	unsigned long gxid = (unsigned long)real_GetNumberProperty( props, "SDL.window.x11.window", 0 );
+	if ( !gxid )
+	{
+		return;
+	}
+	int msx = 0;
+	int msy = 0;
+	int gsx = 0;
+	int gsy = 0;
+	pthread_mutex_lock( &g_dpy_mutex );
+	if ( !g_dpy )
+	{
+		g_dpy = XOpenDisplay( NULL );
+	}
+	int ok = 0;
+	if ( g_dpy )
+	{
+		ok = screen_origin( main->xid, &msx, &msy ) && screen_origin( gxid, &gsx, &gsy );
+	}
+	pthread_mutex_unlock( &g_dpy_mutex );
+	if ( !ok )
+	{
+		return;
+	}
+	float vx = (float)( msx - gsx );
+	float vy = (float)( msy - gsy );
+	if ( vx > 5000.0f || vx < -5000.0f || vy > 5000.0f || vy < -5000.0f )
+	{
+		return;
+	}
+	g_seq[slot] = moved_seq;
+	g_main[slot] = main->id;
+	if ( !g_ok[slot] || vx - g_vx[slot] > 0.5f || g_vx[slot] - vx > 0.5f ||
+		vy - g_vy[slot] > 0.5f || g_vy[slot] - vy > 0.5f )
+	{
+		g_vx[slot] = vx;
+		g_vy[slot] = vy;
+		g_ok[slot] = 1;
+		n_xvec++;
+		emitf( "t=%lld xvec ghost=%u main=%u vec=%.1f,%.1f\n", now_ms(), wid, main->id, vx, vy );
+	}
+}
+
+// Rewrite a ghost twin's coords into main space (correct mode only).
+static void xremap( void *ev )
 {
 	if ( !ev_pok )
 	{
 		return;
 	}
-	WindowEntry *main = main_entry();
-	if ( !main )
 	{
-		return;
-	}
-	WindowEntry *e = entry_for_id( ev_pwid );
-	if ( e )
-	{
-		if ( e->id == main->id && last_ghost_wid != 0 && last_ghost_wid != main->id )
+		WindowEntry *te = entry_for_id( ev_pwid );
+		if ( te && te->nq > 0 )
 		{
-			unsigned long long dt = tsms > last_ghost_ts ? tsms - last_ghost_ts : last_ghost_ts - tsms;
-			if ( dt <= 8 )
-			{
-				float vx = last_ghost_x - ev_px;
-				float vy = last_ghost_y - ev_py;
-				if ( !have_pair || ghost_wid != last_ghost_wid ||
-					vx - pair_vx > 0.5f || pair_vx - vx > 0.5f ||
-					vy - pair_vy > 0.5f || pair_vy - vy > 0.5f )
-				{
-					ghost_wid = last_ghost_wid;
-					pair_vx = vx;
-					pair_vy = vy;
-					have_pair = 1;
-					n_pair++;
-					emitf( "t=%lld pair ghost=%u main=%u vec=%.1f,%.1f\n",
-						now_ms(), ghost_wid, main->id, vx, vy );
-				}
-			}
+			return;
 		}
-		last_tracked_ts = tsms;
-		last_tracked_x = ev_px;
-		last_tracked_y = ev_py;
-		last_tracked_wid = ev_pwid;
-		return;
 	}
-	last_ghost_ts = tsms;
-	last_ghost_x = ev_px;
-	last_ghost_y = ev_py;
-	last_ghost_wid = ev_pwid;
-	if ( last_tracked_wid != main->id )
+	int slot = ghost_slot( ev_pwid );
+	if ( slot < 0 )
 	{
 		return;
 	}
-	unsigned long long dt = tsms > last_tracked_ts ? tsms - last_tracked_ts : last_tracked_ts - tsms;
-	if ( dt > 8 )
+	xvec_recompute( ev_pwid );
+	if ( !g_ok[slot] || mode() != 2 )
 	{
 		return;
 	}
-	float vx = ev_px - last_tracked_x;
-	float vy = ev_py - last_tracked_y;
-	if ( !have_pair || ghost_wid != ev_pwid ||
-		vx - pair_vx > 0.5f || pair_vx - vx > 0.5f ||
-		vy - pair_vy > 0.5f || pair_vy - vy > 0.5f )
-	{
-		ghost_wid = ev_pwid;
-		pair_vx = vx;
-		pair_vy = vy;
-		have_pair = 1;
-		n_pair++;
-		emitf( "t=%lld pair ghost=%u main=%u vec=%.1f,%.1f\n",
-			now_ms(), ghost_wid, main->id, vx, vy );
-	}
-	if ( have_pair && ghost_wid == ev_pwid && mode() == 2 )
-	{
-		float nx = ev_px - pair_vx;
-		float ny = ev_py - pair_vy;
-		memcpy( (char *)ev + 28, &nx, 4 );
-		memcpy( (char *)ev + 32, &ny, 4 );
-		n_remap_ev++;
-		ev_px = nx;
-		ev_py = ny;
-	}
+	float nx = ev_px - g_vx[slot];
+	float ny = ev_py - g_vy[slot];
+	memcpy( (char *)ev + 28, &nx, 4 );
+	memcpy( (char *)ev + 32, &ny, 4 );
+	n_remap_ev++;
+	ev_px = nx;
+	ev_py = ny;
 }
 
 // Observe-only event-feed histogram. Never modifies events; proves whether
@@ -886,20 +986,17 @@ int SDL_PollEvent( void *ev )
 	if ( rc != 0 && ev )
 	{
 		unsigned type = *(volatile unsigned *)ev;
-		unsigned long long ts = 0;
-		memcpy( &ts, (char *)ev + 8, sizeof( ts ) );
-		unsigned long long tsms = ts / 1000000ULL;
 		if ( type == 0x400 )
 		{
 			n_ev_motion++;
 			note_coords( ev, 0 );
-			pair_or_remap( ev, tsms );
+			xremap( ev );
 		}
 		else if ( type == 0x401 || type == 0x402 )
 		{
 			n_ev_btn++;
 			note_coords( ev, 1 );
-			pair_or_remap( ev, tsms );
+			xremap( ev );
 			if ( type == 0x401 && ev_pok )
 			{
 				emitf( "t=%lld click wid=%u x=%.1f y=%.1f\n", now_ms(), ev_pwid, ev_px, ev_py );
@@ -944,6 +1041,23 @@ int SDL_PollEvent( void *ev )
 					now, nowid_list[k], ufw, ufh, uxid, upar, uwx, uwy, uww, uwh,
 					upx, upy, upw, uph, ur == 1 ? "embedded" : ( ur == 0 ? "toplevel" : "fail" ) );
 			}
+			for ( int i = 0; i < MAX_WINDOWS; i++ )
+			{
+				if ( !windows[i].known )
+				{
+					continue;
+				}
+				SDL_Window *rp = real_GetWindowFromID ? real_GetWindowFromID( windows[i].id ) : 0;
+				emitf( "t=%lld emain id=%u nq=%u ptr=%p fromid=%p\n",
+					now, windows[i].id, windows[i].nq, (void *)windows[i].ptr, (void *)rp );
+			}
+			for ( int k = 0; k < 4; k++ )
+			{
+				if ( nowid_list[k] != 0 )
+				{
+					xvec_recompute( nowid_list[k] );
+				}
+			}
 			WindowEntry *le = entry_for_id( ev_last_wid );
 			emitf( "t=%lld evpos wid=%u fossil=%dx%d mx=[%.1f..%.1f] my=[%.1f..%.1f] mlast=(%.1f,%.1f) blast=(%.1f,%.1f) insane=%lu\n",
 				now, ev_last_wid, le ? le->rw : -1, le ? le->rh : -1,
@@ -967,7 +1081,7 @@ unsigned SDL_GetMouseState( float *x, float *y )
 		return 0;
 	}
 	unsigned r = real_GetMouseState( x, y );
-	if ( mode() != 2 || !have_pair || !x || !y )
+	if ( mode() != 2 || !x || !y )
 	{
 		return r;
 	}
@@ -986,11 +1100,15 @@ unsigned SDL_GetMouseState( float *x, float *y )
 		focus_last_id = fid;
 		emitf( "t=%lld focus id=%u\n", now_ms(), fid );
 	}
-	if ( fid == ghost_wid )
+	for ( int k = 0; k < MAX_GHOSTS; k++ )
 	{
-		*x -= pair_vx;
-		*y -= pair_vy;
-		n_remap_state++;
+		if ( g_ok[k] && fid == g_wid[k] )
+		{
+			*x -= g_vx[k];
+			*y -= g_vy[k];
+			n_remap_state++;
+			break;
+		}
 	}
 	return r;
 }
@@ -1006,9 +1124,12 @@ __attribute__( ( destructor ) ) static void sdlwinfix_summary( void )
 		n_f_sym, n_f_props, n_f_xid, n_f_dpy, n_f_query, n_f_geo,
 		n_moved, n_ev_motion, n_ev_btn, n_ev_win, n_poll,
 		n_ev_insane, ev_mlx, ev_mly, ev_blx, ev_bly );
-	emitf( "t=%lld summary3 ghost=%u vec=(%.1f,%.1f) pair=%lu remap_ev=%lu remap_state=%lu focus=%u\n",
-		now_ms(), ghost_wid, pair_vx, pair_vy, n_pair, n_remap_ev, n_remap_state,
-		focus_last_id == 0xFFFFFFFFu ? 0 : focus_last_id );
+	{
+		WindowEntry *sm = main_entry();
+		emitf( "t=%lld summary3 main=%u xvec=%lu remap_ev=%lu remap_state=%lu focus=%u\n",
+			now_ms(), sm ? sm->id : 0, n_xvec, n_remap_ev,
+			n_remap_state, focus_last_id == 0xFFFFFFFFu ? 0 : focus_last_id );
+	}
 	emitf( "t=%lld summary2 nowid=%lu\n", now_ms(), n_ev_nowid );
 	if ( log_fd >= 0 )
 	{
