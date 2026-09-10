@@ -1,19 +1,21 @@
 // libsdlwinfix — corrective shim for the SDL foreign-window embed defect.
 //
-// OBSERVE (SBOX_SDLWINFIX=observe) or CORRECT (SBOX_SDLWINFIX=1) the answers
-// SDL_GetWindowSize / SDL_GetWindowPosition give for an SDL window that Qt
-// embeds as a foreign child without ever forwarding geometry. Qt reparents
-// the SDL X window under a container; SDL keeps answering with the frozen
-// creation size and (0,0), so Screen.Size and the engine cursor origin are
-// wrong. When the window is an embedded X child (parent != root) the shim
-// answers from the live X parent geometry instead. Top-level windows and
-// every failure path pass through untouched (fail open to real values).
+// Qt embeds the SDL X window as a foreign child without forwarding geometry,
+// so SDL_GetWindowSize/Position answer with the frozen creation values and the
+// engine lays out against a stale origin. When the window is an embedded X
+// child (parent != root) the shim answers from the live X parent geometry.
+// Separately, SDL delivers the same physical click to both the embedded play
+// view and the never-queried top-level editor window with different coords;
+// the shift is the exact difference of the two windows' screen origins
+// (XTranslateCoordinates to root), recomputed on geometry moves and session
+// switches, and the twin's event/state coords are rewritten into play-view
+// space. Top-level windows and every failure path pass through untouched
+// (fail open to real values).
 //
-// v2: persistent X connection (v1 opened+closed one per query and the churn
-// degraded under per-frame load -> mass fail-open), per-reason fail counters,
-// per-window change-gated fail/move lines, SDL_PollEvent histogram (proves
-// whether the engine's mouse feed is alive while answers are faked).
-// v9: twin vector from X truth (XTranslateCoordinates origins), not timestamps.
+// SBOX_SDLWINFIX unset/0/empty = dormant passthrough, no logging.
+// "observe" = resolve and log topology, fake nothing. Anything else ("1",
+// "on", ...) = correct. Log goes to SDLWINFIX_LOG or logs/sdlwinfix.log;
+// correct mode logs only create/topo/fail/move/xvec plus one summary line.
 //
 // Build: gcc -shared -fPIC -O2 -o libsdlwinfix.so sdlwinfix.c -lX11 -lpthread -ldl
 #define _GNU_SOURCE
@@ -41,33 +43,21 @@ typedef struct
 	SDL_Window *ptr;
 	unsigned id;
 	char title[TITLE_LEN];
-	// Last answered values (change-gated ans lines).
-	int lw;
-	int lh;
-	int lx;
-	int ly;
-	int lsrc; // 0=none yet, 1=real, 2=parent
 	// Last known-good parent geometry (move detection).
 	int have_parent;
 	int ppx;
 	int ppy;
 	int ppw;
 	int pph;
-	// Last REAL (unfaked) size SDL believes - the fossil coordinate space.
-	int rw;
-	int rh;
 	int topo_done;
-	// Last fail reason logged (change-gated fail lines, 0=ok).
-	int lfail;
-	// Query count (identifies the window the engine sizes/cursors from).
-	unsigned nq;
-	// Live X xid (for screen-origin translation).
-	unsigned long xid;
+	int lfail; // last fail reason logged (change-gated, 0=ok)
+	unsigned nq; // query count: identifies the engine's sizing window
+	unsigned long xid; // live X xid (for screen-origin translation)
 } WindowEntry;
 
 static WindowEntry windows[MAX_WINDOWS];
 
-// Fail reasons (also used for change-gated fail lines).
+// Fail reasons (change-gated fail lines).
 #define FR_OK 0
 #define FR_SYM 1 // dlsym failed
 #define FR_PROPS 2 // no SDL properties
@@ -84,64 +74,19 @@ static int (*real_GetWindowPosition)( SDL_Window *, int *, int * ) = 0;
 static SDL_PropertiesID (*real_GetWindowProperties)( SDL_Window * ) = 0;
 static long long (*real_GetNumberProperty)( SDL_PropertiesID, const char *, long long ) = 0;
 static int (*real_PollEvent)( void * ) = 0;
+static SDL_Window *(*real_GetWindowFromID)( unsigned ) = 0;
+static SDL_Window *(*real_GetMouseFocus)( void ) = 0;
+static unsigned (*real_GetMouseState)( float *, float * ) = 0;
 
 static unsigned long n_create = 0;
 static unsigned long n_getsize = 0;
 static unsigned long n_getposition = 0;
 static unsigned long n_faked = 0;
-static unsigned long n_top = 0;
-static unsigned long n_f_sym = 0;
-static unsigned long n_f_props = 0;
-static unsigned long n_f_xid = 0;
-static unsigned long n_f_dpy = 0;
-static unsigned long n_f_query = 0;
-static unsigned long n_f_geo = 0;
 static unsigned long n_moved = 0;
-static unsigned long moved_seq = 0;
-// Event feed histogram (SDL_PollEvent interpose, observe-only).
-static unsigned long n_poll = 0;
-static unsigned long n_ev_motion = 0;
-static unsigned long n_ev_btn = 0;
-static unsigned long n_ev_win = 0;
-static long long last_ev_ms = 0;
-// Event-coordinate stats (SDL3 SDL_MouseMotionEvent layout: type@0 u32,
-// windowID@16 u32, x@28 f32, y@32 f32; button events share the prefix).
-// Self-validating: windowID must match a tracked SDL window id, coords must
-// be finite and sane, otherwise counted insane and ignored (wrong offsets).
-static float ev_mx0 = 0;
-static float ev_mx1 = 0;
-static float ev_my0 = 0;
-static float ev_my1 = 0;
-static float ev_mlx = 0;
-static float ev_mly = 0;
-static float ev_blx = 0;
-static float ev_bly = 0;
-static unsigned ev_last_wid = 0;
-static unsigned ev_pwid = 0;
-static float ev_px = 0;
-static float ev_py = 0;
-static int ev_pok = 0;
-static int ev_have = 0;
-static unsigned long n_ev_insane = 0;
-#define MAX_GHOSTS 4
-static unsigned g_wid[MAX_GHOSTS] = { 0, 0, 0, 0 };
-static float g_vx[MAX_GHOSTS] = { 0, 0, 0, 0 };
-static float g_vy[MAX_GHOSTS] = { 0, 0, 0, 0 };
-static int g_ok[MAX_GHOSTS] = { 0, 0, 0, 0 };
-static unsigned g_main[MAX_GHOSTS] = { 0, 0, 0, 0 };
-static unsigned long g_seq[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned long moved_seq = 0; // bumped on every embed geometry change; invalidates ghost vectors
 static unsigned long n_xvec = 0;
 static unsigned long n_remap_ev = 0;
 static unsigned long n_remap_state = 0;
-static unsigned focus_last_id = 0xFFFFFFFFu;
-static SDL_Window *(*real_GetMouseFocus)( void ) = 0;
-static unsigned (*real_GetMouseState)( float *, float * ) = 0;
-static unsigned long n_ev_nowid = 0;
-static int evbad_left = 8;
-static unsigned nowid_list[4] = { 0, 0, 0, 0 };
-static int nowid_done[4] = { 0, 0, 0, 0 };
-static SDL_Window *(*real_GetWindowFromID)( unsigned ) = 0;
-static int fromid_logged = 0;
 
 static int log_fd = -1;
 static int log_failed = 0;
@@ -233,6 +178,48 @@ static void emitf( const char *fmt, ... )
 	emit( buf, len );
 }
 
+static void *resolve( void **slot, const char *name )
+{
+	if ( !*slot )
+	{
+		*slot = dlsym( RTLD_NEXT, name );
+	}
+	return *slot;
+}
+
+// X connection helpers; call with g_dpy_mutex held. x_display_locked opens
+// lazily with the 1 Hz reconnect throttle; x_drop_locked discards the wire
+// on X errors (stale xid, server hiccup) so the next query reconnects
+// instead of failing forever on a dead connection.
+static int x_display_locked( void )
+{
+	if ( g_dpy )
+	{
+		return 1;
+	}
+	long long now = now_ms();
+	if ( now - g_dpy_fail_ms < 1000 )
+	{
+		return 0;
+	}
+	g_dpy = XOpenDisplay( NULL );
+	if ( !g_dpy )
+	{
+		g_dpy_fail_ms = now;
+		return 0;
+	}
+	return 1;
+}
+
+static void x_drop_locked( void )
+{
+	if ( g_dpy )
+	{
+		XCloseDisplay( g_dpy );
+		g_dpy = 0;
+	}
+}
+
 static WindowEntry *track_window( SDL_Window *window )
 {
 	int free_slot = -1;
@@ -290,106 +277,82 @@ static WindowEntry *track_window( SDL_Window *window )
 static int x11_parent( SDL_Window *window, int *px, int *py, int *pw, int *ph,
 	unsigned long *xid_out, unsigned long *parent_out, int *wx, int *wy, int *ww, int *wh )
 {
-	if ( !real_GetWindowProperties || !real_GetNumberProperty )
+	if ( !resolve( (void **)&real_GetWindowProperties, "SDL_GetWindowProperties" ) ||
+		!resolve( (void **)&real_GetNumberProperty, "SDL_GetNumberProperty" ) )
 	{
-		real_GetWindowProperties = dlsym( RTLD_NEXT, "SDL_GetWindowProperties" );
-		real_GetNumberProperty = dlsym( RTLD_NEXT, "SDL_GetNumberProperty" );
-	}
-	if ( !real_GetWindowProperties || !real_GetNumberProperty )
-	{
-		n_f_sym++;
 		return -FR_SYM;
 	}
 	SDL_PropertiesID props = real_GetWindowProperties( window );
 	if ( !props )
 	{
-		n_f_props++;
 		return -FR_PROPS;
 	}
 	unsigned long xid = (unsigned long)real_GetNumberProperty( props, "SDL.window.x11.window", 0 );
 	if ( !xid )
 	{
-		n_f_xid++;
 		return -FR_XID;
 	}
 	pthread_mutex_lock( &g_dpy_mutex );
-	if ( !g_dpy )
-	{
-		long long now = now_ms();
-		if ( now - g_dpy_fail_ms < 1000 )
-		{
-			pthread_mutex_unlock( &g_dpy_mutex );
-			n_f_dpy++;
-			return -FR_DPY;
-		}
-		g_dpy = XOpenDisplay( NULL );
-		if ( !g_dpy )
-		{
-			g_dpy_fail_ms = now;
-			pthread_mutex_unlock( &g_dpy_mutex );
-			n_f_dpy++;
-			return -FR_DPY;
-		}
-	}
-	int ret = 0;
 	Window root = 0;
 	Window parent = 0;
-	Window *children = 0;
-	unsigned int nchildren = 0;
-	if ( XQueryTree( g_dpy, (Window)xid, &root, &parent, &children, &nchildren ) )
+	int ret = 0;
+	if ( !x_display_locked() )
 	{
-		if ( children )
+		ret = -FR_DPY;
+	}
+	else
+	{
+		Window *children = 0;
+		unsigned int nchildren = 0;
+		if ( XQueryTree( g_dpy, (Window)xid, &root, &parent, &children, &nchildren ) )
 		{
-			XFree( children );
-		}
-		if ( parent != 0 && parent != root )
-		{
-			int x = 0;
-			int y = 0;
-			unsigned int w = 0;
-			unsigned int h = 0;
-			unsigned int bw = 0;
-			unsigned int depth = 0;
-			Window wroot = 0;
-			if ( XGetGeometry( g_dpy, parent, &wroot, &x, &y, &w, &h, &bw, &depth ) )
+			if ( children )
 			{
-				*px = x;
-				*py = y;
-				*pw = (int)w;
-				*ph = (int)h;
-				ret = 1;
-				// Own geometry for the topo line (best effort).
-				if ( wx && XGetGeometry( g_dpy, (Window)xid, &wroot, &x, &y, &w, &h, &bw, &depth ) )
+				XFree( children );
+			}
+			if ( parent != 0 && parent != root )
+			{
+				int x = 0;
+				int y = 0;
+				unsigned int w = 0;
+				unsigned int h = 0;
+				unsigned int bw = 0;
+				unsigned int depth = 0;
+				Window wroot = 0;
+				if ( XGetGeometry( g_dpy, parent, &wroot, &x, &y, &w, &h, &bw, &depth ) )
 				{
-					*wx = x;
-					*wy = y;
-					*ww = (int)w;
-					*wh = (int)h;
+					*px = x;
+					*py = y;
+					*pw = (int)w;
+					*ph = (int)h;
+					ret = 1;
+					// Own geometry for the topo line (best effort).
+					if ( wx && XGetGeometry( g_dpy, (Window)xid, &wroot, &x, &y, &w, &h, &bw, &depth ) )
+					{
+						*wx = x;
+						*wy = y;
+						*ww = (int)w;
+						*wh = (int)h;
+					}
+				}
+				else
+				{
+					ret = -FR_GEO;
 				}
 			}
 			else
 			{
-				n_f_geo++;
-				ret = -FR_GEO;
+				ret = 0;
 			}
 		}
 		else
 		{
-			n_top++;
-			ret = 0;
+			ret = -FR_QUERY;
 		}
-	}
-	else
-	{
-		n_f_query++;
-		ret = -FR_QUERY;
 	}
 	if ( ret < 0 )
 	{
-		// Drop the connection on X errors (stale xid, server hiccup) so the
-		// next query reconnects instead of failing forever on a dead wire.
-		XCloseDisplay( g_dpy );
-		g_dpy = 0;
+		x_drop_locked();
 	}
 	if ( xid_out )
 	{
@@ -415,42 +378,6 @@ static void log_topo_once( WindowEntry *e, unsigned long xid, unsigned long pare
 		now_ms(), (unsigned)e->id, xid, parent, wx, wy, ww, wh, px, py, pw, ph );
 }
 
-static void log_ans( WindowEntry *e, const char *kind, int a, int b, int src )
-{
-	if ( e->lsrc == src )
-	{
-		if ( kind[0] == 's' && e->lw == a && e->lh == b )
-		{
-			return;
-		}
-		if ( kind[0] == 'p' && e->lx == a && e->ly == b )
-		{
-			return;
-		}
-	}
-	if ( kind[0] == 's' )
-	{
-		e->lw = a;
-		e->lh = b;
-	}
-	else
-	{
-		e->lx = a;
-		e->ly = b;
-	}
-	e->lsrc = src;
-	if ( kind[0] == 's' )
-	{
-		emitf( "t=%lld ans id=%u \"%s\" size %dx%d src=%s\n",
-			now_ms(), (unsigned)e->id, e->title, a, b, src == 2 ? "parent" : "real" );
-	}
-	else
-	{
-		emitf( "t=%lld ans id=%u \"%s\" pos %d,%d src=%s\n",
-			now_ms(), (unsigned)e->id, e->title, a, b, src == 2 ? "parent" : "real" );
-	}
-}
-
 // Find a tracked window by SDL window id.
 static WindowEntry *entry_for_id( unsigned wid )
 {
@@ -466,98 +393,6 @@ static WindowEntry *entry_for_id( unsigned wid )
 		}
 	}
 	return 0;
-}
-
-// Record mouse event coordinates with self-validation. SDL3 motion/button
-// events share the prefix type@0 u32, windowID@16 u32, x@28 f32, y@32 f32.
-// The windowID must match a tracked window and coords must be finite/sane,
-// else counted insane and ignored (offsets would be wrong).
-static WindowEntry *note_coords( void *ev, int is_button )
-{
-	unsigned wid = 0;
-	float x = 0;
-	float y = 0;
-	memcpy( &wid, (char *)ev + 16, sizeof( wid ) );
-	memcpy( &x, (char *)ev + 28, sizeof( x ) );
-	memcpy( &y, (char *)ev + 32, sizeof( y ) );
-	if ( x != x || y != y || x > 1e6f || x < -1e6f || y > 1e6f || y < -1e6f )
-	{
-		n_ev_insane++;
-		if ( evbad_left > 0 )
-		{
-			evbad_left--;
-			emitf( "t=%lld evbad type=%s wid=%u x=%f y=%f\n",
-				now_ms(), is_button ? "btn" : "motion", wid, x, y );
-		}
-		return 0;
-	}
-	ev_pwid = wid;
-	ev_px = x;
-	ev_py = y;
-	ev_pok = ( x == x && y == y && x <= 1e6f && x >= -1e6f && y <= 1e6f && y >= -1e6f );
-	WindowEntry *found = entry_for_id( wid );
-	if ( !found || found->nq == 0 )
-	{
-		n_ev_nowid++;
-		for ( int k = 0; k < 4; k++ )
-		{
-			if ( nowid_list[k] == wid )
-			{
-				break;
-			}
-			if ( nowid_list[k] == 0 )
-			{
-				nowid_list[k] = wid;
-				break;
-			}
-		}
-		if ( evbad_left > 0 )
-		{
-			evbad_left--;
-			emitf( "t=%lld evbad type=%s wid=%u x=%.1f y=%.1f\n",
-				now_ms(), is_button ? "btn" : "motion", wid, x, y );
-		}
-	}
-	else if ( found->nq > 0 )
-	{
-		ev_last_wid = wid;
-	}
-	if ( is_button )
-	{
-		ev_blx = x;
-		ev_bly = y;
-	}
-	else
-	{
-		ev_mlx = x;
-		ev_mly = y;
-		if ( !ev_have )
-		{
-			ev_mx0 = ev_mx1 = x;
-			ev_my0 = ev_my1 = y;
-			ev_have = 1;
-		}
-		else
-		{
-			if ( x < ev_mx0 )
-			{
-				ev_mx0 = x;
-			}
-			if ( x > ev_mx1 )
-			{
-				ev_mx1 = x;
-			}
-			if ( y < ev_my0 )
-			{
-				ev_my0 = y;
-			}
-			if ( y > ev_my1 )
-			{
-				ev_my1 = y;
-			}
-		}
-	}
-	return found;
 }
 
 static const char *reason_name( int r )
@@ -587,28 +422,26 @@ static void log_fail( WindowEntry *e, int reason )
 		now_ms(), (unsigned)e->id, e->title, reason_name( reason ) );
 }
 
-// Move detection: did Qt/WM move or resize the embed between queries?
-// Answers F: do our faked answers follow instantly when geometry changes?
-static void log_move( WindowEntry *e, int px, int py, int pw, int ph,
-	int wx, int wy, int ww, int wh )
+// Geometry-change detector: updates last-known parent geometry, reports change.
+// moved_seq keys ghost-vector invalidation off this - the move line is secondary.
+static int note_parent_geo( WindowEntry *e, int px, int py, int pw, int ph,
+	int *ox, int *oy, int *ow, int *oh )
 {
-	if ( e->have_parent && e->ppx == px && e->ppy == py && e->ppw == pw && e->pph == ph )
-	{
-		return;
-	}
+	int changed = 0;
 	if ( e->have_parent )
 	{
-		n_moved++;
-		moved_seq++;
-		emitf( "t=%lld move id=%u \"%s\" win %d,%d,%dx%d par %d,%d,%dx%d -> %d,%d,%dx%d\n",
-			now_ms(), (unsigned)e->id, e->title,
-			wx, wy, ww, wh, e->ppx, e->ppy, e->ppw, e->pph, px, py, pw, ph );
+		changed = ( e->ppx != px || e->ppy != py || e->ppw != pw || e->pph != ph );
+		*ox = e->ppx;
+		*oy = e->ppy;
+		*ow = e->ppw;
+		*oh = e->pph;
 	}
 	e->have_parent = 1;
 	e->ppx = px;
 	e->ppy = py;
 	e->ppw = pw;
 	e->pph = ph;
+	return changed;
 }
 
 // Shared query path for size/position: resolve parent geometry in observe and
@@ -628,7 +461,18 @@ static int query_parent( WindowEntry *e, int *px, int *py, int *pw, int *ph,
 		e->xid = *xid;
 		log_topo_once( e, *xid, *parent, *wx, *wy, *ww, *wh, *px, *py, *pw, *ph );
 		log_fail( e, FR_OK );
-		log_move( e, *px, *py, *pw, *ph, *wx, *wy, *ww, *wh );
+		int ox = 0;
+		int oy = 0;
+		int ow = 0;
+		int oh = 0;
+		if ( note_parent_geo( e, *px, *py, *pw, *ph, &ox, &oy, &ow, &oh ) )
+		{
+			n_moved++;
+			moved_seq++;
+			emitf( "t=%lld move id=%u \"%s\" win %d,%d,%dx%d par %d,%d,%dx%d -> %d,%d,%dx%d\n",
+				now_ms(), (unsigned)e->id, e->title,
+				*wx, *wy, *ww, *wh, ox, oy, ow, oh, *px, *py, *pw, *ph );
+		}
 		return ( m == 2 ) ? 1 : 0;
 	}
 	if ( r < 0 )
@@ -642,12 +486,9 @@ static int query_parent( WindowEntry *e, int *px, int *py, int *pw, int *ph,
 
 SDL_Window *SDL_CreateWindowWithProperties( SDL_PropertiesID props )
 {
-	if ( !real_CreateWindowWithProperties )
-	{
-		real_CreateWindowWithProperties = dlsym( RTLD_NEXT, "SDL_CreateWindowWithProperties" );
-		real_GetWindowID = dlsym( RTLD_NEXT, "SDL_GetWindowID" );
-		real_GetWindowTitle = dlsym( RTLD_NEXT, "SDL_GetWindowTitle" );
-	}
+	resolve( (void **)&real_CreateWindowWithProperties, "SDL_CreateWindowWithProperties" );
+	resolve( (void **)&real_GetWindowID, "SDL_GetWindowID" );
+	resolve( (void **)&real_GetWindowTitle, "SDL_GetWindowTitle" );
 	n_create++;
 	if ( !real_CreateWindowWithProperties )
 	{
@@ -668,15 +509,11 @@ SDL_Window *SDL_CreateWindowWithProperties( SDL_PropertiesID props )
 
 int SDL_GetWindowSize( SDL_Window *window, int *rw, int *rh )
 {
-	if ( !real_GetWindowSize )
-	{
-		real_GetWindowSize = dlsym( RTLD_NEXT, "SDL_GetWindowSize" );
-	}
-	n_getsize++;
-	if ( !real_GetWindowSize )
+	if ( !resolve( (void **)&real_GetWindowSize, "SDL_GetWindowSize" ) )
 	{
 		return -1;
 	}
+	n_getsize++;
 	int rc = real_GetWindowSize( window, rw, rh );
 	if ( !window || rc < 0 )
 	{
@@ -688,11 +525,6 @@ int SDL_GetWindowSize( SDL_Window *window, int *rw, int *rh )
 		return rc;
 	}
 	e->nq++;
-	int w = rw ? *rw : -1;
-	int h = rh ? *rh : -1;
-	e->rw = w;
-	e->rh = h;
-	int src = 1;
 	int px = 0;
 	int py = 0;
 	int pw = 0;
@@ -707,35 +539,27 @@ int SDL_GetWindowSize( SDL_Window *window, int *rw, int *rh )
 	{
 		if ( pw >= 1 && ph >= 1 )
 		{
-			w = pw;
-			h = ph;
 			if ( rw )
 			{
-				*rw = w;
+				*rw = pw;
 			}
 			if ( rh )
 			{
-				*rh = h;
+				*rh = ph;
 			}
-			src = 2;
 			n_faked++;
 		}
 	}
-	log_ans( e, "size", w, h, src );
 	return rc;
 }
 
 int SDL_GetWindowPosition( SDL_Window *window, int *rx, int *ry )
 {
-	if ( !real_GetWindowPosition )
-	{
-		real_GetWindowPosition = dlsym( RTLD_NEXT, "SDL_GetWindowPosition" );
-	}
-	n_getposition++;
-	if ( !real_GetWindowPosition )
+	if ( !resolve( (void **)&real_GetWindowPosition, "SDL_GetWindowPosition" ) )
 	{
 		return -1;
 	}
+	n_getposition++;
 	int rc = real_GetWindowPosition( window, rx, ry );
 	if ( !window || rc < 0 )
 	{
@@ -747,9 +571,6 @@ int SDL_GetWindowPosition( SDL_Window *window, int *rx, int *ry )
 		return rc;
 	}
 	e->nq++;
-	int x = rx ? *rx : -999999;
-	int y = ry ? *ry : -999999;
-	int src = 1;
 	int px = 0;
 	int py = 0;
 	int pw = 0;
@@ -762,30 +583,25 @@ int SDL_GetWindowPosition( SDL_Window *window, int *rx, int *ry )
 	int wh = 0;
 	if ( query_parent( e, &px, &py, &pw, &ph, &xid, &parent, &wx, &wy, &ww, &wh ) )
 	{
-		x = px;
-		y = py;
 		if ( rx )
 		{
-			*rx = x;
+			*rx = px;
 		}
 		if ( ry )
 		{
-			*ry = y;
+			*ry = py;
 		}
-		src = 2;
 		n_faked++;
 	}
-	log_ans( e, "pos", x, y, src );
 	return rc;
 }
 
-// Most-queried tracked window: the one the engine sizes/cursors from.
+// Most-queried live tracked window: the one the engine sizes/cursors from.
+// The liveness gate matters across play sessions: the dead view keeps the
+// highest all-time query count, but GetWindowFromID no longer resolves it.
 static WindowEntry *main_entry( void )
 {
-	if ( !real_GetWindowFromID )
-	{
-		real_GetWindowFromID = dlsym( RTLD_NEXT, "SDL_GetWindowFromID" );
-	}
+	resolve( (void **)&real_GetWindowFromID, "SDL_GetWindowFromID" );
 	WindowEntry *best = 0;
 	for ( int i = 0; i < MAX_WINDOWS; i++ )
 	{
@@ -805,15 +621,20 @@ static WindowEntry *main_entry( void )
 	return best;
 }
 
-// Ghost-twin unification. A never-queried window echoing same-timestamp
-// mouse events is a ghost twin living in a shifted space; pair it with the
-// main window on identical timestamps, then rewrite its coords into main
-// space (correct mode only - observe only logs the pair).
-// Ghost-twin unification via X truth. A never-queried window echoing mouse
-// events is a ghost twin living in a shifted space; the shift is the exact
-// difference of the two windows' screen origins (XTranslateCoordinates to
-// root). Recomputed on main-geometry moves and periodically. Deterministic
-// across sessions and layout transitions - no pairing heuristics.
+// Ghost-twin unification. A never-queried window echoing mouse events is a
+// ghost twin living in a shifted space; the shift is the exact difference of
+// the two windows' screen origins (XTranslateCoordinates to root). The vector
+// stores main-minus-ghost (matching the observable twin delta); converting
+// ghost->main subtracts it. Recomputed whenever the embed geometry moves
+// (moved_seq) or the main window switches sessions. Correct mode only.
+#define MAX_GHOSTS 4
+static unsigned g_wid[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static float g_vx[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static float g_vy[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static int g_ok[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned g_main[MAX_GHOSTS] = { 0, 0, 0, 0 };
+static unsigned long g_seq[MAX_GHOSTS] = { 0, 0, 0, 0 };
+
 static int ghost_slot( unsigned wid )
 {
 	for ( int k = 0; k < MAX_GHOSTS; k++ )
@@ -864,16 +685,9 @@ static void xvec_recompute( unsigned wid )
 	{
 		return;
 	}
-	if ( !real_GetWindowFromID )
-	{
-		real_GetWindowFromID = dlsym( RTLD_NEXT, "SDL_GetWindowFromID" );
-	}
-	if ( !real_GetWindowProperties || !real_GetNumberProperty )
-	{
-		real_GetWindowProperties = dlsym( RTLD_NEXT, "SDL_GetWindowProperties" );
-		real_GetNumberProperty = dlsym( RTLD_NEXT, "SDL_GetNumberProperty" );
-	}
-	if ( !real_GetWindowFromID || !real_GetWindowProperties || !real_GetNumberProperty )
+	if ( !resolve( (void **)&real_GetWindowFromID, "SDL_GetWindowFromID" ) ||
+		!resolve( (void **)&real_GetWindowProperties, "SDL_GetWindowProperties" ) ||
+		!resolve( (void **)&real_GetNumberProperty, "SDL_GetNumberProperty" ) )
 	{
 		return;
 	}
@@ -897,15 +711,9 @@ static void xvec_recompute( unsigned wid )
 	int gsx = 0;
 	int gsy = 0;
 	pthread_mutex_lock( &g_dpy_mutex );
-	if ( !g_dpy )
-	{
-		g_dpy = XOpenDisplay( NULL );
-	}
-	int ok = 0;
-	if ( g_dpy )
-	{
-		ok = screen_origin( main->xid, &msx, &msy ) && screen_origin( gxid, &gsx, &gsy );
-	}
+	int ok = x_display_locked() &&
+		screen_origin( main->xid, &msx, &msy ) &&
+		screen_origin( gxid, &gsx, &gsy );
 	pthread_mutex_unlock( &g_dpy_mutex );
 	if ( !ok )
 	{
@@ -930,50 +738,63 @@ static void xvec_recompute( unsigned wid )
 	}
 }
 
-// Rewrite a ghost twin's coords into main space (correct mode only).
-static void xremap( void *ev )
+// Mouse event coords (SDL3 motion/button events share the prefix type@0 u32,
+// windowID@16 u32, x@28 f32, y@32 f32), validated: finite and sane, else
+// ignored so a misparsed layout can never shift the cursor.
+typedef struct
 {
-	if ( !ev_pok )
+	unsigned wid;
+	float x;
+	float y;
+	int ok;
+} MouseCoords;
+
+static MouseCoords parse_coords( void *ev )
+{
+	MouseCoords c = { 0, 0.0f, 0.0f, 0 };
+	memcpy( &c.wid, (char *)ev + 16, sizeof( c.wid ) );
+	memcpy( &c.x, (char *)ev + 28, sizeof( c.x ) );
+	memcpy( &c.y, (char *)ev + 32, sizeof( c.y ) );
+	c.ok = ( c.x == c.x && c.y == c.y &&
+		c.x <= 1e6f && c.x >= -1e6f && c.y <= 1e6f && c.y >= -1e6f );
+	return c;
+}
+
+// Rewrite a ghost twin's coords into main space (correct mode only).
+// Queried windows pass through untouched.
+static void xremap( void *ev, MouseCoords *c )
+{
+	if ( !c->ok )
 	{
 		return;
 	}
+	WindowEntry *te = entry_for_id( c->wid );
+	if ( te && te->nq > 0 )
 	{
-		WindowEntry *te = entry_for_id( ev_pwid );
-		if ( te && te->nq > 0 )
-		{
-			return;
-		}
+		return;
 	}
-	int slot = ghost_slot( ev_pwid );
+	int slot = ghost_slot( c->wid );
 	if ( slot < 0 )
 	{
 		return;
 	}
-	xvec_recompute( ev_pwid );
+	xvec_recompute( c->wid );
 	if ( !g_ok[slot] || mode() != 2 )
 	{
 		return;
 	}
-	float nx = ev_px - g_vx[slot];
-	float ny = ev_py - g_vy[slot];
+	float nx = c->x - g_vx[slot];
+	float ny = c->y - g_vy[slot];
 	memcpy( (char *)ev + 28, &nx, 4 );
 	memcpy( (char *)ev + 32, &ny, 4 );
 	n_remap_ev++;
-	ev_px = nx;
-	ev_py = ny;
 }
 
-// Observe-only event-feed histogram. Never modifies events; proves whether
-// the engine's mouse feed is alive while size/pos answers are faked.
-// SDL3 event ids used: mouse motion 0x400, button down/up 0x401/0x402,
-// window events 0x2xx. Only the type field (offset 0) is read.
+// SDL3 event ids: mouse motion 0x400, button down/up 0x401/0x402.
+// Only the type field (offset 0) is read here; coords via parse_coords.
 int SDL_PollEvent( void *ev )
 {
-	if ( !real_PollEvent )
-	{
-		real_PollEvent = dlsym( RTLD_NEXT, "SDL_PollEvent" );
-	}
-	if ( !real_PollEvent )
+	if ( !resolve( (void **)&real_PollEvent, "SDL_PollEvent" ) )
 	{
 		return 0;
 	}
@@ -982,86 +803,13 @@ int SDL_PollEvent( void *ev )
 	{
 		return rc;
 	}
-	n_poll++;
 	if ( rc != 0 && ev )
 	{
 		unsigned type = *(volatile unsigned *)ev;
-		if ( type == 0x400 )
+		if ( type == 0x400 || type == 0x401 || type == 0x402 )
 		{
-			n_ev_motion++;
-			note_coords( ev, 0 );
-			xremap( ev );
-		}
-		else if ( type == 0x401 || type == 0x402 )
-		{
-			n_ev_btn++;
-			note_coords( ev, 1 );
-			xremap( ev );
-			if ( type == 0x401 && ev_pok )
-			{
-				emitf( "t=%lld click wid=%u x=%.1f y=%.1f\n", now_ms(), ev_pwid, ev_px, ev_py );
-			}
-		}
-		else if ( ( type & 0xf00 ) == 0x200 )
-		{
-			n_ev_win++;
-		}
-		long long now = now_ms();
-		if ( now - last_ev_ms >= 5000 )
-		{
-			last_ev_ms = now;
-			emitf( "t=%lld ev motion=%lu btn=%lu win=%lu poll=%lu\n",
-				now, n_ev_motion, n_ev_btn, n_ev_win, n_poll );
-			if ( !real_GetWindowFromID && !fromid_logged )
-			{
-				real_GetWindowFromID = dlsym( RTLD_NEXT, "SDL_GetWindowFromID" );
-				fromid_logged = 1;
-				emitf( "t=%lld eshim fromid=%p\n", now, (void *)real_GetWindowFromID );
-			}
-			for ( int k = 0; k < 4 && real_GetWindowFromID; k++ )
-			{
-				if ( nowid_list[k] == 0 || nowid_done[k] )
-				{
-					continue;
-				}
-				nowid_done[k] = 1;
-				SDL_Window *uw = real_GetWindowFromID( nowid_list[k] );
-				if ( !uw || !real_GetWindowSize )
-				{
-					emitf( "t=%lld ewin id=%u ptr=%p noresolve\n", now, nowid_list[k], (void *)uw );
-					continue;
-				}
-				int ufw = -1;
-				int ufh = -1;
-				real_GetWindowSize( uw, &ufw, &ufh );
-				int upx = 0, upy = 0, upw = 0, uph = 0, uwx = 0, uwy = 0, uww = 0, uwh = 0;
-				unsigned long uxid = 0, upar = 0;
-				int ur = x11_parent( uw, &upx, &upy, &upw, &uph, &uxid, &upar, &uwx, &uwy, &uww, &uwh );
-				emitf( "t=%lld ewin id=%u fossil=%dx%d xid=%lu parent=%lu wingeo=%d,%d,%dx%d pargeo=%d,%d,%dx%d %s\n",
-					now, nowid_list[k], ufw, ufh, uxid, upar, uwx, uwy, uww, uwh,
-					upx, upy, upw, uph, ur == 1 ? "embedded" : ( ur == 0 ? "toplevel" : "fail" ) );
-			}
-			for ( int i = 0; i < MAX_WINDOWS; i++ )
-			{
-				if ( !windows[i].known )
-				{
-					continue;
-				}
-				SDL_Window *rp = real_GetWindowFromID ? real_GetWindowFromID( windows[i].id ) : 0;
-				emitf( "t=%lld emain id=%u nq=%u ptr=%p fromid=%p\n",
-					now, windows[i].id, windows[i].nq, (void *)windows[i].ptr, (void *)rp );
-			}
-			for ( int k = 0; k < 4; k++ )
-			{
-				if ( nowid_list[k] != 0 )
-				{
-					xvec_recompute( nowid_list[k] );
-				}
-			}
-			WindowEntry *le = entry_for_id( ev_last_wid );
-			emitf( "t=%lld evpos wid=%u fossil=%dx%d mx=[%.1f..%.1f] my=[%.1f..%.1f] mlast=(%.1f,%.1f) blast=(%.1f,%.1f) insane=%lu\n",
-				now, ev_last_wid, le ? le->rw : -1, le ? le->rh : -1,
-				ev_mx0, ev_mx1, ev_my0, ev_my1, ev_mlx, ev_mly, ev_blx, ev_bly, n_ev_insane );
+			MouseCoords c = parse_coords( ev );
+			xremap( ev, &c );
 		}
 	}
 	return rc;
@@ -1072,11 +820,7 @@ int SDL_PollEvent( void *ev )
 // mode only). Deltas are translation-invariant - relative mode untouched.
 unsigned SDL_GetMouseState( float *x, float *y )
 {
-	if ( !real_GetMouseState )
-	{
-		real_GetMouseState = dlsym( RTLD_NEXT, "SDL_GetMouseState" );
-	}
-	if ( !real_GetMouseState )
+	if ( !resolve( (void **)&real_GetMouseState, "SDL_GetMouseState" ) )
 	{
 		return 0;
 	}
@@ -1085,21 +829,13 @@ unsigned SDL_GetMouseState( float *x, float *y )
 	{
 		return r;
 	}
-	if ( !real_GetMouseFocus )
-	{
-		real_GetMouseFocus = dlsym( RTLD_NEXT, "SDL_GetMouseFocus" );
-	}
-	if ( !real_GetMouseFocus || !real_GetWindowID )
+	if ( !resolve( (void **)&real_GetMouseFocus, "SDL_GetMouseFocus" ) ||
+		!resolve( (void **)&real_GetWindowID, "SDL_GetWindowID" ) )
 	{
 		return r;
 	}
 	SDL_Window *f = real_GetMouseFocus();
 	unsigned fid = f ? real_GetWindowID( f ) : 0;
-	if ( fid != focus_last_id )
-	{
-		focus_last_id = fid;
-		emitf( "t=%lld focus id=%u\n", now_ms(), fid );
-	}
 	for ( int k = 0; k < MAX_GHOSTS; k++ )
 	{
 		if ( g_ok[k] && fid == g_wid[k] )
@@ -1119,28 +855,16 @@ __attribute__( ( destructor ) ) static void sdlwinfix_summary( void )
 	{
 		return;
 	}
-	emitf( "t=%lld summary create=%lu getsize=%lu getposition=%lu faked=%lu top=%lu fail_sym=%lu fail_props=%lu fail_xid=%lu fail_dpy=%lu fail_query=%lu fail_geo=%lu moved=%lu motion=%lu btn=%lu winev=%lu poll=%lu insane=%lu mlast=(%.1f,%.1f) blast=(%.1f,%.1f)\n",
-		now_ms(), n_create, n_getsize, n_getposition, n_faked, n_top,
-		n_f_sym, n_f_props, n_f_xid, n_f_dpy, n_f_query, n_f_geo,
-		n_moved, n_ev_motion, n_ev_btn, n_ev_win, n_poll,
-		n_ev_insane, ev_mlx, ev_mly, ev_blx, ev_bly );
-	{
-		WindowEntry *sm = main_entry();
-		emitf( "t=%lld summary3 main=%u xvec=%lu remap_ev=%lu remap_state=%lu focus=%u\n",
-			now_ms(), sm ? sm->id : 0, n_xvec, n_remap_ev,
-			n_remap_state, focus_last_id == 0xFFFFFFFFu ? 0 : focus_last_id );
-	}
-	emitf( "t=%lld summary2 nowid=%lu\n", now_ms(), n_ev_nowid );
+	WindowEntry *sm = main_entry();
+	emitf( "t=%lld summary create=%lu getsize=%lu getposition=%lu faked=%lu moved=%lu main=%u xvec=%lu remap_ev=%lu remap_state=%lu\n",
+		now_ms(), n_create, n_getsize, n_getposition, n_faked, n_moved,
+		sm ? sm->id : 0, n_xvec, n_remap_ev, n_remap_state );
 	if ( log_fd >= 0 )
 	{
 		close( log_fd );
 		log_fd = -1;
 	}
 	pthread_mutex_lock( &g_dpy_mutex );
-	if ( g_dpy )
-	{
-		XCloseDisplay( g_dpy );
-		g_dpy = 0;
-	}
+	x_drop_locked();
 	pthread_mutex_unlock( &g_dpy_mutex );
 }

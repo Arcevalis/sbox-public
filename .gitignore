@@ -12,6 +12,7 @@
 !*.csproj
 !*.cs
 !*.razor
+!*.c
 
 
 # Sandbox source files
