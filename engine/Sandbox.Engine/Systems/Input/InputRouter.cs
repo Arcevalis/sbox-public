@@ -96,8 +96,8 @@ internal static partial class InputRouter
 	/// taken the pointer itself, in Qt.
 	/// <para>
 	/// It has to, because SDL cannot. An X11 pointer grab redirects pointer events to the grabbing
-	/// client, and on Linux the Qt→SDL bridge is the only thing feeding the engine
-	/// (<c>INPUT-ARCHITECTURE.md</c> §5.2) - so asking SDL to grab starves the very source the game
+	/// client, and on Linux the Qt→SDL bridge is the only thing feeding the engine - so asking
+	/// SDL to grab starves the very source the game
 	/// depends on. Measured: while <c>sdlRelMode=True</c>, Qt delivered <b>zero</b> mouse moves and
 	/// <c>InputRouter</c> zero events, and both resumed the instant SDL let go.
 	/// </para>
@@ -129,7 +129,7 @@ internal static partial class InputRouter
 		MouseCursorVisible = !mouseCaptureMode && (activeMouse is not null && activeMouse.MouseState == InputContext.InputState.UI);
 
 		// SDL's mouse focus is not authoritative while the editor owns the pointer - the events
-		// SDL sees are injected, and injection never updates its focus (INPUT-ARCHITECTURE.md §5.3).
+		// SDL sees are injected, and injection never updates its focus.
 		if ( !managedCapture && !InputSystem.HasMouseFocus() ) MouseCursorVisible = true;
 
 		if ( InputDebug.Enabled )
@@ -145,7 +145,7 @@ internal static partial class InputRouter
 
 			// A steady state logs nothing, so we would not be able to tell a capture that is
 			// delivering from one that has gone silent. Tick the delivery rate once a second
-			// while a capture is wanted - that is the measurement §7 turns on.
+			// while a capture is wanted.
 			if ( wantsCapture && timeSinceDeliveryReport > 1.0f )
 			{
 				InputDebug.Event( "routerdbg", $"delivered={DeliveredEventCount - lastReportedEventCount}/s while captured (allowed={mouseCaptureMode})" );
