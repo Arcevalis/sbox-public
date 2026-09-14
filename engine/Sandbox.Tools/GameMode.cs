@@ -122,10 +122,9 @@ public static class GameMode
 	/// no warp in the middle of it to go wrong.
 	/// <para>
 	/// KNOWN GAP: this assumes the pointer cannot travel further than the margin between two Qt
-	/// events, and a fast enough flick does - at the low end of the 40-190 moves/s Qt was measured
-	/// delivering, one event can cover ~75px. Once it is outside the widget Qt stops sending it
-	/// MouseMove at all, so the warp that would pull it back never fires. See
-	/// <c>bootstrap-linux/linux-input.md</c> §7c.
+	/// events, and a fast enough flick does - at event rates measured as low as ~40 moves/s, one
+	/// event can cover ~75px. Once the pointer is outside the widget Qt stops sending it MouseMove
+	/// at all, so the warp that would pull it back never fires, stranding the pointer outside.
 	/// </para>
 	/// </summary>
 	const float CaptureEdgeMargin = 64.0f;
@@ -180,9 +179,9 @@ public static class GameMode
 
 		var centre = _inPlay.Size * 0.5f;
 
-		// Read and write the same coordinate space. linux-input.md §3 is what happens otherwise:
-		// reading QCursor::pos() while writing SetNativeCursorPos leaves the residue of a warp that
-		// did not land to be measured again next frame, compounding every frame. MouseEvent's local
+		// Read and write the same coordinate space. Mixing coordinate spaces is what goes wrong
+		// here: reading a native cursor position while writing a Qt one leaves the residue of a
+		// warp that did not land to be measured again next frame, compounding every frame. MouseEvent's local
 		// position, ToScreen() and Application.CursorPosition are all Qt logical coordinates.
 		Application.CursorPosition = _inPlay.ToScreen( centre );
 
@@ -231,9 +230,9 @@ public static class GameMode
 
 	private static void OnPlayWidgetMouseMove( Vector2 local )
 	{
-		// Whether Qt still sees the pointer over the play widget is the whole question behind
-		// linux-input.md §7 - an SDL pointer grab redirects events to SDL and starves Qt, which is
-		// the bridge's only source. Count them here, where Qt hands them to us.
+		// Whether Qt still sees the pointer over the play widget matters: an SDL pointer grab
+		// redirects events to SDL and starves Qt, which is the bridge's only source. Count them
+		// here, where Qt hands them to us.
 		if ( InputDebug.Enabled )
 		{
 			qtMouseMoveCount++;

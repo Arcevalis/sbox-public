@@ -2,15 +2,12 @@ namespace Sandbox.Engine;
 
 /// <summary>
 /// Diagnostics for the input path, gated on the <c>SBOX_INPUT_DEBUG</c> environment variable.
-/// <para>
-/// <c>bootstrap-linux/launch/run-editor-debug.sh</c> exports that variable and greps the log for the
-/// <c>[routerdbg]</c> / <c>[gamemode]</c> / <c>[inputdbg]</c> tags, but until now nothing emitted
-/// them. This is the missing half.
-/// </para>
+/// Set it before launching the editor and grep the log for the <c>[routerdbg]</c> /
+/// <c>[gamemode]</c> / <c>[inputdbg]</c> tags.
 /// <para>
 /// Everything here logs <b>on change only</b>. <c>InputRouter.Frame()</c> runs once per rendered
-/// frame, and an unconditional call from there is exactly the mistake that made
-/// <c>SetRelativeMouseMode</c> fire ~150 times a second (<c>bootstrap-linux/linux-input.md</c> §5).
+/// frame, and an unconditional log call from there would spam once per frame; the per-second
+/// tickers in the callers exist so a silent capture stays distinguishable from a delivering one.
 /// </para>
 /// </summary>
 internal static class InputDebug
