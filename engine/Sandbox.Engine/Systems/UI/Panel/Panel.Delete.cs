@@ -93,10 +93,6 @@ public partial class Panel
 				SetMouseCapture( false );
 			}
 
-			InlineOwner?.Invalidate();
-			InlineParagraph?.Dispose();
-			InlineParagraph = null;
-			InlineOwner = null;
 			LayoutTree?.Dispose();
 			LayoutTree = null;
 
@@ -106,13 +102,8 @@ public partial class Panel
 			renderTree?.Clear();
 			renderTree = null;
 
-			if ( CachedDescriptors != null )
-			{
-				RenderLayer.Return( CachedDescriptors );
-				CachedDescriptors = null;
-			}
-
 			ComputedStyle = null;
+			_paintCache = default;
 			StyleSheet = default;
 			GameObject = null;
 

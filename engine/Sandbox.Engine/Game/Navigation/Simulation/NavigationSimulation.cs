@@ -248,7 +248,7 @@ internal sealed class NavigationSimulation
 		float speed = MathF.Min( settings.MaxSpeed, MathF.Sqrt( 2 * settings.Acceleration * distanceToEnd ) );
 		var wish = direction.Normal * speed;
 		agent.WishVelocity = wish;
-		var avoidance = WallSteering.Steer( agent, Avoid( index, wish, dt ), end );
+		var avoidance = WallSteering.Steer( agent, Avoid( index, wish, dt ), end, direction.Length );
 		var change = avoidance - agent.Velocity;
 		float maxChange = settings.Acceleration * dt;
 		if ( change.Length > maxChange ) change = change.Normal * maxChange;

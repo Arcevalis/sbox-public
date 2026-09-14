@@ -87,7 +87,7 @@
 @code
 {
     // Keep in sync with .row PackageCard width and the gap in FrontPageGames.razor.scss.
-    const float TileWidth = 250f;
+    const float TileWidth = 300f;
     const float TileGap = 8f;
 
     [Parameter] public Package.ListResult Group { get; set; }
@@ -216,12 +216,7 @@
 
         foreach ( var section in Sections )
         {
-            // A mosaic shelf carries half again as many cards, so it plays proportionally more.
-            var count = MenuProject.UI.PackageCard.VideoThumbsPerShelf;
-            if ( section.Big is not null )
-                count = (int)MathF.Round( count * 1.5f );
-
-            section.Rotation.Count = count;
+            section.Rotation.Count = MenuProject.UI.PackageCard.VideoThumbsPerShelf;
             section.Rotation.Interval = MenuProject.UI.PackageCard.VideoThumbsSeconds;
             section.Rotation.Tick();
         }

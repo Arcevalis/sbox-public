@@ -8,6 +8,18 @@ public partial class Scene : GameObject
 {
 	public bool IsEditor { get; private set; }
 
+	/// <summary>
+	/// A snapshot is currently creating objects whose map content it already supplies.
+	/// </summary>
+	internal bool IsLoadingSnapshot { get; private set; }
+
+	internal IDisposable LoadingSnapshotScope()
+	{
+		var previous = IsLoadingSnapshot;
+		IsLoadingSnapshot = true;
+		return new DisposeAction( () => IsLoadingSnapshot = previous );
+	}
+
 	bool _destroyed;
 	SceneWorld _sceneWorld;
 

@@ -80,6 +80,11 @@ public partial class GameObject
 		/// </summary>
 		internal bool SkipNulls { get; set; }
 
+		/// <summary>
+		/// Keep NetworkMode.Never objects, for a host handoff. NotNetworked and map-spawned objects still stay out.
+		/// </summary>
+		internal bool IncludeLocalObjects { get; set; }
+
 		internal bool ShouldSave( GameObject gameObject )
 		{
 			var shouldIgnoreNotSavedFlag = SingleNetworkObject || SceneForNetwork;
@@ -90,7 +95,7 @@ public partial class GameObject
 			// We're saving for the network.
 			if ( SceneForNetwork || SingleNetworkObject )
 			{
-				if ( gameObject.NetworkMode == NetworkMode.Never ) return false;
+				if ( gameObject.NetworkMode == NetworkMode.Never && (!IncludeLocalObjects || gameObject.IsSpawnedByMap) ) return false;
 				if ( gameObject.Flags.Contains( GameObjectFlags.NotNetworked ) ) return false;
 			}
 

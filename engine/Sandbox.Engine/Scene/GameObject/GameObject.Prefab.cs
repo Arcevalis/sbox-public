@@ -160,6 +160,11 @@ public partial class GameObject
 	internal bool IsMapInstanceRoot => MapSource is not null;
 
 	/// <summary>
+	/// Created by a MapInstance, directly or via an ancestor; never travels in a snapshot.
+	/// </summary>
+	internal bool IsSpawnedByMap => IsMapInstanceRoot || Components.Get<MapInstance>( FindMode.EverythingInAncestors ) is not null;
+
+	/// <summary>
 	/// Access point for all prefab instance related data.
 	/// Can be accessed on both instance root and children contained within the instance.
 	/// For outermost prefab instances this will contain a patch and guid mappings.

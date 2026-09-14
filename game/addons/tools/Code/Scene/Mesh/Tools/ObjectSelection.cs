@@ -64,6 +64,9 @@ public sealed partial class ObjectSelection( MeshTool tool ) : SelectionTool( to
 			AddMenuOption( transform, "Align Down Local", "vertical_align_bottom", "mesh.align-down-local", true );
 			AddMenuOption( transform, "Align Down World", "vertical_align_bottom", "mesh.align-down-world", true );
 			AddMenuOption( transform, "Align To Closest Normal", "swap_vert", "mesh.align-to-closest-normal", true );
+			transform.AddSeparator();
+			AddMenuOption( transform, "Flip Horizontal", "swap_horiz", "mesh.flip-horizontal", true );
+			AddMenuOption( transform, "Flip Vertical", "swap_vert", "mesh.flip-vertical", true );
 		}
 
 		if ( hasObjects )
