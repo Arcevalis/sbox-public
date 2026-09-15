@@ -7,9 +7,10 @@ namespace Editor.CodeEditors;
 internal static class CustomCodeEditorSettings
 {
 	/// <summary>
-	/// Path to the executable to launch.
+	/// Path to the executable to launch. On Windows the picker filters to .exe,
+	/// on Linux/macOS it shows all files since binaries are usually extensionless.
 	/// </summary>
-	[File( Extension = "exe" )]
+	[File( Extension = "exe", IsExecutable = true )]
 	public static string ExecutablePath
 	{
 		get => EditorCookie.GetString( CustomCodeEditor.ExecutablePathKey, "" );
