@@ -439,8 +439,8 @@ internal partial class UISystem
 		{
 			var p = DeletionList[i];
 
-			// panel might have been turned null by hotloading
-			if ( p is null )
+			// Hotload can clear the reference; an ancestor can finish deletion before this outro.
+			if ( !p.IsValid() )
 			{
 				DeletionList.RemoveAt( i );
 				i--;

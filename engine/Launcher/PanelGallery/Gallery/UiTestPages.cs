@@ -27,7 +27,9 @@ public static class UiTestPages
 			var current = page;
 			var icon = string.IsNullOrEmpty( current.Icon ) ? "science" : current.Icon;
 
-			var folder = current.Group == "/" ? "" : string.IsNullOrEmpty( current.Group ) ? "Css Styles" : $"Css Styles/{current.Group}";
+			// A leading slash selects a top-level gallery category; other groups live under CSS.
+			var folder = current.Group?.StartsWith( '/' ) == true ? current.Group.TrimStart( '/' )
+				: string.IsNullOrEmpty( current.Group ) ? "Css Styles" : $"Css Styles/{current.Group}";
 			Pages.Add( new GalleryPageInfo( current.Title, icon, () => current.Create<Panel>(), folder ) );
 		}
 	}
