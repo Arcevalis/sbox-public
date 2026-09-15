@@ -5,22 +5,30 @@ public static partial class EditorUtility
 {
 	/// <summary>
 	/// Open a file save dialog. Returns null on cancel, else the absolute path of the target file.
+	/// Pass an empty extension to show all files (e.g. when picking an executable on Linux/macOS).
 	/// </summary>
 	public static string SaveFileDialog( string title, string extension, string defaultPath )
 	{
-		extension = extension.Trim( '.' );
+		extension = (extension ?? "").Trim( '.' ).Trim();
 
-		var path = defaultPath;
-		if ( path.Contains( "." ) ) path = Path.GetDirectoryName( path );
+		var directory = defaultPath;
+		if ( !string.IsNullOrEmpty( directory ) && directory.Contains( "." ) )
+			directory = Path.GetDirectoryName( directory );
 
 		var fd = new FileDialog( null );
 		fd.Title = title;
-		fd.Directory = path;
-		fd.DefaultSuffix = $".{extension}";
-		fd.SelectFile( Path.GetFileName( defaultPath ) );
+		if ( !string.IsNullOrEmpty( directory ) )
+			fd.Directory = directory;
+		var fileName = string.IsNullOrEmpty( defaultPath ) ? "" : Path.GetFileName( defaultPath );
+		if ( !string.IsNullOrEmpty( fileName ) )
+			fd.SelectFile( fileName );
 		fd.SetFindFile();
 		fd.SetModeSave();
-		fd.SetNameFilter( $"{extension} (*.{extension})" );
+		if ( !string.IsNullOrEmpty( extension ) )
+		{
+			fd.DefaultSuffix = $".{extension}";
+			fd.SetNameFilter( $"{extension} (*.{extension})" );
+		}
 
 		if ( !fd.Execute() )
 			return null;
@@ -30,19 +38,27 @@ public static partial class EditorUtility
 
 	/// <summary>
 	/// Open a file open dialog. Returns null on cancel, else the absolute path of the target file.
+	/// Pass an empty extension to show all files (e.g. when picking an executable on Linux/macOS).
 	/// </summary>
 	public static string OpenFileDialog( string title, string extension, string defaultPath )
 	{
-		extension = extension.Trim( '.' );
+		extension = (extension ?? "").Trim( '.' ).Trim();
 
 		var fd = new FileDialog( null );
 		fd.Title = title;
-		fd.Directory = Path.GetDirectoryName( defaultPath );
-		fd.DefaultSuffix = $".{extension}";
-		fd.SelectFile( Path.GetFileName( defaultPath ) );
+		var directory = string.IsNullOrEmpty( defaultPath ) ? "" : Path.GetDirectoryName( defaultPath );
+		if ( !string.IsNullOrEmpty( directory ) )
+			fd.Directory = directory;
+		var fileName = string.IsNullOrEmpty( defaultPath ) ? "" : Path.GetFileName( defaultPath );
+		if ( !string.IsNullOrEmpty( fileName ) )
+			fd.SelectFile( fileName );
 		fd.SetFindFile();
 		fd.SetModeOpen();
-		fd.SetNameFilter( $"{extension} (*.{extension})" );
+		if ( !string.IsNullOrEmpty( extension ) )
+		{
+			fd.DefaultSuffix = $".{extension}";
+			fd.SetNameFilter( $"{extension} (*.{extension})" );
+		}
 
 		if ( !fd.Execute() )
 			return null;

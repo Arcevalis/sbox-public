@@ -10,6 +10,14 @@ internal class FileAttribute : Attribute
 	/// The extension to filter by in the browse dialog. If empty, all files are shown.
 	/// </summary>
 	public string Extension { get; set; } = "";
+
+	/// <summary>
+	/// Marks this as an executable picker: on Windows the browse dialog filters by
+	/// <see cref="Extension"/> (e.g. "exe"), while on Linux/macOS all files are shown
+	/// since binaries are usually extensionless (e.g. /usr/bin/nvim) or scripts
+	/// (e.g. rider.sh). Drag-drop follows the same rule.
+	/// </summary>
+	public bool IsExecutable { get; set; }
 }
 
 [CustomEditor( typeof( string ), WithAllAttributes = new[] { typeof( FileAttribute ) } )]
@@ -93,7 +101,11 @@ internal class FileControlWidget : ControlWidget
 
 	void Browse()
 	{
-		var path = EditorUtility.OpenFileDialog( $"Select {SerializedProperty.DisplayName}", attribute?.Extension ?? "", SerializedProperty.GetValue<string>( "" ) );
+		var extension = attribute?.Extension ?? "";
+		if ( attribute?.IsExecutable == true && !System.OperatingSystem.IsWindows() )
+			extension = "";
+
+		var path = EditorUtility.OpenFileDialog( $"Select {SerializedProperty.DisplayName}", extension, SerializedProperty.GetValue<string>( "" ) );
 		if ( string.IsNullOrEmpty( path ) )
 			return;
 
@@ -111,6 +123,10 @@ internal class FileControlWidget : ControlWidget
 
 	bool CanAssign( string path )
 	{
+		// Linux/macOS binaries are usually extensionless, so an executable picker accepts any file there.
+		if ( attribute?.IsExecutable == true && !System.OperatingSystem.IsWindows() )
+			return true;
+
 		var extensions = (attribute?.Extension ?? "").Split( ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries );
 		if ( extensions.Length == 0 )
 			return true;
