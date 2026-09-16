@@ -319,7 +319,7 @@ PS
 			return 0.0;
 
 		Texture2D maskTex = Bindless::GetTexture2D( inst.TextMaskIndex );
-		return saturate( maskTex.Sample( Bindless::GetSampler( NonUniform( inst.TextMaskSamplerIndex ) ), uv ).a );
+		return saturate( maskTex.Sample( Bindless::GetSamplerNonUniform( inst.TextMaskSamplerIndex ), uv ).a );
 	}
 
 	// Which side's colour a border pixel takes. CSS splits each corner along the line from the box corner
@@ -347,7 +347,7 @@ PS
 
 	#include "ui/border_style.hlsl"
 
-	float4 AddImageBorder( float2 texCoord, float2 boxSize, float4 borderWidth, int borderImageIndex, NonUniform borderImageSamplerIndex, int borderImageMode, int borderImageFill, float4 borderImageSlice )
+	float4 AddImageBorder( float2 texCoord, float2 boxSize, float4 borderWidth, int borderImageIndex, int borderImageSamplerIndex, int borderImageMode, int borderImageFill, float4 borderImageSlice )
 	{
 		float4 BorderImageWidth = borderWidth;
 		Texture2D borderTex = Bindless::GetTexture2D( borderImageIndex );
@@ -392,7 +392,7 @@ PS
 		else if ( vBoxTexCoord.y > boxSize.y - BorderImageWidth.w )
 			uv.y = ( ( vBoxTexCoord.y - ( boxSize.y - BorderImageWidth.w ) ) / BorderImageWidth.w ) * vBorderPixelRatio.w + ( 1.0 - vBorderPixelRatio.w );
 
-		float4 r = borderTex.Sample( Bindless::GetSampler( borderImageSamplerIndex ), uv );
+		float4 r = borderTex.Sample( Bindless::GetSamplerNonUniform( borderImageSamplerIndex ), uv );
 		r.xyz = UIDecodeColor( r.xyz );
 		return r;
 	}
@@ -746,7 +746,7 @@ PS
 			{
 
 				Texture2D tex = Bindless::GetTexture2D( inst.TextureIndex );
-				vImage = tex.SampleBias( Bindless::GetSampler( NonUniform( inst.SamplerIndex ) ), vUV, -1.5 ); // negative = sharper, positive = blurrier
+				vImage = tex.SampleBias( Bindless::GetSamplerNonUniform( inst.SamplerIndex ), vUV, -1.5 ); // negative = sharper, positive = blurrier
 			}
 			else
 			{
@@ -779,8 +779,11 @@ PS
 				vImage *= bgTint;
 			#endif
 
-			col.rgb = lerp( col.rgb, vImage.rgb, saturate( vImage.a + ( 1 - col.a ) ) );
-			col.a = max( col.a, vImage.a );
+			// Source-over: weight by the image's share of the combined alpha, so a transparent
+			// texel can't tint a translucent box and vImage.a alone wouldn't darken it either
+			float overAlpha = vImage.a + col.a * ( 1 - vImage.a );
+			col.rgb = lerp( col.rgb, vImage.rgb, overAlpha > 0 ? vImage.a / overAlpha : 0 );
+			col.a = overAlpha;
 
 			// A texture's alpha is a mask - a glyph's edge lives there - so it's coverage. A gradient's isn't.
 			if ( inst.TextureIndex > 0 )
@@ -803,7 +806,7 @@ PS
 			biTint.rgb = UIDecodeColor( biTint.rgb );
 			biTint.a = saturate( biTint.a );
 			float4 vBoxBorder = AddImageBorder( i.vTexCoord.xy, boxSize, borderWidth, inst.BorderImageIndex,
-				NonUniform( inst.BorderImageSamplerIndex ), inst.GetBorderImageMode(), inst.GetBorderImageFill(), inst.BorderImageSlice ) * biTint;
+				inst.BorderImageSamplerIndex, inst.GetBorderImageMode(), inst.GetBorderImageFill(), inst.BorderImageSlice ) * biTint;
 			col = AlphaBlend( vBoxBorder, col );
 			flMask = max( flMask, saturate( vBoxBorder.a ) );
 		}

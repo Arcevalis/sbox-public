@@ -55,6 +55,24 @@ partial class UISystem
 	}
 
 	/// <summary>
+	/// Releases current and pending focus before a subtree leaves this system. The blur event travels with the panel.
+	/// </summary>
+	internal void ReleaseFocusSubtree( Panel subtree )
+	{
+		if ( NextFocus?.AncestorsAndSelf.Contains( subtree ) == true )
+		{
+			NextFocus = null;
+			FocusPendingChange = false;
+		}
+
+		if ( CurrentFocus?.AncestorsAndSelf.Contains( subtree ) != true ) return;
+		var focused = CurrentFocus;
+		CurrentFocus = null;
+		Panel.Switch( PseudoClass.Focus, false, focused );
+		focused.CreateEvent( new PanelEvent( "onblur", focused ) );
+	}
+
+	/// <summary>
 	/// Settle the focus for this frame - drop it if it's become ineligible, then move it to
 	/// whatever asked for it, sending blur and focus events on the way.
 	/// </summary>

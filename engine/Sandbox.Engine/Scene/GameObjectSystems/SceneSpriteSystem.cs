@@ -229,9 +229,6 @@ public sealed class SceneSpriteSystem : GameObjectSystem<SceneSpriteSystem>
 			}
 		}
 
-		// Animate all sprites in parallel - AdvanceFrame is uniform cost so no load balancing needed
-		Parallel.For( 0, _allSprites.Count, i => _allSprites[i].AdvanceFrame() );
-
 		// Registered sprites who are not enabled
 		_spritesToRemove.Clear();
 		foreach ( var spriteId in _registeredSpriteRenderers )

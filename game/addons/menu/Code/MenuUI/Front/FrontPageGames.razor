@@ -91,7 +91,7 @@
                     <div class="row">
                         @foreach ( var package in section.RowOne )
                         {
-                            <MenuProject.UI.PackageCard Package=@package
+                            <MenuProject.UI.PackageCard Package=@package style="@section.RowOneStyle"
                                          Rotation=@section.Rotation
                                          Clicked="@(() => package.OpenModal())"
                                          RightClicked="@(() => MenuHelpers.OpenPackageMenu( this, package ))" />
@@ -224,6 +224,10 @@
             else
             {
                 section.RowOne.AddRange( packages.Take( Columns ) );
+
+                // Same as the mosaic rows - a shelf with only a couple of games keeps normal
+                // tile widths instead of one card stretching across the whole shelf.
+                section.RowOneStyle = section.RowOne.Count < Columns ? ShortRowTileStyle : "";
             }
 
             Sections.Add( section );

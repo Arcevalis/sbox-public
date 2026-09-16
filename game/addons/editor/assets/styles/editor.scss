@@ -598,3 +598,12 @@
 .os-tooltip .tooltip .tooltip-title { font-weight: 600; margin-bottom: 4px; }
 .os-tooltip .tooltip .tooltip-detail { color: $text-muted; font-size: 11px; margin-top: 4px; }
 .os-tooltip .tooltip .tooltip-image { width: 128px; height: 128px; margin-top: 6px; }
+
+// Docking belongs to the shared editor theme, including native floating windows.
+$dock-ground: $ground;
+$dock-text: $text;
+$dock-muted: $text-muted;
+$dock-light-ground: $l-ground;
+$dock-light-text: $l-text;
+$dock-light-muted: $l-text-muted;
+@import "_docktheme.scss";

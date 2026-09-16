@@ -57,6 +57,29 @@ internal class PanelInput
 		}
 	}
 
+	/// <summary>
+	/// Release pointer capture without clicking or dropping. Keyboard focus and selection stay put.
+	/// </summary>
+	internal void CancelPointerInteraction()
+	{
+		var dropTarget = DropTarget;
+		var dragSource = MouseStates[0].DragTarget;
+
+		mousebuttons.Clear();
+		Panel.Switch( PseudoClass.Active, false, Active );
+		Active = null;
+		DropTarget = null;
+
+		foreach ( var state in MouseStates )
+		{
+			state.Reset();
+		}
+
+		// Clear capture before notifying user code, which can delete panels or reenter input.
+		if ( dropTarget is { IsValid: true, IsDeleting: false } )
+			dropTarget.CreateEvent( new PanelEvent( "ondragleave", dragSource ) );
+	}
+
 	internal virtual void Tick( IEnumerable<RootPanel> panels, bool mouseIsActive )
 	{
 		bool hoveredAny = false;
@@ -389,6 +412,18 @@ internal class PanelInput
 			MouseButton = i;
 		}
 
+		internal void Reset()
+		{
+			Panel.Switch( PseudoClass.Active, false, Active );
+			Pressed = false;
+			Active = null;
+			Dragged = false;
+			DragTarget = null;
+			StartHoldOffsetLocal = default;
+			StartHoldOffsetScreen = default;
+			MouseDownEvent = null;
+		}
+
 		public void Update( bool down, Panel hovered )
 		{
 			var mouseMoved = !Input.CursorDelta.IsNearZeroLength;
@@ -461,7 +496,12 @@ internal class PanelInput
 			IGameInstanceDll.Current?.ClosePopups( hovered );
 
 			if ( Active == null )
+			{
+				// A press over nothing can't drag - clear the last press's target or the drag watch dereferences a null Active
+				Dragged = false;
+				DragTarget = null;
 				return;
+			}
 
 			Panel.Switch( PseudoClass.Active, true, Active );
 

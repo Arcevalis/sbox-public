@@ -531,6 +531,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	{
 		if ( !string.IsNullOrEmpty( message ) )
 		{
+			if ( Networking.System is { } system ) system.FailureReason ??= message;
 			Log.Warning( $"Disconnected: {message.Replace( "\n", "" )}" );
 		}
 
