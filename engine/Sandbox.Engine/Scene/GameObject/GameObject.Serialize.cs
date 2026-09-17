@@ -344,7 +344,16 @@ public partial class GameObject
 
 		// Handle nested prefab instances
 		// Only init with a path, we don't have any patches or lookups for nested instances.
-		if ( node[JsonKeys.EditorPrefabInstanceNestedSource] is JsonValue __PrefabNestedInstance && __PrefabNestedInstance.TryGetValue( out string prefabSource ) )
+		// Prefab refs may be a plain path string or an {Id, Path} object; accept both.
+		static string GetPrefabSourcePath( JsonNode prefabNode ) => prefabNode switch
+		{
+			JsonValue v when v.TryGetValue( out string s ) => s,
+			JsonObject o when o["Path"] is JsonValue p && p.TryGetValue( out string s ) => s,
+			_ => null
+		};
+
+		string prefabSource = GetPrefabSourcePath( node[JsonKeys.EditorPrefabInstanceNestedSource] );
+		if ( prefabSource is not null )
 		{
 			if ( this is not PrefabScene )
 			{
@@ -366,7 +375,7 @@ public partial class GameObject
 			}
 		}
 		// Handle full prefab instances
-		else if ( node[JsonKeys.PrefabInstanceSource] is JsonValue __prefab && __prefab.TryGetValue( out prefabSource ) )
+		else if ( (prefabSource = GetPrefabSourcePath( node[JsonKeys.PrefabInstanceSource] )) is not null )
 		{
 			// Set the persisted id first; mapping gap-fill is seeded by it.
 			DeserializeId( node );

@@ -99,6 +99,16 @@ public abstract partial class Resource : IValid, IJsonConvert, BytePack.ISeriali
 	/// </summary>
 	internal static Resource Load( Type t, string filename )
 	{
+		// Native lookups match paths exactly, so recover the on-disk spelling first.
+		// Anything unresolvable falls through untouched and behaves exactly as before.
+		var mount = Engine.GlobalContext.Current?.FileMount;
+		if ( !string.IsNullOrEmpty( filename ) && mount is not null && mount.IsValid )
+		{
+			var absolute = mount.GetFullPath( filename );
+			if ( !string.IsNullOrEmpty( absolute ) && absolute.Length > filename.Length && !absolute.EndsWith( filename, System.StringComparison.Ordinal ) && absolute.EndsWith( filename, System.StringComparison.OrdinalIgnoreCase ) && absolute[absolute.Length - filename.Length - 1] == '/' )
+				filename = absolute.Substring( absolute.Length - filename.Length );
+		}
+
 		if ( t == typeof( Material ) ) return Material.Load( filename );
 		if ( t == typeof( Texture ) ) return Texture.Load( filename );
 		if ( t == typeof( Model ) ) return Model.Load( filename );

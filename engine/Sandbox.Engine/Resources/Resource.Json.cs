@@ -77,6 +77,18 @@ public partial class Resource
 		// from an object (embedded resource)
 		if ( reader.TokenType == JsonTokenType.StartObject )
 		{
+			// Asset references serialized as {Id, Path} carry no embedded data; capture
+			// the stored path up front while the reader is still positioned on the object.
+			string referencePath = null;
+			try
+			{
+				var peek = reader;
+				referencePath = (System.Text.Json.Nodes.JsonNode.Parse( ref peek ) as System.Text.Json.Nodes.JsonObject)?["Path"]?.GetValue<string>();
+			}
+			catch
+			{
+			}
+
 			EmbeddedResource serializedResource;
 
 			try
@@ -134,7 +146,18 @@ public partial class Resource
 			}
 
 			var options = ResourceGenerator.Options.Default;
-			return ResourceGenerator.CreateResource( serializedResource, options, targetType );
+			var created = ResourceGenerator.CreateResource( serializedResource, options, targetType );
+			if ( created is not null )
+				return created;
+
+			// Fallback for asset references written as {Id, Path} instead of embedded
+			// data. Anything unresolvable keeps the previous behavior and resolves to null.
+			// Case recovery happens downstream in Resource.Load, the single choke point
+			// all native resource loads funnel through.
+			if ( string.IsNullOrEmpty( referencePath ) )
+				return created;
+
+			return LoadFromPath( targetType, referencePath.Replace( '\\', '/' ) );
 		}
 
 		// not found, null, empty, unhandled
