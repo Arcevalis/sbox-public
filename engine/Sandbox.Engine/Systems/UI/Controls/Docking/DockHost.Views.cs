@@ -4,116 +4,87 @@ namespace Sandbox.UI;
 
 public partial class DockHost
 {
+	sealed class DockTabBar( DockHost host ) : TabBar
+	{
+		// Reparenting and selection are committed together by the docking layout.
+		protected override void OnChildRemoved( Panel child ) { }
+
+		public override void SelectTab( Tab tab )
+		{
+			if ( tab is DockTab dock ) host.Activate( dock.Item.Id );
+		}
+
+		public override bool CloseTab( Tab tab ) => tab is DockTab dock && host.Close( dock.Item.Id );
+	}
+
 	sealed class GroupView : Panel
 	{
-		internal Panel Tabs { get; }
+		internal TabBar Tabs { get; }
 		internal Panel Body { get; }
 
-		internal GroupView()
+		internal GroupView( DockHost host )
 		{
 			AddClass( "dock-group" );
-			Tabs = Add.Panel( "dock-tabs" );
-			Tabs.CanDragScroll = false;
+			Tabs = AddChild( new DockTabBar( host ) );
+			Tabs.AddClass( "dock-tabs" );
 			Body = Add.Panel( "dock-body" );
 		}
 	}
 
-	sealed class DockTab : Panel
+	// Shared tab chrome, closing, menus and keyboard navigation; docking owns the drag operation.
+	sealed class DockTab : Tab
 	{
 		readonly DockHost _host;
-		readonly DockItem _item;
+		internal DockItem Item { get; }
 		bool _leftPressed;
 
-		/// <inheritdoc/>
 		public override bool WantsDrag => !_host.UsesWindowDragging;
 
 		internal DockTab( DockHost host, DockItem item )
 		{
 			_host = host;
-			_item = item;
+			Item = item;
+			Text = item.Title;
+			Icon = item.Icon;
+			CanClose = item.CanClose;
 			AddClass( "dock-tab" );
-			AcceptsFocus = true;
-			if ( !string.IsNullOrWhiteSpace( item.Icon ) ) Add.Icon( item.Icon, "dock-tab-icon" );
-			Add.Label( item.Title, "dock-tab-title" );
-			if ( item.CanClose ) AddAction( "close", () => host.Close( item.Id ) ).Tooltip = "Close panel";
-		}
-
-		Panel AddAction( string icon, Action action )
-		{
-			var button = Add.Panel( "dock-tab-action" );
-			button.Add.Icon( icon );
-			button.AddEventListener( "onmousedown", e => e.StopPropagation() );
-			button.AddEventListener( "onclick", e =>
+			foreach ( var child in Children )
 			{
-				e.StopPropagation();
-				action();
-			} );
-			return button;
+				if ( child.HasClass( "tab-title" ) ) child.AddClass( "dock-tab-title" );
+				if ( child.HasClass( "tab-icon" ) && !string.IsNullOrWhiteSpace( item.Icon ) ) child.AddClass( "dock-tab-icon" );
+				if ( child.HasClass( "tab-close" ) && item.CanClose )
+				{
+					child.AddClass( "dock-tab-action" );
+					child.Tooltip = "Close panel";
+				}
+			}
+			BuildContextMenu = menu =>
+			{
+				if ( host.UsesWindowDragging && host.FloatRequested is not null )
+					menu.AddOption( "Float", "open_in_new", () => host.FloatRequested?.Invoke( item.Id ) );
+			};
 		}
 
 		protected override void OnMouseDown( MousePanelEvent e )
 		{
 			_leftPressed = e.Button == "mouseleft";
-			if ( !_leftPressed ) e.StopPropagation();
-			// Activation keeps the tab instance alive for the input system's pending drag.
-			if ( !_leftPressed ) return;
-			_host.Activate( _item.Id );
-			if ( _host.UsesWindowDragging )
+			base.OnMouseDown( e );
+			if ( _leftPressed && _host.UsesWindowDragging )
 			{
 				e.StopPropagation();
-				_host.DragPressed( _host, _item.Id, ScreenMousePosition );
+				_host.DragPressed( _host, Item.Id, ScreenMousePosition );
 			}
-		}
-
-		protected override void OnClick( MousePanelEvent e )
-		{
-			e.StopPropagation();
-			_host.Activate( _item.Id );
-		}
-
-		protected override void OnMiddleClick( MousePanelEvent e )
-		{
-			e.StopPropagation();
-			_host.Close( _item.Id );
-		}
-
-		protected override void OnRightClick( MousePanelEvent e )
-		{
-			e.StopPropagation();
-			var menu = new Menu();
-			if ( _host.UsesWindowDragging && _host.FloatRequested is not null )
-				menu.AddOption( "Float", "open_in_new", () => _host.FloatRequested?.Invoke( _item.Id ) );
-			if ( _item.CanClose ) menu.AddOption( "Close", "close", () => _host.Close( _item.Id ) );
-			if ( menu.Options.Count == 0 ) { menu.Delete( true ); return; }
-			menu.Closed += _ => menu.Delete( true );
-			menu.Open( this, Popup.PositionMode.UnderMouse );
 		}
 
 		protected override void OnDragStart( DragEvent e )
 		{
 			e.StopPropagation();
-			if ( _leftPressed ) _host.BeginDrag( _item.Id );
+			if ( _leftPressed ) _host.BeginDrag( Item.Id );
 		}
+		protected override void OnDrag( DragEvent e ) { e.StopPropagation(); _host.UpdateDrag( e.ScreenPosition ); }
+		protected override void OnDragEnd( DragEvent e ) { e.StopPropagation(); _host.EndDrag( e.ScreenPosition ); }
+		protected override void OnEscape( PanelEvent e ) { e.StopPropagation(); _host.CancelDrag(); }
 
-		protected override void OnDrag( DragEvent e )
-		{
-			e.StopPropagation();
-			_host.UpdateDrag( e.ScreenPosition );
-		}
-
-		protected override void OnDragEnd( DragEvent e )
-		{
-			e.StopPropagation();
-			_host.EndDrag( e.ScreenPosition );
-		}
-
-		protected override void OnEscape( PanelEvent e )
-		{
-			e.StopPropagation();
-			_host.CancelDrag();
-		}
-
-		/// <inheritdoc/>
 		public override void OnButtonTyped( ButtonEvent e )
 		{
 			if ( e.Button == "escape" )
@@ -122,27 +93,10 @@ public partial class DockHost
 				_host.CancelDrag();
 				return;
 			}
-			if ( e.Button is "left" or "right" )
-			{
-				var group = _host._layout.FindGroup( _item.Id );
-				if ( group is not null )
-				{
-					var index = group.Items.IndexOf( _item.Id );
-					var next = group.Tabs[(index + (e.Button == "right" ? 1 : group.Tabs.Count - 1)) % group.Tabs.Count];
-					_host.Activate( next );
-					_host._tabs[next].Focus();
-					e.StopPropagation = true;
-					return;
-				}
-			}
 			base.OnButtonTyped( e );
 		}
 
-		protected override void OnBlur( PanelEvent e )
-		{
-			_host.CancelDrag();
-			base.OnBlur( e );
-		}
+		protected override void OnBlur( PanelEvent e ) { _host.CancelDrag(); base.OnBlur( e ); }
 	}
 
 	static Vector2 MinimumSize( DockNode node )

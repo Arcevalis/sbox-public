@@ -320,7 +320,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 
 		Log.Info( "Creating clone for filtering..." );
 
-		if ( Utility.RunProcess( "git", $"clone --shallow-exclude {SHALLOW_EXCLUDE_TAG} \"{localFilePath}\" \"{filteredRepoPath}\"" ) )
+		if ( Utility.RunProcess( "git", $"clone --config core.longpaths=true --shallow-exclude {SHALLOW_EXCLUDE_TAG} \"{localFilePath}\" \"{filteredRepoPath}\"" ) )
 		{
 			return filteredRepoPath;
 		}

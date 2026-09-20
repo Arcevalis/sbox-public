@@ -367,7 +367,7 @@ public partial class Scene : GameObject
 		// Alpha is used to lerp between IBL and fixed ambient light
 		Color ambientLight = Color.Transparent;
 
-		foreach ( var light in GetAllComponents<DirectionalLight>() )
+		foreach ( var light in Query<DirectionalLight>() )
 		{
 			if ( Camera.IsValid() && light.Tags.HasAny( Camera.RenderExcludeTags ) )
 				continue;

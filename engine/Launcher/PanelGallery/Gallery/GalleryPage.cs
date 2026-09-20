@@ -25,7 +25,13 @@ public record GalleryPageInfo( string Title, string Icon, Func<Panel> Create, st
 		new( "Checkbox", "check_box", () => new CheckboxPage(), "Controls/Input" ),
 		new( "Focus", "keyboard_tab", () => new FocusPage(), "System" ),
 		new( "Colour", "palette", () => new ColorControlsPage(), "Controls/Input" ),
+		new( "Canvas Panel", "pan_tool", () => new CanvasPanelPage(), "Controls/Display" ),
+		new( "Graph Panel", "show_chart", () => new GraphPanelPage(), "Controls/Display" ),
+		new( "Curve Editor", "timeline", () => new CurveEditorPage(), "Controls/Input" ),
 		new( "Grouping", "table_rows", () => new LayoutControlsPage(), "Controls/Layout" ),
+		new( "Toolbar", "view_week", () => new ToolbarPage(), "Controls/Layout" ),
+		new( "Tabs", "tab", () => new TabsPage(), "Controls/Layout" ),
+		new( "Status Bar", "info", () => new StatusBarPage(), "Controls/Layout" ),
 		new( "Folder Select", "folder_open", () => new FolderSelectorPage(), "Controls/Input" ),
 		new( "Sliders", "tune", () => new SlidersPage(), "Controls/Input" ),
 		new( "Split Container", "vertical_split", () => new SplitContainerPage(), "Controls/Layout" ),
@@ -91,7 +97,9 @@ public abstract class GalleryPage : Panel
 	float sceneHorizontalFov;
 	float sceneOrthoHeight;
 
-	/// <summary>Give the scene the window height, with independently scrolling controls alongside it.</summary>
+	/// <summary>
+	/// Give the scene the window height, with independently scrolling controls alongside it.
+	/// </summary>
 	protected void UseSceneLayout( ScenePanel view, CameraComponent camera )
 	{
 		AddClass( "full-page scene-gallery" );

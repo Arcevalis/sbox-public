@@ -6,7 +6,13 @@
 
 <root class="@(Visible ? "visible" : "")">
 	<div class="heading"><i>group</i><label>@Title</label></div>
-	<label class="game">@GameTitle</label>
+	<div class="game">
+		@if ( !string.IsNullOrWhiteSpace( GameThumbnail ) )
+		{
+			<div class="thumbnail" style="background-image: url( @GameThumbnail );"></div>
+		}
+		<label>@GameTitle</label>
+	</div>
 	@if ( Busy && HostProgress is { } host )
 	{
 		<div class="progress-label"><label>Party leader's download</label><label>@($"{host.Percent:0}%")</label></div>
@@ -45,6 +51,7 @@
 	[Parameter] public LoadingProgress? Progress { get; set; }
 	[Parameter] public LoadingProgress? HostProgress { get; set; }
 	[Parameter] public string GameTitle { get; set; }
+	[Parameter] public string GameThumbnail { get; set; }
 	[Parameter] public string Error { get; set; }
 	[Parameter] public bool IsFollower { get; set; }
 	[Parameter] public int SessionId { get; set; }
@@ -81,7 +88,7 @@
 	void Cancel() => CancelRequested?.Invoke();
 	void Dismiss() { Dismissed = Identity; }
 	void Leave() => LeaveRequested?.Invoke();
-	protected override int BuildHash() => HashCode.Combine( Identity, Dismissed, GameTitle, Progress, HostProgress, Detail, IsFollower );
+	protected override int BuildHash() => HashCode.Combine( Identity, Dismissed, GameTitle, Progress, HostProgress, Detail, IsFollower, GameThumbnail );
 	public override void Tick()
 	{
 		if ( LastIdentity != Identity ) Dismissed = null;

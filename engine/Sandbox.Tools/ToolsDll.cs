@@ -2,6 +2,7 @@ using NativeEngine;
 using Sandbox.Audio;
 using Sandbox.Engine;
 using Sandbox.Internal;
+using Sandbox.Modals;
 using System;
 
 namespace Sandbox;
@@ -282,13 +283,24 @@ internal class ToolsDll : IToolsDll
 			Time.Update( scene.TimeNow, scene.TimeDelta );
 		}
 
-		// Escape was pressed in game and wasn't swallowed
-		// so lets change focus from the game window to the main editor
-		// window, which is going to free the mouse cursor from being captured
+		// Shift+Escape toggles the platform menu without releasing game focus.
+		if ( Game.IsPlaying && InputRouter.EditorPauseMenuWasPressed )
+		{
+			InputRouter.EditorPauseMenuWasPressed = false;
+			Input.EscapePressed = false;
+
+			using var scope = GlobalContext.MenuScope();
+			IModalSystem.Current?.PauseMenu();
+
+			return;
+		}
+
+		// Escape was pressed in game and wasn't swallowed. Return focus to the editor
+		// to release the captured mouse.
 		if ( Game.IsPlaying && Input.EscapePressed )
 		{
-			EditorWindow.Focus();
 			Input.EscapePressed = false;
+			EditorWindow.Focus();
 		}
 	}
 

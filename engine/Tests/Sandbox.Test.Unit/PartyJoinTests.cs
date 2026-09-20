@@ -6,6 +6,65 @@ using System.Threading;
 public class PartyJoinTests
 {
 	[TestMethod]
+	public async Task HostMenuKeepsPreloadAndWaitsUntilTheServerIsReady()
+	{
+		var download = new TaskCompletionSource();
+		var downloads = 0;
+		var connects = 0;
+		using var join = new PartyJoinController( ( _, _, _ ) => { downloads++; return download.Task; },
+			( _, _, _ ) => { connects++; return Task.CompletedTask; }, () => { } );
+		join.Update( Loading(), 0 );
+		var pending = join.PendingTask;
+		var menu = Loading() with { State = PartyRoom.OwnerJoinState.Unavailable };
+		join.Update( menu, 1 );
+		Assert.AreEqual( 1, downloads );
+		Assert.AreEqual( PartyRoom.JoinStage.Downloading, join.Stage );
+
+		download.SetResult();
+		await pending;
+		join.Update( menu, 600 );
+		Assert.AreEqual( PartyRoom.JoinStage.WaitingForHost, join.Stage );
+		Assert.IsNull( join.Error );
+		Assert.AreEqual( 0, connects );
+
+		join.Update( Ready(), 601 );
+		await join.PendingTask;
+		Assert.AreEqual( PartyRoom.JoinStage.Connected, join.Stage );
+		Assert.AreEqual( 1, connects );
+		Assert.AreEqual( 1, downloads );
+	}
+
+	[TestMethod]
+	public async Task JoiningAPartyWhileHostIsInMenuPreloadsAndCanBeCancelled()
+	{
+		var downloads = 0;
+		var connects = 0;
+		using var join = new PartyJoinController( ( _, _, _ ) => { downloads++; return Task.CompletedTask; },
+			( _, _, _ ) => { connects++; return Task.CompletedTask; }, () => { } );
+		join.Update( Loading() with { State = PartyRoom.OwnerJoinState.Unavailable }, 0 );
+		await join.PendingTask;
+		Assert.AreEqual( 1, downloads );
+		Assert.AreEqual( PartyRoom.JoinStage.WaitingForHost, join.Stage );
+		join.Cancel();
+		join.Update( Loading(), 300 );
+		join.Update( Ready(), 600 );
+		Assert.AreEqual( PartyRoom.JoinStage.Cancelled, join.Stage );
+		Assert.AreEqual( 0, connects );
+	}
+
+	[TestMethod]
+	public void StalledLocalDownloadStillTimesOutWhileHostIsInMenu()
+	{
+		var download = new TaskCompletionSource();
+		using var join = new PartyJoinController( ( _, _, _ ) => download.Task,
+			( _, _, _ ) => Task.CompletedTask, () => { } );
+		var menu = Loading() with { State = PartyRoom.OwnerJoinState.Unavailable };
+		join.Update( menu, 0 );
+		join.Update( menu, 121 );
+		Assert.AreEqual( PartyRoom.JoinStage.Failed, join.Stage );
+	}
+
+	[TestMethod]
 	public async Task RetryDuringConnectionDoesNotRestartTheAttempt()
 	{
 		var connection = new TaskCompletionSource();

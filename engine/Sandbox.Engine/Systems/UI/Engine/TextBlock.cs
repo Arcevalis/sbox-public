@@ -606,7 +606,7 @@ internal sealed partial class TextBlock : IDisposable
 		}
 		else
 		{
-			Block.MaxWidth = IsInlineParagraph ? _inlineWidth : WhiteSpace == UI.WhiteSpace.NoWrap ? null : (maxwidth.CeilToInt() + 1);
+			Block.MaxWidth = IsInlineParagraph ? _inlineWidth : WhiteSpace is UI.WhiteSpace.NoWrap or UI.WhiteSpace.Pre ? null : (maxwidth.CeilToInt() + 1);
 		}
 
 		int width = Block.MeasuredWidth.CeilToInt().Clamp( 2, 4096 );

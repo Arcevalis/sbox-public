@@ -86,9 +86,9 @@ EditorWindow, .mock-editor-surface
 // Everything that carries a palette colour eases into it, so flipping the theme class crossfades
 // the window instead of snapping. Rules further down with their own transition win over this.
 //
-EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divider, .paneheader,
-.paneheader .badge, .pane, .splitter, .tabbar, .tablehead, .cell, .section, .section .head,
-.section .body, .statusbar, .statusbar .sep, .assetgrid, .scroll, .graph .bar, .progress,
+EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar-separator, .paneheader,
+.paneheader .badge, .pane, .splitter, .tablehead, .cell, .section, .section .head,
+.section .body, .assetgrid, .scroll, .graph .bar, .progress,
 .numberbox .value, .slider .track, .slider .readout, .searchbox .value, .searchbox .placeholder
 {
 	transition: background-color 0.35s ease-out, color 0.35s ease-out, border-color 0.35s ease-out;
@@ -98,9 +98,7 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 // Asset browser tab - a search row over the grid
 //
 .assets { flex-direction: column; flex-grow: 1; overflow: hidden; }
-.assets .bar { flex-shrink: 0; flex-direction: row; align-items: center; height: 30px; padding: 0 8px; background-color: $panel; border-bottom: 1px solid $line; }
 .assets .bar .searchbox { width: 220px; }
-.assets .bar .grow { flex-grow: 1; }
 .assets .bar .count { color: $faint; font-size: 11px; font-family: Roboto Mono; }
 .assets .scroll { flex-grow: 1; }
 
@@ -313,40 +311,15 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 .dropdown .separator { height: 1px; background-color: $line; margin: 5px 8px; }
 
 //
-// Toolbar
+// Controls embedded in the viewport toolbar
 //
-.toolbar, .viewporttoolbar
-{
-	position: relative;
-	flex-shrink: 0;
-	height: 34px;
-	flex-direction: row;
-	align-items: center;
-	padding: 0px 8px;
-	background-color: $panel;
-	border-bottom: 1px solid $line;
-}
 
-.toolbar .divider, .viewporttoolbar .divider { width: 1px; height: 18px; margin: 0px 8px; background-color: $line; }
-.toolbar .grow, .viewporttoolbar .grow { flex-grow: 1; }
 
 .viewporttoolbar .numberbox { width: 62px; flex-grow: 0; flex-shrink: 0; margin-left: 2px; }
 .viewporttoolbar .numberbox .unit { color: $faint; margin-left: 2px; }
-.viewporttoolbar .segmented { margin-right: 2px; }
-.viewporttoolbar .playcontrols
-{
-	position: absolute;
-	left: 0px;
-	width: 100%;
-	height: 33px;
-	flex-direction: row;
-	align-items: center;
-	justify-content: center;
-	pointer-events: none;
-}
-.viewporttoolbar .iconbutton.play.playing { color: $rose; }
-.viewporttoolbar .iconbutton.play { color: $lime; }
-.viewporttoolbar .iconbutton.disabled { opacity: 0.3; }
+.viewporttoolbar .buttongroup { margin-right: 2px; }
+.viewporttoolbar > .button.play.playing { color: $rose; }
+.viewporttoolbar > .button.play { color: $lime; }
 
 .iconbutton
 {
@@ -609,55 +582,6 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 .treerow.hidden .name { color: $faint; }
 
 //
-// Tabs
-//
-.tabbar
-{
-	flex-shrink: 0;
-	height: 34px;
-	flex-direction: row;
-	align-items: stretch;
-	background-color: $deep;
-	border-bottom: 1px solid $line;
-}
-
-.tabbar .tab
-{
-	pointer-events: all;
-	flex-direction: row;
-	align-items: center;
-	padding: 0px 16px;
-	color: $dim;
-	cursor: pointer;
-	border-bottom: 2px solid transparent;
-	transition: all 0.18s ease-out;
-}
-
-.tabbar .tab:hover { color: $text; background-color: $hover-wash; }
-.tabbar .tab.active
-{
-	color: $bright;
-	background-image: linear-gradient( 180deg, rgba( $accent, 0.12 ) 0%, $panel 80% );
-	border-bottom-color: $indigo;
-}
-
-.tabbar .tab .icon { font-size: 14px; margin-right: 7px; transition: transform 0.18s ease-out; }
-.tabbar .tab.active .icon { color: $indigo; transform: scale( 1.1 ); }
-.tabbar .tab .count
-{
-	margin-left: 9px;
-	padding: 1px 7px;
-	border-radius: 9px;
-	background-color: $raised;
-	color: $dim;
-	font-family: Roboto Mono;
-	font-size: 10px;
-	transition: all 0.18s ease-out;
-}
-
-.tabbar .tab.active .count { background-color: rgba( $accent, 0.16 ); color: $accent-text; }
-
-//
 // Table
 //
 .tablehead
@@ -820,33 +744,10 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 //
 // The row of tools above the tree
 //
-.panetools
-{
-	flex-shrink: 0;
-	flex-direction: row;
-	align-items: center;
-	height: 28px;
-	padding: 0 6px;
-	border-bottom: 1px solid $line-soft;
-}
 
 .panetools .searchbox { flex-grow: 1; flex-shrink: 1; width: 0; margin: 0 4px; }
 
-.toolbutton
-{
-	width: 22px;
-	height: 22px;
-	align-items: center;
-	justify-content: center;
-	border-radius: 4px;
-	color: $dim;
-	pointer-events: all;
-	transition: all 0.12s ease-out;
-}
 
-.toolbutton .icon { font-size: 16px; }
-.toolbutton:hover { background-color: $raised; color: $bright; }
-.toolbutton.active { background-color: $indigo; color: #fff; }
 
 //
 // Viewport overlays - frame rate, the tool strip and the axis ball
@@ -867,16 +768,8 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 	position: absolute;
 	left: 6px;
 	top: 26px;
-	flex-direction: column;
-	padding: 3px;
-	border-radius: 7px;
-	background-color: rgba( black, 0.45 );
-	border: 1px solid rgba( white, 0.07 );
 }
 
-.viewport .toolstrip .toolbutton { width: 26px; height: 26px; color: rgba( white, 0.7 ); }
-.viewport .toolstrip .toolbutton:hover { background-color: rgba( white, 0.12 ); color: #fff; }
-.viewport .toolstrip .toolbutton.active { background-color: $indigo; color: #fff; }
 
 .viewport .axiswidget
 {
@@ -934,18 +827,8 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 //
 .console { flex-direction: column; flex-grow: 1; overflow: hidden; }
 
-.console .bar
-{
-	flex-direction: row;
-	align-items: center;
-	flex-shrink: 0;
-	height: 28px;
-	padding: 0 8px;
-	background-color: $panel;
-	border-bottom: 1px solid $line;
-}
 
-.console .button
+.console .commandline > .button
 {
 	flex-direction: row;
 	align-items: center;
@@ -958,29 +841,15 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 	transition: all 0.12s ease-out;
 }
 
-.console .button .icon { font-size: 13px; margin-right: 3px; }
-.console .button:hover { color: $bright; background-color: $raised; border-color: $edge; }
-.console .button.active { color: $bright; background-color: $raised; border-color: $edge-hover; }
+.console .commandline > .button .icon { font-size: 13px; margin-right: 3px; }
+.console .commandline > .button:hover { color: $bright; background-color: $raised; border-color: $edge; }
+.console .commandline > .button.active { color: $bright; background-color: $raised; border-color: $edge-hover; }
 
 .console .bar .searchbox { width: 180px; margin-right: 6px; }
 
-.console .filter
-{
-	flex-direction: row;
-	align-items: center;
-	padding: 2px 7px 2px 5px;
-	margin-left: 3px;
-	border-radius: 3px;
-	color: $faint;
-	font-size: 11px;
-	opacity: 0.45;
-	transition: all 0.12s ease-out;
-}
+.console .filter .button-text { font-family: Roboto Mono; }
 
-.console .filter:hover { background-color: $raised; }
-.console .filter.active { opacity: 1; background-color: $raised; }
-.console .filter .icon { font-size: 14px; margin-right: 3px; }
-.console .filter .count { font-family: Roboto Mono; }
+
 .console .filter.warn.active { color: $amber; }
 .console .filter.error.active { color: $rose; }
 .console .filter.info.active { color: $text; }
@@ -1116,7 +985,7 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 .console .commandline .prompt { font-family: Roboto Mono; color: $lime; margin-right: 6px; }
 .console .commandline .searchbox { flex-grow: 1; background-color: transparent; border-width: 0px; }
 .console .commandline .searchbox .value { font-family: Roboto Mono; }
-.console .button.square { padding: 3px 5px; margin-right: 0px; }
+.console .commandline > .button.square { padding: 3px 5px; margin-right: 0px; }
 
 //
 // Inspector - laid out like Unity's: a tight header row per component with a tick box, then
@@ -1415,21 +1284,6 @@ EditorWindow, .titlebar, .titlebar .subtitle, .menubar, .toolbar, .toolbar .divi
 //
 // Status bar
 //
-.statusbar
-{
-	flex-shrink: 0;
-	height: 26px;
-	flex-direction: row;
-	align-items: center;
-	padding: 0px 12px;
-	background-color: $raised;
-	border-top: 1px solid $line;
-	color: $dim;
-	font-size: 11px;
-}
-
-.statusbar .grow { flex-grow: 1; }
-.statusbar .sep { width: 1px; height: 12px; margin: 0px 12px; background-color: $line; }
 .statusbar .mono { font-family: Roboto Mono; }
 .statusbar .dot
 {
@@ -1517,7 +1371,6 @@ $nub: $l-surface;
 $nub-hover: $l-surface;
 
 EditorWindow.editor-light-mode, .mock-editor-surface.editor-light-mode { background-color: $window; color: $text; border: 1px solid $edge; }
-.editor-light-mode .assets .bar { background-color: $panel; border-bottom: 1px solid $line; }
 .editor-light-mode .assets .bar .count { color: $faint; }
 .editor-light-mode .titlebar { background-image: linear-gradient( 180deg, $bar-b 0%, $bar-a 100% ); border-bottom: 1px solid $line; }
 .editor-light-mode .titlebar .brand { background-image: linear-gradient( 145deg, $cyan 0%, $indigo 60% ); }
@@ -1541,11 +1394,9 @@ EditorWindow.editor-light-mode, .mock-editor-surface.editor-light-mode { backgro
 .editor-light-mode .dropdown .row .shortcut { color: $dim; }
 .editor-light-mode .dropdown .row:hover .shortcut { color: $on-accent-dim; }
 .editor-light-mode .dropdown .separator { background-color: $line; }
-.editor-light-mode .toolbar, .editor-light-mode .viewporttoolbar { background-color: $panel; border-bottom: 1px solid $line; }
-.editor-light-mode .toolbar .divider, .editor-light-mode .viewporttoolbar .divider { background-color: $line; }
 .editor-light-mode .viewporttoolbar .numberbox .unit { color: $faint; }
-.editor-light-mode .viewporttoolbar .iconbutton.play.playing { color: $rose; }
-.editor-light-mode .viewporttoolbar .iconbutton.play { color: $lime; }
+.editor-light-mode .viewporttoolbar > .button.play.playing { color: $rose; }
+.editor-light-mode .viewporttoolbar > .button.play { color: $lime; }
 .editor-light-mode .iconbutton { color: $dim; }
 .editor-light-mode .iconbutton:hover { background-color: $raised; color: $bright; }
 .editor-light-mode .iconbutton.active { background-color: $indigo; }
@@ -1580,13 +1431,6 @@ EditorWindow.editor-light-mode, .mock-editor-surface.editor-light-mode { backgro
 .editor-light-mode .treerow .eye { color: $faint; }
 .editor-light-mode .treerow .eye:hover { color: $amber; }
 .editor-light-mode .treerow.hidden .name { color: $faint; }
-.editor-light-mode .tabbar { background-color: $deep; border-bottom: 1px solid $line; }
-.editor-light-mode .tabbar .tab { color: $dim; }
-.editor-light-mode .tabbar .tab:hover { color: $text; background-color: $hover-wash; }
-.editor-light-mode .tabbar .tab.active { color: $bright; background-image: linear-gradient( 180deg, rgba( $accent, 0.12 ) 0%, $panel 80% ); border-bottom-color: $indigo; }
-.editor-light-mode .tabbar .tab.active .icon { color: $indigo; }
-.editor-light-mode .tabbar .tab .count { background-color: $raised; color: $dim; }
-.editor-light-mode .tabbar .tab.active .count { color: $accent-text; }
 .editor-light-mode .tablehead { background-color: $raised; border-bottom: 1px solid $line; color: $dim; }
 .editor-light-mode .tablerow { border-bottom: 1px solid $line-soft; color: $text; }
 .editor-light-mode .tablerow:hover { background-color: $raised; }
@@ -1608,22 +1452,13 @@ EditorWindow.editor-light-mode, .mock-editor-surface.editor-light-mode { backgro
 .editor-light-mode .scenetab:hover { color: $text; background-color: $raised; }
 .editor-light-mode .scenetab.active { color: $bright; background-color: $panel; border-bottom: 2px solid $indigo; }
 .editor-light-mode .scenetab .dirty { color: $amber; }
-.editor-light-mode .panetools { border-bottom: 1px solid $line-soft; }
-.editor-light-mode .toolbutton { color: $dim; }
-.editor-light-mode .toolbutton:hover { background-color: $raised; color: $bright; }
-.editor-light-mode .toolbutton.active { background-color: $indigo; }
 .editor-light-mode .viewport .fps { color: $lime; }
-.editor-light-mode .viewport .toolstrip .toolbutton.active { background-color: $indigo; }
 .editor-light-mode .statusbar .logcount { color: $dim; }
 .editor-light-mode .statusbar .logcount.warn { color: $amber; }
 .editor-light-mode .statusbar .logcount.error { color: $rose; }
-.editor-light-mode .console .bar { background-color: $panel; border-bottom: 1px solid $line; }
-.editor-light-mode .console .button { color: $dim; border: 1px solid $line; }
-.editor-light-mode .console .button:hover { color: $bright; background-color: $raised; border-color: $edge; }
-.editor-light-mode .console .button.active { color: $bright; background-color: $raised; border-color: $edge-hover; }
-.editor-light-mode .console .filter { color: $faint; }
-.editor-light-mode .console .filter:hover { background-color: $raised; }
-.editor-light-mode .console .filter.active { background-color: $raised; }
+.editor-light-mode .console .commandline > .button { color: $dim; border: 1px solid $line; }
+.editor-light-mode .console .commandline > .button:hover { color: $bright; background-color: $raised; border-color: $edge; }
+.editor-light-mode .console .commandline > .button.active { color: $bright; background-color: $raised; border-color: $edge-hover; }
 .editor-light-mode .console .filter.warn.active { color: $amber; }
 .editor-light-mode .console .filter.error.active { color: $rose; }
 .editor-light-mode .console .filter.info.active { color: $text; }
@@ -1701,8 +1536,6 @@ EditorWindow.editor-light-mode, .mock-editor-surface.editor-light-mode { backgro
 .editor-light-mode .combo .value { color: $bright; }
 .editor-light-mode .combo .icon { color: $dim; }
 .editor-light-mode .combo:hover .icon { color: $indigo; }
-.editor-light-mode .statusbar { background-color: $raised; border-top: 1px solid $line; color: $dim; }
-.editor-light-mode .statusbar .sep { background-color: $line; }
 .editor-light-mode .statusbar .dot { background-color: $lime; }
 .editor-light-mode .statusbar .spinner { border-top: 2px solid $indigo; }
 .editor-light-mode .progress { background-color: $raised; }

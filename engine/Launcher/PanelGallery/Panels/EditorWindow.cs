@@ -339,8 +339,9 @@ public partial class EditorWindow : Panel
 	Hierarchy BuildHierarchy( Panel pane )
 	{
 		// The row of tools above the tree, same as the editor's
-		var tools = pane.Add.Panel( "panetools" );
-		tools.Clickable( "toolbutton", CreateObject ).Icon( "add" );
+		var tools = pane.AddChild( new Toolbar() );
+		tools.AddClass( "panetools" );
+		tools.AddButton( null, "add", CreateObject ).Tooltip = "Create object";
 		var tree = pane.AddChild( new Hierarchy() );
 		var search = tools.AddChild( new TextInput( "Search", "search" ) );
 		search.OnChange = value => tree.SetFilter( value );
@@ -386,12 +387,13 @@ public partial class EditorWindow : Panel
 
 	void BuildStatusBar()
 	{
-		var bar = Add.Panel( "statusbar" );
+		var status = AddChild( new Sandbox.UI.StatusBar() );
+		var bar = status.Left;
 
 		bar.Add.Panel( "dot" );
 		statusSelection = bar.Add.Label( "Nothing selected" );
 
-		bar.Add.Panel( "grow" );
+		bar = status.Right;
 
 		graph = bar.Add.Panel( "graph" );
 		for ( int i = 0; i < 28; i++ )
@@ -401,15 +403,15 @@ public partial class EditorWindow : Panel
 			graphBars.Add( graphBar );
 		}
 
-		bar.Add.Panel( "sep" );
+		status.AddSeparator( right: true );
 
 		statusInfo = LogCount( bar, "comment", "info" );
 		statusWarn = LogCount( bar, "warning", "warn" );
 		statusError = LogCount( bar, "error", "error" );
 
-		bar.Add.Panel( "sep" );
+		status.AddSeparator( right: true );
 		statusCounts = bar.Add.Label( "", "mono" );
-		bar.Add.Panel( "sep" );
+		status.AddSeparator( right: true );
 		statusFps = bar.Add.Label( "", "mono" );
 	}
 

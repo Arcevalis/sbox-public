@@ -422,6 +422,7 @@ internal class PanelInput
 			StartHoldOffsetLocal = default;
 			StartHoldOffsetScreen = default;
 			MouseDownEvent = null;
+			RestoreActive();
 		}
 
 		public void Update( bool down, Panel hovered )
@@ -440,6 +441,16 @@ internal class PanelInput
 					Dragged = true;
 					DragTarget?.CreateEvent( new DragEvent( "ondragstart", DragTarget, StartHoldOffsetLocal, StartHoldOffsetScreen ) );
 
+					// The drag-start handler is user code and may rebuild or delete the
+					// panel that received the mouse-down event. Do not dispatch another
+					// mouse event to an invalid panel after that callback returns.
+					if ( !Active.IsValid() )
+					{
+						Active = null;
+						DragTarget = null;
+						return;
+					}
+
 					// We started dragging - stop active panel being active, no click events
 					{
 						Panel.Switch( PseudoClass.Active, false, Active );
@@ -447,6 +458,7 @@ internal class PanelInput
 						Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) );
 						Active.OnButtonEvent( new ButtonEvent( MouseButton, false ) );
 						Active = null;
+						RestoreActive();
 					}
 				}
 
@@ -525,6 +537,16 @@ internal class PanelInput
 			Active.OnButtonEvent( new ButtonEvent( MouseButton, true ) );
 		}
 
+		void RestoreActive()
+		{
+			// Other buttons can still hold this panel or one of its descendants.
+			foreach ( var state in Input.MouseStates )
+			{
+				if ( state.Active is not null )
+					Panel.Switch( PseudoClass.Active, true, state.Active );
+			}
+		}
+
 		void OnReleased( Panel hovered )
 		{
 			if ( MouseButton == ButtonCode.MouseBack || MouseButton == ButtonCode.MouseForward )
@@ -582,6 +604,8 @@ internal class PanelInput
 
 			Active.OnButtonEvent( new ButtonEvent( MouseButton, false ) );
 			Active = null;
+
+			RestoreActive();
 		}
 	}
 

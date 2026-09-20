@@ -168,6 +168,7 @@ internal class ClutterBatchSceneObject : SceneCustomObject
 		_commandList.Attributes.Set( "AllInstanceSpheres", _spheres );
 		_commandList.Attributes.Set( "InstanceCount", _count );
 		_commandList.Attributes.Set( "ClutterModelRadius", _modelRadius );
+		_commandList.Attributes.Set( "DisableScreenSpaceShadows", Flags.CastShadows ? 0 : 1 );
 		_commandList.Attributes.Set( "ClutterLodCount", _lodCount );
 		_commandList.Attributes.Set( "ClutterLodSwitchDistances", _lodDistances );
 

@@ -39,8 +39,10 @@ internal sealed class PartyJoinController : IDisposable
 	internal void Update( Target target, double now, LoadingProgress? hostProgress = null )
 	{
 		_now = now;
+		var wasPreparing = _target.State is PartyRoom.OwnerJoinState.Loading or PartyRoom.OwnerJoinState.Unavailable;
+		var isFollowing = target.State is PartyRoom.OwnerJoinState.Loading or PartyRoom.OwnerJoinState.Unavailable or PartyRoom.OwnerJoinState.Ready;
 		var changed = !_hasTarget || target.Owner != _target.Owner || target.Package != _target.Package
-			|| (target.State != _target.State && !(target.State == PartyRoom.OwnerJoinState.Ready && _target.State == PartyRoom.OwnerJoinState.Loading))
+			|| (target.State != _target.State && !(wasPreparing && isFollowing))
 			|| (target.State == PartyRoom.OwnerJoinState.Ready && _target.State == PartyRoom.OwnerJoinState.Ready && target.Address != _target.Address);
 
 		if ( changed )
@@ -57,18 +59,15 @@ internal sealed class PartyJoinController : IDisposable
 
 		_target = target;
 		if ( target.State is PartyRoom.OwnerJoinState.None ) return;
-		if ( target.State is PartyRoom.OwnerJoinState.Unavailable )
-		{
-			Stage = PartyRoom.JoinStage.Unavailable;
-			return;
-		}
 		if ( Stage is PartyRoom.JoinStage.Failed or PartyRoom.JoinStage.Cancelled or PartyRoom.JoinStage.Connected ) return;
 
 		if ( hostProgress is { } host && (_hostProgress is not { } previous || host.Fraction != previous.Fraction || host.Title != previous.Title) )
 			_lastActivity = now;
 		_hostProgress = hostProgress;
 
-		if ( now - _lastActivity > 120 )
+		// A loaded game may have its own menu. Give the leader time to set up a server.
+		var waitingForServer = target.State == PartyRoom.OwnerJoinState.Unavailable && Stage == PartyRoom.JoinStage.WaitingForHost;
+		if ( !waitingForServer && now - _lastActivity > 120 )
 		{
 			Fail( "No progress for two minutes. Check the party leader or retry." );
 			return;

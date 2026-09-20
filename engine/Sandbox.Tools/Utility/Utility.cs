@@ -171,16 +171,8 @@ public static partial class EditorUtility
 		if ( dirA == dirB )
 			return;
 
-		CopyAssetToDirectory( asset, directory );
-
-		var absoluteSource = asset.GetSourceFile( true );
-		var absoluteCompiled = asset.GetCompiledFile( true );
-
-		if ( !string.IsNullOrEmpty( absoluteSource ) )
-			System.IO.File.Delete( absoluteSource );
-
-		if ( !string.IsNullOrEmpty( absoluteCompiled ) )
-			System.IO.File.Delete( absoluteCompiled );
+		string filename = Path.GetFileName( asset.AbsolutePath );
+		MoveAsset( asset, Path.Combine( dirB, filename ) );
 	}
 
 	public static void RenameDirectory( string directory, string newDirectory, bool recursive = false )
@@ -220,83 +212,107 @@ public static partial class EditorUtility
 	}
 
 	/// <summary>
-	/// Moves a file to the same directory but gives it a new name 
+	/// Rename an asset (and related files) to a new name
 	/// </summary>
-	/// <param name="asset"></param>
-	/// <param name="newName"></param>
-	public static bool RenameAsset( Asset asset, string newName )
+	public static bool RenameAsset( Asset asset, string newName, bool overwrite = false )
 	{
-		if ( string.IsNullOrEmpty( newName ) )
-			return false;
-
 		// Lower case for the same reason CreateResource does it - the compiler opens the source
 		// by its lower-cased resource path, so that's what the file has to be called on disk.
-		newName = newName.Trim().GetFilenameSafe().ToLowerInvariant();
-		if ( string.IsNullOrEmpty( newName ) )
+		var safeName = newName?.Trim().GetFilenameSafe().ToLowerInvariant();
+		if ( string.IsNullOrEmpty( safeName ) )
 			return false;
 
-		var compiledPath = asset.GetCompiledFile( true );
-		var newCompiledPath = WithFileName( compiledPath, asset.Name, newName );
+		string newPath = Path.Combine( Path.GetDirectoryName( asset.AbsolutePath ), safeName );
+		return MoveAsset( asset, newPath, overwrite );
+	}
 
-		var sourcePath = asset.GetSourceFile( true );
-		var newSourcePath = WithFileName( sourcePath, asset.Name, newName );
+	/// <summary>
+	/// Moves an asset (and related files) to a new path.
+	/// </summary>
+	public static bool MoveAsset( Asset asset, string path, bool overwrite = false )
+	{
+		path = path?.Trim().NormalizeFilename( false );
 
-		if ( string.Equals( asset.Name, newName, StringComparison.OrdinalIgnoreCase ) )
+		if ( string.IsNullOrEmpty( path ) )
+			return false;
+
+		var oldPath = asset.AbsolutePath;
+
+		if ( oldPath.EndsWith( "_c" ) ) oldPath = oldPath[..^2];
+		if ( path.EndsWith( "_c" ) ) path = path[..^2];
+
+		if ( string.Equals( oldPath, path, StringComparison.OrdinalIgnoreCase ) )
 		{
-			// we've just changed the capitalisation
-			// nothing's really changed for us as our asset system is case insensitive, so just do OS move
+			// we're just changing the capitalisation
+			overwrite = true;
 		}
-		else
+		else if ( !overwrite )
 		{
-			if ( System.IO.File.Exists( newSourcePath ) )
+			// check if it's gunna succeed first so we don't end up with a half moved asset
+			foreach ( var ext in Asset.RelatedFileExts )
 			{
-				Log.Error( $"Cannot rename asset, '{asset.Name}' already exists!" );
+				if ( !File.Exists( path + ext ) ) continue;
+
+				Log.Error( $"Cannot move asset, '{path + ext}' already exists!" );
 				return false;
 			}
-
-			// if there's a compiled asset of this name already, but NOT a source file, just bin it (?)
-			if ( System.IO.File.Exists( newCompiledPath ) )
-			{
-				System.IO.File.Delete( newCompiledPath );
-			}
-
-			// moving the asset will register another, so let's delete the old one
-			asset.IsDeleted = true;
 		}
 
-		if ( !string.IsNullOrEmpty( compiledPath ) )
-			System.IO.File.Move( compiledPath, newCompiledPath );
+		// TODO: Remove this once we have FileSystem.DeferChanges()
+		FileWatch.SuppressWatchers = RealTime.Now + 999;
 
-		if ( !string.IsNullOrEmpty( sourcePath ) )
-			System.IO.File.Move( sourcePath, newSourcePath );
+		// move all our components: oldpath -> path
+		foreach ( var ext in Asset.RelatedFileExts )
+		{
+			var file = new FileInfo( oldPath + ext );
+			if ( file.Exists ) file.MoveTo( path + ext, overwrite );
+		}
+
+		FileWatch.SuppressWatchers = RealTime.Now;
 
 		return true;
 	}
 
 	/// <summary>
-	/// Swap <paramref name="oldName"/> for <paramref name="newName"/> in the filename part of
-	/// <paramref name="path"/>, leaving the directories alone.
+	/// Create a copy of an asset (and related files) on a new path.
 	/// </summary>
-	/// <remarks>
-	/// Matched without case: an asset's Name is lowercased, but the paths name files on disk and
-	/// keep whatever casing the disk uses, so the two don't necessarily agree. Only the filename
-	/// is touched, so a directory that happens to contain the name isn't renamed along with it.
-	/// </remarks>
-	private static string WithFileName( string path, string oldName, string newName )
+	public static bool CopyAsset( Asset asset, string path, bool overwrite = false )
 	{
+		path = path?.Trim();
+
 		if ( string.IsNullOrEmpty( path ) )
-			return path;
+			return false;
 
-		var directory = System.IO.Path.GetDirectoryName( path );
-		var filename = System.IO.Path.GetFileName( path );
-		var at = filename.IndexOf( oldName, StringComparison.OrdinalIgnoreCase );
+		var oldPath = asset.AbsolutePath;
 
-		if ( at < 0 )
-			return path;
+		if ( oldPath.EndsWith( "_c" ) ) oldPath = oldPath[..^2];
+		if ( path.EndsWith( "_c" ) ) path = path[..^2];
 
-		var renamed = string.Concat( filename.AsSpan( 0, at ), newName, filename.AsSpan( at + oldName.Length ) );
+		if ( !overwrite )
+		{
+			// check if it's gunna succeed first so we don't end up with a half copied asset
+			foreach ( var ext in Asset.RelatedFileExts )
+			{
+				if ( !File.Exists( path + ext ) ) continue;
 
-		return string.IsNullOrEmpty( directory ) ? renamed : System.IO.Path.Combine( directory, renamed );
+				Log.Error( $"Cannot copy asset, '{path + ext}' already exists!" );
+				return false;
+			}
+		}
+
+		// TODO: Remove this once we have FileSystem.DeferChanges()
+		FileWatch.SuppressWatchers = RealTime.Now + 999;
+
+		// copy all our components: oldpath -> path
+		foreach ( var ext in Asset.RelatedFileExts )
+		{
+			var file = new FileInfo( oldPath + ext );
+			if ( file.Exists ) file.CopyTo( path + ext, overwrite );
+		}
+
+		FileWatch.SuppressWatchers = RealTime.Now;
+
+		return true;
 	}
 
 	/// <summary>

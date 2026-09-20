@@ -185,7 +185,7 @@ public partial class GameObject
 
 		json[JsonKeys.Id] = Id;
 		if ( GameObjectVersion != 0 ) json[JsonKeys.Version] = GameObjectVersion;
-		json[JsonKeys.PrefabInstanceSource] = JsonValue.Create( PrefabInstance.PrefabSource );
+		json[JsonKeys.PrefabInstanceSource] = Json.ToNode( PrefabInstance.PrefabSource );
 		json[JsonKeys.PrefabInstancePatch] = Json.ToNode( PrefabInstance.Patch );
 		json[JsonKeys.PrefabIdToInstanceId] = Json.ToNode( PrefabInstance.PrefabToInstanceLookup );
 
@@ -240,7 +240,7 @@ public partial class GameObject
 			}
 			else
 			{
-				json[JsonKeys.EditorPrefabInstanceNestedSource] = JsonValue.Create( PrefabInstance.PrefabSource );
+				json[JsonKeys.EditorPrefabInstanceNestedSource] = Json.ToNode( PrefabInstance.PrefabSource );
 			}
 		}
 
@@ -344,30 +344,26 @@ public partial class GameObject
 
 		// Handle nested prefab instances
 		// Only init with a path, we don't have any patches or lookups for nested instances.
-		// Prefab refs may be a plain path string or an {Id, Path} object; accept both.
-		static string GetPrefabSourcePath( JsonNode prefabNode ) => prefabNode switch
-		{
-			JsonValue v when v.TryGetValue( out string s ) => s,
-			JsonObject o when o["Path"] is JsonValue p && p.TryGetValue( out string s ) => s,
-			_ => null
-		};
-
-		string prefabSource = GetPrefabSourcePath( node[JsonKeys.EditorPrefabInstanceNestedSource] );
-		if ( prefabSource is not null )
+		// ResourceId refs may be a plain path string or an {Id, Path} object; Json.FromNode handles both.
+		if ( node[JsonKeys.EditorPrefabInstanceNestedSource] is JsonNode __prefabNestedInstance && Json.FromNode<ResourceId>( __prefabNestedInstance ) is { } prefabNestedSource )
 		{
 			if ( this is not PrefabScene )
 			{
 				// Set the persisted id first; nested mapping gap-fill is seeded by it.
 				DeserializeId( node );
 
-				InitPrefabInstance( prefabSource, true );
+				InitPrefabInstance( prefabNestedSource, true );
 
 				var prefabFile = PrefabFile.Load( PrefabInstance.PrefabSource );
+
 				if ( !IsPrefabLoaded( prefabFile ) )
 				{
 					PostDeserialize( options );
 					return;
 				}
+
+				// make sure the reference is up to date
+				PrefabInstance.UpdateSource( prefabFile );
 
 				// Build the (unstored) nested mappings in PostDeserialize, once the subtree has its
 				// final ids. Doing it here would run against temp ids and an empty subtree.
@@ -375,7 +371,7 @@ public partial class GameObject
 			}
 		}
 		// Handle full prefab instances
-		else if ( (prefabSource = GetPrefabSourcePath( node[JsonKeys.PrefabInstanceSource] )) is not null )
+		else if ( node[JsonKeys.PrefabInstanceSource] is JsonNode __prefab && Json.FromNode<ResourceId>( __prefab ) is { } prefabSource )
 		{
 			// Set the persisted id first; mapping gap-fill is seeded by it.
 			DeserializeId( node );
@@ -383,6 +379,7 @@ public partial class GameObject
 			InitPrefabInstance( prefabSource, false );
 
 			var prefabFile = PrefabFile.Load( PrefabInstance.PrefabSource );
+
 			if ( !IsPrefabLoaded( prefabFile ) )
 			{
 				// Preserve patch and GUID mappings so the instance data survives save/load round-trips
@@ -395,7 +392,7 @@ public partial class GameObject
 
 				// Keep this object visible in the hierarchy as a disabled stub.
 				DeserializeId( node );
-				Name = $"[Missing Prefab] {PrefabInstance.PrefabSource}";
+				Name = $"[Missing Prefab] {PrefabInstance.PrefabSource.Path}";
 				_enabled = false;
 				Flags |= GameObjectFlags.Error;
 
@@ -403,6 +400,9 @@ public partial class GameObject
 				UpdateEnabledStatus();
 				return;
 			}
+
+			// make sure the reference is up to date
+			PrefabInstance.UpdateSource( prefabFile );
 
 			Json.Patch instancePatch = null;
 			Dictionary<Guid, Guid> nodePrefabToInstanceId = null;
@@ -443,9 +443,9 @@ public partial class GameObject
 		Flags |= GameObjectFlags.Deserializing;
 
 		// Handle networked prefab instances, we just init the path
-		if ( node[JsonKeys.NetworkedPrefabInstance] is JsonValue _prefab && _prefab.TryGetValue( out prefabSource ) )
+		if ( node[JsonKeys.NetworkedPrefabInstance] is JsonValue _prefab && _prefab.TryGetValue( out string prefabNetworkedSource ) )
 		{
-			InitPrefabInstance( prefabSource, false );
+			InitPrefabInstance( prefabNetworkedSource, false );
 		}
 
 		// Stop right here if we are EditorOnly

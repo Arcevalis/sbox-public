@@ -1,6 +1,8 @@
 namespace Sandbox.PanelGallery;
 
-/// <summary>A dockable asset browser whose search and selection survive tab changes.</summary>
+/// <summary>
+/// A dockable asset browser whose search and selection survive tab changes.
+/// </summary>
 public class AssetBrowser : Panel
 {
 	string filter = "";
@@ -19,7 +21,9 @@ public class AssetBrowser : Panel
 		RefreshAssets();
 	}
 
-	/// <summary>Filter the asset browser after typing settles.</summary>
+	/// <summary>
+	/// Filter the asset browser after typing settles.
+	/// </summary>
 	public void SetFilter( string value )
 	{
 		filter = value ?? "";
@@ -34,12 +38,13 @@ public class AssetBrowser : Panel
 	{
 		var root = Add.Panel( "assets" );
 
-		var bar = root.Add.Panel( "bar" );
+		var bar = root.AddChild( new Toolbar() );
+		bar.AddClass( "bar" );
 
 		var search = bar.AddChild( new TextInput( "Search assets..", "search" ) );
 		search.OnChange = SetFilter;
 
-		bar.Add.Panel( "grow" );
+		bar.AddSpacer();
 		bar.Add.Label( $"{Assets().Count:n0} assets", "count" );
 
 		var scroll = root.Add.Panel( "scroll" );

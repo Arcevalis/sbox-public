@@ -37,8 +37,20 @@ PartyJoinCard
 
 	.game
 	{
+		align-items: center;
+		gap: 12px;
 		font-size: 13px;
 		color: #b4c2d9;
+	}
+
+	.thumbnail
+	{
+		width: 96px;
+		height: 54px;
+		flex-shrink: 0;
+		border-radius: 6px;
+		background-size: cover;
+		background-position: center;
 	}
 
 	.progress-label

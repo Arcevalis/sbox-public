@@ -7,17 +7,31 @@ namespace Sandbox.UI;
 /// </summary>
 public sealed class DockItem
 {
-	/// <summary>Stable ID used in saved layouts.</summary>
+	/// <summary>
+	/// Stable ID used in saved layouts.
+	/// </summary>
 	public string Id { get; }
-	/// <summary>Title shown on the tab.</summary>
+
+	/// <summary>
+	/// Title shown on the tab.
+	/// </summary>
 	public string Title { get; }
-	/// <summary>Optional Material icon shown before the title.</summary>
+
+	/// <summary>
+	/// Optional Material icon shown before the title.
+	/// </summary>
 	public string Icon { get; }
-	/// <summary>The panel owned by the host, or null until a factory registration is opened.</summary>
+
+	/// <summary>
+	/// The panel owned by the host, or null until a factory registration is opened.
+	/// </summary>
 	public Panel Content { get; private set; }
 	Func<Panel> _create;
 	internal bool IsAlive => Content is null || (Content.IsValid && !Content.IsDeleting);
-	/// <summary>Whether the panel can be closed.</summary>
+
+	/// <summary>
+	/// Whether the panel can be closed.
+	/// </summary>
 	public bool CanClose { get; }
 
 	internal Panel Container { get; }
@@ -72,10 +86,14 @@ public partial class DockHost : Panel
 	internal Dictionary<string, DockItem> ReservedItems { get; } = new( StringComparer.Ordinal );
 	internal event Action RegistrationChanged;
 
-	/// <summary>All registered panels, including closed panels.</summary>
+	/// <summary>
+	/// All registered panels, including closed panels.
+	/// </summary>
 	public IReadOnlyCollection<DockItem> Items => _items.Values;
 
-	/// <summary>Called after a layout edit. Content instances are not recreated.</summary>
+	/// <summary>
+	/// Called after a layout edit. Content instances are not recreated.
+	/// </summary>
 	public event Action LayoutChanged;
 
 	internal Action<DockHost, string, Vector2> DragPressed { get; set; }
@@ -106,7 +124,9 @@ public partial class DockHost : Panel
 		return _layout.Restore( json, _items.Keys );
 	}
 
-	/// <summary>Creates an empty docking workspace.</summary>
+	/// <summary>
+	/// Creates an empty docking workspace.
+	/// </summary>
 	public DockHost()
 	{
 		AddClass( "dockhost" );
@@ -125,7 +145,9 @@ public partial class DockHost : Panel
 			throw new InvalidOperationException( "The docking host is being deleted." );
 	}
 
-	/// <summary>Registers content, initially closed. A panel instance can belong to only one registration.</summary>
+	/// <summary>
+	/// Registers content, initially closed. A panel instance can belong to only one registration.
+	/// </summary>
 	public DockItem Register( string id, string title, Panel content, bool canClose = true, string icon = null )
 	{
 		CheckAlive();
@@ -145,7 +167,9 @@ public partial class DockHost : Panel
 		return item;
 	}
 
-	/// <summary>Registers a dock factory without creating its panel. Content is created on first open and retained until the host is deleted.</summary>
+	/// <summary>
+	/// Registers a dock factory without creating its panel. Content is created on first open and retained until the host is deleted.
+	/// </summary>
 	public DockItem Register( string id, string title, Func<Panel> create, bool canClose = true, string icon = null )
 	{
 		CheckAlive();
@@ -160,13 +184,19 @@ public partial class DockHost : Panel
 		return item;
 	}
 
-	/// <summary>Finds a registered panel, including closed panels.</summary>
+	/// <summary>
+	/// Finds a registered panel, including closed panels.
+	/// </summary>
 	public DockItem Find( string id ) => id is not null && _items.TryGetValue( id, out var item ) ? item : null;
 
-	/// <summary>Whether a registered panel is in the layout.</summary>
+	/// <summary>
+	/// Whether a registered panel is in the layout.
+	/// </summary>
 	public bool IsOpen( string id ) => _layout.FindGroup( id ) is not null;
 
-	/// <summary>Opens or moves a registered panel. Edge fractions describe the incoming panel's share.</summary>
+	/// <summary>
+	/// Opens or moves a registered panel. Edge fractions describe the incoming panel's share.
+	/// </summary>
 	public void Dock( string id, string relativeTo = null, DockPosition position = DockPosition.Center, float fraction = 0.5f, int tabIndex = -1 )
 	{
 		CheckAlive();
@@ -180,7 +210,9 @@ public partial class DockHost : Panel
 		_layout.Dock( id, relativeTo, position, fraction, tabIndex );
 	}
 
-	/// <summary>Closes a panel without deleting its content. Nonclosable panels are left open.</summary>
+	/// <summary>
+	/// Closes a panel without deleting its content. Nonclosable panels are left open.
+	/// </summary>
 	public bool Close( string id )
 	{
 		CheckAlive();
@@ -189,24 +221,32 @@ public partial class DockHost : Panel
 		return _layout.Close( id );
 	}
 
-	/// <summary>Preserves a transferred registration's closed state, including never-opened nonclosable panels.</summary>
+	/// <summary>
+	/// Preserves a transferred registration's closed state, including never-opened nonclosable panels.
+	/// </summary>
 	internal void HideTransferredItem( string id ) => _layout.Close( id );
 
-	/// <summary>Selects an open panel without moving it.</summary>
+	/// <summary>
+	/// Selects an open panel without moving it.
+	/// </summary>
 	public bool Activate( string id )
 	{
 		CheckAlive();
 		return _layout.Activate( id );
 	}
 
-	/// <summary>Saves tab order, selection and split proportions. Closed panels are omitted.</summary>
+	/// <summary>
+	/// Saves tab order, selection and split proportions. Closed panels are omitted.
+	/// </summary>
 	public string State
 	{
 		get => _layout.Save();
 		set => RestoreState( value );
 	}
 
-	/// <summary>Restores a valid layout atomically. Open nonclosable panels must remain present.</summary>
+	/// <summary>
+	/// Restores a valid layout atomically. Open nonclosable panels must remain present.
+	/// </summary>
 	public bool RestoreState( string json )
 	{
 		CheckAlive();
@@ -218,7 +258,9 @@ public partial class DockHost : Panel
 		return _layout.Restore( json, _items.Keys );
 	}
 
-	/// <summary>Transfers ownership and docks the same content in another host. Invalid placement leaves both hosts unchanged.</summary>
+	/// <summary>
+	/// Transfers ownership and docks the same content in another host. Invalid placement leaves both hosts unchanged.
+	/// </summary>
 	internal void TransferTo( DockHost target, string id, string relativeTo = null, DockPosition position = DockPosition.Center, float fraction = 0.5f, int tabIndex = -1, bool open = true )
 	{
 		CheckAlive();
@@ -297,7 +339,7 @@ public partial class DockHost : Panel
 		used.Add( node );
 		if ( !_views.TryGetValue( node, out var view ) )
 		{
-			view = node is DockSplit split ? new SplitView( this, split ) : new GroupView();
+			view = node is DockSplit split ? new SplitView( this, split ) : new GroupView( this );
 			_views.Add( node, view );
 		}
 		view.Parent = parent;
@@ -325,6 +367,7 @@ public partial class DockHost : Panel
 				item.Container.Parent = region.Body;
 				item.Container.Style.Display = group.ActiveId == id ? DisplayMode.Flex : DisplayMode.None;
 			}
+			region.Tabs.SetSelection( _tabs[group.ActiveId] );
 		}
 		return view;
 	}

@@ -35,15 +35,8 @@ public readonly ref partial struct Painter
 				return;
 			}
 
-			var edges = new UICssBoxBatched.PathPrimitive[points.Length];
-			for ( int i = 0; i < points.Length; i++ )
-			{
-				edges[i].Kind = UICssBoxBatched.PathPrimitiveKind.Segment;
-				edges[i].A = Pack( points[i] - bounds.Position, points[(i + 1) % points.Length] - bounds.Position );
-			}
-
-			desc.BorderShapeData.Kind = UICssBoxBatched.ShapeKind.PolygonPath;
-			desc.PathData = new Data( desc.BorderShapeData, edges );
+			desc.PathData = BuildPolygon( points, out _ );
+			desc.BorderShapeData = desc.PathData.Shape;
 			Add( buffer, desc );
 		}
 

@@ -168,6 +168,11 @@ internal class GameInstance : IGameInstance
 		LoadingScreen.Title = "Fetching Package Info";
 		_package = await Package.FetchAsync( Ident, false );
 
+		// A newer load may have started while we were fetching. Bail before we
+		// touch the shared loading screen state that now belongs to it.
+		if ( token.IsCancellationRequested )
+			return false;
+
 		if ( !IsDeveloperHost )
 		{
 			if ( Package is null )

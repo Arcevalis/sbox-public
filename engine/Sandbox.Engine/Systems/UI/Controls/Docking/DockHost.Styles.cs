@@ -29,56 +29,6 @@ public partial class DockHost
 			.dock-body { position: relative; }
 			.dock-content { width: 100%; height: 100%; }
 			.dock-content > * { flex-grow: 1; min-width: 0; min-height: 0; }
-			.dock-tabs
-			{
-				flex-shrink: 0;
-				height: 34px;
-				padding: 4px 4px 0 4px;
-				gap: 3px;
-				background-color: #101319;
-				overflow-x: scroll;
-				overflow-y: hidden;
-			}
-			.dock-tab
-			{
-				flex-shrink: 0;
-				align-items: center;
-				padding: 0 6px 0 10px;
-				gap: 7px;
-				border: 1px solid transparent;
-				border-top: 2px solid transparent;
-				border-radius: 5px 5px 0 0;
-				cursor: pointer;
-				color: #929caa;
-				background-color: #20242c;
-				&:hover { background-color: #252b35; color: #e2e8f0; }
-				&.selected
-				{
-					border-color: #343d4b;
-					border-top-color: transparent;
-					border-bottom-color: #20242c;
-					background-color: #20242c;
-					color: #f0f3f8;
-				}
-				&:focus { border-top-color: transparent; }
-				> .dock-tab-action { opacity: 0.35; }
-				&.selected > .dock-tab-action { opacity: 0.7; }
-				&:hover > .dock-tab-action, &:focus > .dock-tab-action { opacity: 1; }
-				&.dragging { opacity: 0.45; }
-			}
-			.dock-tab-title { white-space: nowrap; pointer-events: none; }
-			.dock-tab-icon { width: 16px; height: 16px; font-size: 16px; flex-shrink: 0; pointer-events: none; }
-			.dock-tab-action
-			{
-				width: 20px;
-				height: 20px;
-				flex-shrink: 0;
-				align-items: center;
-				justify-content: center;
-				border-radius: 4px;
-				&:hover { background-color: #ffffff18; color: white; }
-				> * { pointer-events: none; font-size: 14px; }
-			}
 			.dock-branch { flex-basis: 0px; }
 			.dock-splitter
 			{

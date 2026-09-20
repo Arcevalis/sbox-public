@@ -72,7 +72,7 @@ public partial class MenuOverlay : RootPanel
 		var options = content.Add.Panel( "options" );
 		content.Add.Panel( "progress-bar" );
 
-		var area = Instance.BottomRight;
+		var area = Instance.Top;
 		area.Queue( content, duration: 10f, clickToDismiss: false );
 
 		bool answered = false;

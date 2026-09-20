@@ -44,7 +44,14 @@ public sealed partial class RenderTarget
 
 		lock ( _lock )
 		{
-			rt = All.FirstOrDefault( x => !x.Loaned && x.CreationHash == hash );
+			// Not FirstOrDefault - the predicate would capture hash and allocate a closure every call.
+			foreach ( var candidate in All )
+			{
+				if ( candidate.Loaned || candidate.CreationHash != hash ) continue;
+
+				rt = candidate;
+				break;
+			}
 
 			if ( rt == null )
 			{

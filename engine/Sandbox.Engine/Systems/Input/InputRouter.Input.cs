@@ -255,6 +255,14 @@ internal static partial class InputRouter
 			if ( repeat )
 				return;
 
+			// Reserve Shift+Escape for the platform menu while testing in the editor.
+			// Capture the chord now, before Shift can be released or game UI can consume Escape.
+			if ( down && Application.IsEditor && Game.IsPlaying && modifiers.Contains( KeyboardModifiers.Shift ) )
+			{
+				EditorPauseMenuWasPressed = true;
+				return;
+			}
+
 			OnEscapePressed( down );
 			return;
 		}

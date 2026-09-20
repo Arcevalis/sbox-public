@@ -373,7 +373,8 @@ public partial class SceneObject : IHandle
 	}
 
 	/// <summary>
-	/// This object is not batchable by material for some reason ( example: has dynamic attributes that affect rendering )
+	/// Whether this object may be batched with compatible objects. Different render attribute values
+	/// automatically split batches; objects with equal attributes can still batch together.
 	/// </summary>
 	public bool Batchable
 	{

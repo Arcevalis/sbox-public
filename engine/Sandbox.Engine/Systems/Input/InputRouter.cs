@@ -49,6 +49,11 @@ internal static partial class InputRouter
 	public static bool EscapeWasPressed { get; set; }
 
 	/// <summary>
+	/// Shift+Escape was pressed in editor play mode. Kept separate so game input cannot consume it.
+	/// </summary>
+	internal static bool EditorPauseMenuWasPressed { get; set; }
+
+	/// <summary>
 	/// Time since escape was pressed
 	/// </summary>
 	static RealTimeSince TimeSinceEscapePressed { get; set; }
@@ -202,6 +207,7 @@ internal static partial class InputRouter
 
 		MouseCursorDelta = 0;
 		EscapeWasPressed = false;
+		EditorPauseMenuWasPressed = false;
 
 		// Only the UI that has the mouse gets to show a tooltip - the one underneath it loses its hover
 		foreach ( var context in Contexts )

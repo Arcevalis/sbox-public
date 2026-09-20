@@ -9,6 +9,13 @@
     return;
 
 <root>
+    @if ( Sections.Count == 0 )
+    {
+        <div class="empty-wrap">
+            <EmptyState Icon="search_off" Title="Nothing to show" Subtitle="No games came back for this feed. Try another tab, or check back in a bit." />
+        </div>
+    }
+
     @foreach ( var section in Sections )
     {
         <div class="section @( section.Jam ? "jam" : "" )">
@@ -294,7 +301,7 @@
     /// </summary>
     static Package PickBig( Package[] packages ) => packages.FirstOrDefault( x => !string.IsNullOrEmpty( x?.VideoThumb ) );
 
-    static string GroupUrl( Package.ListResult.Grouping g ) => MenuHelpers.IsJamQuery( g.QueryString ) ? "/jam" : $"/games/group?Query={g.QueryString}&title={g.Title}&icon={g.Icon}";
+    static string GroupUrl( Package.ListResult.Grouping g ) => MenuHelpers.IsJamQuery( g.QueryString ) ? "/jam" : $"/games/group?Query={g.QueryString}&title={g.Title}&subtitle={g.Description}";
 
     /// <summary>
     /// Drop a package the player just hid.
