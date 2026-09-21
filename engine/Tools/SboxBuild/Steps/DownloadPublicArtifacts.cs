@@ -166,6 +166,16 @@ internal class DownloadPublicArtifacts( bool nativeBinariesOnly = false )
 				if ( Path.IsPathRooted( relative ) || relative.Contains( ':' ) || !destination.StartsWith( rootPrefix, pathComparison ) )
 					throw new InvalidOperationException( $"Artifact path is outside the repository: '{entry.Path}'." );
 
+				if ( IsCompiledOutput( artifactPath ) && File.Exists( destination ) )
+				{
+					// Compiled outputs are owned by the local toolchain once seeded: refresh
+					// the state snapshot, never regress the bytes. Genuine staleness against
+					// changed sources is the fingerprint system's job and self-heals there.
+					newState[entry.Path] = Snapshot( entry, destination );
+					Interlocked.Increment( ref skippedCount );
+					return;
+				}
+
 				if ( knownState.TryGetValue( entry.Path, out var known ) && IsUnchanged( destination, known, entry ) )
 				{
 					newState[entry.Path] = known;
@@ -549,6 +559,19 @@ internal class DownloadPublicArtifacts( bool nativeBinariesOnly = false )
 			return false;
 
 		return info.LastWriteTimeUtc.Ticks == known.ModifiedTicks;
+	}
+
+	/// <summary>
+	/// Compiled asset outputs (<c>*.*_c</c>, mirroring the uploader glob in
+	/// <see cref="SyncPublicRepo"/>) are owned by the local toolchain once seeded:
+	/// restoring them from the CDN would regress locally compiled results.
+	/// </summary>
+	private static bool IsCompiledOutput( string artifactPath )
+	{
+		var file = artifactPath.Replace( '\\', '/' );
+		var slash = file.LastIndexOf( '/' );
+		file = slash < 0 ? file : file[(slash + 1)..];
+		return file.Contains( '.' ) && file.EndsWith( "_c", StringComparison.OrdinalIgnoreCase );
 	}
 
 	private static ArtifactStateEntry Snapshot( ArtifactFileInfo entry, string destination )
