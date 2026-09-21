@@ -1,4 +1,4 @@
-﻿using Sandbox.Resources;
+using Sandbox.Resources;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -165,7 +165,7 @@ public partial class Resource
 			if ( string.IsNullOrEmpty( referencePath ) )
 				return created;
 
-			return LoadFromPath( targetType, referencePath.Replace( '\\', '/' ) );
+			return Load( targetType, referencePath.Replace( '\\', '/' ) );
 		}
 
 		//
