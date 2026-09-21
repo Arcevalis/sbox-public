@@ -21,7 +21,7 @@ internal class NativeAsset : Asset
 		Assert.NotNull( AssetType ); // agh? Maybe we mock up an unknown type type?
 
 		AssetId = native.GetAssetIndexInt();
-		Guid = native.GetGuid();
+		var nativeGuid = native.GetGuid();
 		Name = native.GetFriendlyName_Transient().NormalizeFilename( false );
 		RelativePath = native.GetRelativePath_Transient( AssetLocation_t.Invalid ).NormalizeFilename( false );
 		Path = System.IO.Path.ChangeExtension( RelativePath, AssetType.FileExtension ).NormalizeFilename( false );
@@ -32,12 +32,25 @@ internal class NativeAsset : Asset
 		AbsoluteCompiledPath = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( native.GetAbsolutePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false, false ) ); // invalid means get any
 		IsDeleted = string.IsNullOrEmpty( AbsolutePath );
 
-		if ( MetaData is { } meta && (!meta.TryGet<Guid>( "guid", out var existingGuid ) || existingGuid != Guid) )
+		// Identity must be adopted after the paths above are assigned: reading
+		// MetaData calls Asset.GetMetadataFile, which reads IsCloud/IsTransient,
+		// which read AbsolutePath. On the first update AbsolutePath is still
+		// null until the assignments above run (and it goes null again for
+		// deleted assets) - touching MetaData any earlier NREs every asset.
+		if ( MetaData is { } meta && meta.TryGet<Guid>( "guid", out var persistentGuid ) && persistentGuid != System.Guid.Empty )
 		{
-			// update the guid in the metadata if it doesn't match the native asset's guid
-			// (it would be nice if we could plumb back from the native DB when we assign a new guid, instead of reading to check,
-			// but there's no guarantee this is the first time we're resolving this path - or that an asset exists when we do)
-			MetaData.Set( "guid", Guid );
+			// Persistent identity wins. The native guid is not stable across boots, so
+			// mirroring it here rewrites every .meta on every scan, invalidating all native
+			// fingerprints ("file checksum changed") and queueing a mass recompile. When the
+			// tree is healthy this behaves exactly like the old mirror-always code.
+			Guid = persistentGuid;
+		}
+		else
+		{
+			// First registration (or missing/unreadable .meta): adopt the native guid and
+			// persist it. One write, then stable forever.
+			Guid = nativeGuid;
+			MetaData?.Set( "guid", nativeGuid );
 		}
 
 		if ( AssetSystem.CloudDirectory is not null )
