@@ -1,4 +1,5 @@
-﻿using Sandbox.Internal;
+using Sandbox.Engine;
+using Sandbox.Internal;
 using System;
 
 namespace Editor;
@@ -196,6 +197,28 @@ internal static class ManagedTools
 		}
 		else
 		{
+			if ( OperatingSystem.IsLinux() && GameMode.GameHasKeyboardFocus && !IsEditorReservedKey( key ) )
+			{
+				if ( !press )
+				{
+					EditorShortcuts.Release( ev.Name.ToUpperInvariant() );
+				}
+				else
+				{
+					var text = ev.Text;
+					if ( !string.IsNullOrEmpty( text ) )
+					{
+						foreach ( var c in text )
+						{
+							if ( !char.IsControl( c ) )
+								InputRouter.OnText( c.ToString() );
+						}
+					}
+				}
+
+				return false;
+			}
+
 			if ( press )
 			{
 				var modifiers = ev.KeyboardModifiers;
@@ -229,6 +252,11 @@ internal static class ManagedTools
 		}
 
 		return false;
+	}
+
+	static bool IsEditorReservedKey( KeyCode key )
+	{
+		return key == KeyCode.Escape || (key >= KeyCode.F1 && key <= KeyCode.F12);
 	}
 
 	internal static bool GlobalShortcutPressed()
