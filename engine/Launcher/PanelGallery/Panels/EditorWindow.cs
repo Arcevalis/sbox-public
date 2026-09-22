@@ -34,7 +34,7 @@ public partial class EditorWindow : Panel
 	/// </summary>
 	public static PanelWindow Open()
 	{
-		var window = new PanelWindow( "Panel Gallery", new Vector2( 1500, 940 ), new Vector2( -1, -1 ), true );
+		var window = new PanelWindow( "Panel Gallery", new Vector2( 1500, 940 ), null, true );
 		window.Root.AddChild( new EditorWindow( window ) );
 		return window;
 	}

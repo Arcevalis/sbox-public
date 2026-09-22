@@ -1,4 +1,4 @@
-@using System;
+﻿@using System;
 @using Sandbox;
 @using Sandbox.UI;
 @inherits Panel
@@ -45,9 +45,13 @@
     ScenePanel scenePanel;
 
     /// <summary>
-    /// Across their recently played games - the same feed the achievements page shows.
+    /// Their lifetime unlock count, from the player overview.
     /// </summary>
-    int AchievementsUnlocked { get; set; }
+    long AchievementsUnlocked { get; set; }
+
+    /// <summary>
+    /// Their lifetime gamercore, which we already have from the login.
+    /// </summary>
     int AchievementScore { get; set; }
     bool StatsLoaded { get; set; }
 
@@ -66,13 +70,23 @@
 
     async Task LoadStats()
     {
-        var overviews = await MenuUtility.GetAchievementOverviews( 50 );
+        Sandbox.Services.Players.Overview overview;
 
-        if ( overviews is null )
+        try
+        {
+            overview = await Sandbox.Services.Players.Overview.Get( Sandbox.Utility.Steam.SteamId );
+        }
+        catch ( Exception )
+        {
+            // Offline, or the backend is having a moment - just leave the stats hidden.
+            return;
+        }
+
+        if ( overview is null )
             return;
 
-        AchievementsUnlocked = overviews.Sum( x => x.Unlocked );
-        AchievementScore = overviews.Sum( x => x.Score );
+        AchievementsUnlocked = overview.Achievements;
+        AchievementScore = Sandbox.Services.Players.Profile.Local.Score;
         StatsLoaded = true;
 
         StateHasChanged();

@@ -864,6 +864,7 @@ public sealed partial class SceneCamera : IDisposable, IManagedCamera
 		//
 		var setup = new CameraRenderer( "RenderToCubeTexture", _cameraId );
 		setup.Configure( this, config );
+		setup.Native.EnableUI = false;
 
 		for ( int i = 0; i < CubeRotations.Length; i++ )
 		{

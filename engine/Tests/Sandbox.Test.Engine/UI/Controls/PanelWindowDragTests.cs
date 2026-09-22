@@ -146,8 +146,8 @@ public class PanelWindowDragTests
 			return true;
 		};
 
-		PanelWindowInput.OnKey( (IntPtr)handle, ButtonCode.KEY_ESCAPE, true, false, 0 );
-		PanelWindowInput.OnKey( (IntPtr)handle, ButtonCode.KEY_ESCAPE, false, false, 0 );
+		PanelWindowInput.OnKey( (IntPtr)handle, ButtonCode.KEY_ESCAPE, true, 0 );
+		PanelWindowInput.OnKey( (IntPtr)handle, ButtonCode.KEY_ESCAPE, false, 0 );
 
 		Assert.AreEqual( 2, calls );
 		Assert.AreEqual( 1, session.Cancellations );

@@ -1,6 +1,4 @@
-﻿using Sandbox;
-
-namespace NativeEngine
+namespace Sandbox
 {
 	internal enum GameControllerAxis : int
 	{

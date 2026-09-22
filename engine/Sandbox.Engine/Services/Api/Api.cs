@@ -53,7 +53,7 @@ internal static partial class Api
 			// Try to incldue any convars that could make a meaningful impact on performance
 
 			FpsMax = ConVarSystem.GetInt( "fps_max", 0, true ),
-			MSAA = NativeEngine.RenderService.GetMultisampleType(),
+			MSAA = NativeEngine.CSceneSystem.GetMainSwapChainMultisampleType(),
 			VolumeFogDepth = ConVarSystem.GetInt( "volume_fog_depth", 0, true ),
 			Application.ExceptionCount,
 

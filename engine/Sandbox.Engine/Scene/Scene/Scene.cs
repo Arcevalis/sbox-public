@@ -354,6 +354,8 @@ public partial class Scene : GameObject
 	/// </summary>
 	internal void PreCameraRender()
 	{
+		RenderEnvmaps();
+
 		// We want to initialize all cameras (enabled & disabled) incase they're used to render manually
 		// we need to make sure the SceneCamera is created etc.
 		var cameras = Cameras.OrderBy( x => x.Priority );
@@ -361,8 +363,6 @@ public partial class Scene : GameObject
 		{
 			cc.InitializeRendering();
 		}
-
-		RenderEnvmaps();
 
 		// Alpha is used to lerp between IBL and fixed ambient light
 		Color ambientLight = Color.Transparent;

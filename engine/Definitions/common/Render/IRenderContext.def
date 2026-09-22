@@ -131,6 +131,7 @@ native class IRenderContext as NativeEngine.IRenderContext
 	}
 
 	void Submit();
+	void ForceFlushGPU();
 
 	inline void BindRenderTargets( SwapChainHandle_t swapChain, bool color, bool depth )
 	{

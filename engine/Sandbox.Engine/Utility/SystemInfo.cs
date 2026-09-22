@@ -135,12 +135,9 @@ public static class SystemInfo
 
 		try
 		{
-			int w = 0, h = 0;
-			uint hz = 0;
-			env.MonitorCount = NativeEngine.EngineGlobal.Plat_GetMonitorCount();
-
-			if ( NativeEngine.EngineGlobal.Plat_GetDesktopResolution( NativeEngine.EngineGlobal.Plat_GetDefaultMonitorIndex(), ref w, ref h, ref hz ) )
-				env.DisplayRefreshRate = (int)hz;
+			env.MonitorCount = SdlDisplay.Count;
+			var mode = SdlDisplay.GetDesktopMode( SdlDisplay.Primary );
+			env.DisplayRefreshRate = (int)MathF.Round( mode.RefreshRate, MidpointRounding.AwayFromZero );
 		}
 		catch ( Exception e )
 		{

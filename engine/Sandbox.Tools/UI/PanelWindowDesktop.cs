@@ -12,7 +12,6 @@ namespace Editor;
 internal static class PanelWindowDesktop
 {
 	const uint NextWindow = 2; // GW_HWNDNEXT
-	const ulong MouseCapture = 0x00004000; // SDL_WINDOW_MOUSE_CAPTURE
 	static readonly HashSet<string> _reportedFailures = new();
 
 	/// <summary>
@@ -20,7 +19,7 @@ internal static class PanelWindowDesktop
 	/// </summary>
 	internal static uint GetPointer( out Vector2 position )
 	{
-		var buttons = SDL_GetGlobalMouseState( out var x, out var y );
+		var buttons = Sdl.GetGlobalMouseState( out var x, out var y );
 		position = new Vector2( x, y );
 		return buttons;
 	}
@@ -30,14 +29,14 @@ internal static class PanelWindowDesktop
 	/// </summary>
 	internal static bool Capture( bool capture )
 	{
-		return Check( SDL_CaptureMouse( capture ), nameof( SDL_CaptureMouse ) );
+		return Check( Sdl.CaptureMouse( capture ), nameof( Sdl.CaptureMouse ) );
 	}
 
 	/// <summary>Owned tool windows stay above their dock window and follow its visibility.</summary>
 	internal static void SetOwner( PanelWindow window, PanelWindow owner )
 	{
-		if ( !SDL_SetWindowParent( window.Handle, owner.Handle ) )
-			throw new InvalidOperationException( $"Could not set dock window owner: {EngineGlobal.SDL_GetError()}" );
+		if ( !Sdl.SetWindowParent( window.Handle, owner.Handle ) )
+			throw new InvalidOperationException( $"Could not set dock window owner: {Sdl.GetError()}" );
 	}
 
 	/// <summary>
@@ -84,9 +83,9 @@ internal static class PanelWindowDesktop
 				foreach ( var window in PanelWindow.All )
 				{
 					if ( !window.IsOpen || window.Handle == IntPtr.Zero ) continue;
-					var properties = SDL_GetWindowProperties( window.Handle );
-					if ( !Check( properties != 0, nameof( SDL_GetWindowProperties ) ) ) return null;
-					var nativeHandle = SDL_GetPointerProperty( properties, "SDL.window.win32.hwnd", IntPtr.Zero );
+					var properties = Sdl.GetWindowProperties( window.Handle );
+					if ( !Check( properties != 0, nameof( Sdl.GetWindowProperties ) ) ) return null;
+					var nativeHandle = Sdl.GetPointerProperty( properties, "SDL.window.win32.hwnd", IntPtr.Zero );
 					if ( nativeHandle != handle ) continue;
 
 					target = window;
@@ -102,11 +101,11 @@ internal static class PanelWindowDesktop
 		else
 		{
 			// Wayland and other backends need a platform hit-test API, not guessed desktop coordinates.
-			var driver = Marshal.PtrToStringUTF8( SDL_GetCurrentVideoDriver() );
+			var driver = Sdl.GetCurrentVideoDriver();
 			if ( driver != "x11" && driver != "cocoa" ) return null;
 
-			var focus = SDL_GetMouseFocus();
-			if ( focus == IntPtr.Zero || (SDL_GetWindowFlags( focus ) & MouseCapture) != 0 ) return null;
+			var focus = Sdl.GetMouseFocus();
+			if ( focus == IntPtr.Zero || (Sdl.GetWindowFlags( focus ) & Sdl.WindowFlags.MouseCapture) != 0 ) return null;
 
 			// SDL mouse focus isn't a desktop hit-test API. Capture reports the source, and
 			// there is no reliable way here to find a window underneath the drag preview.
@@ -117,7 +116,7 @@ internal static class PanelWindowDesktop
 			{
 				if ( window.Handle != focus ) continue;
 				if ( !window.IsOpen || window == excluded || window.IgnoresInput ) return null;
-				if ( !PanelWindowNative.IsVisible( focus ) || PanelWindowNative.IsMinimized( focus ) ) return null;
+				if ( !window.IsVisible || window.IsMinimized ) return null;
 				target = window;
 				break;
 			}
@@ -134,39 +133,10 @@ internal static class PanelWindowDesktop
 	static bool Check( bool success, string operation )
 	{
 		if ( !success && _reportedFailures.Add( operation ) )
-			Log.Warning( $"Panel window docking: {operation} failed: {EngineGlobal.SDL_GetError()}" );
+			Log.Warning( $"Panel window docking: {operation} failed: {Sdl.GetError()}" );
 
 		return success;
 	}
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	[return: MarshalAs( UnmanagedType.I1 )]
-	static extern bool SDL_SetWindowParent( IntPtr window, IntPtr parent );
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern uint SDL_GetGlobalMouseState( out float x, out float y );
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	[return: MarshalAs( UnmanagedType.I1 )]
-	static extern bool SDL_CaptureMouse( [MarshalAs( UnmanagedType.I1 )] bool capture );
-
-
-
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern uint SDL_GetWindowProperties( IntPtr window );
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern IntPtr SDL_GetPointerProperty( uint properties, [MarshalAs( UnmanagedType.LPUTF8Str )] string name, IntPtr defaultValue );
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern IntPtr SDL_GetMouseFocus();
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern ulong SDL_GetWindowFlags( IntPtr window );
-
-	[DllImport( "SDL3", CallingConvention = CallingConvention.Cdecl )]
-	static extern IntPtr SDL_GetCurrentVideoDriver();
 
 	[DllImport( "user32.dll" )]
 	static extern IntPtr GetTopWindow( IntPtr window );

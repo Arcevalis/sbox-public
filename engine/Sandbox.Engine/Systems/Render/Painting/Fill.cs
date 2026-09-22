@@ -12,6 +12,7 @@ namespace Sandbox;
 /// percentages and calc expressions resolve from the shape's top-left against its width (X) and height (Y).
 /// Gradient points must be finite and distinct; Auto and null are unsupported. Painter.Transform applies after resolution.
 /// </remarks>
+[Expose]
 public readonly partial struct Fill
 {
 	readonly Color _color;

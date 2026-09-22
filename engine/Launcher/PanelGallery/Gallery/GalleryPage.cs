@@ -21,6 +21,7 @@ public record GalleryPageInfo( string Title, string Icon, Func<Panel> Create, st
 		new( "Calculator", "calculate", () => new CalculatorPage(), "Demos" ),
 		new( "Buttons", "smart_button", () => new ButtonsPage(), "Controls/Input" ),
 		new( "Text Entry", "edit", () => new TextEntryPage(), "Controls/Input" ),
+		new( "Script Editor", "code", () => new ScriptControlPage(), "Controls/Input" ),
 		new( "Value Controls", "123", () => new InputControlsPage(), "Controls/Input" ),
 		new( "Checkbox", "check_box", () => new CheckboxPage(), "Controls/Input" ),
 		new( "Focus", "keyboard_tab", () => new FocusPage(), "System" ),

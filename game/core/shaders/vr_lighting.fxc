@@ -55,9 +55,19 @@ bool g_bShowLPVVoxels < Attribute( "g_bShowLPVVoxels" ); >;
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Self shadow normal maps
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
-#if ( S_ENABLE_NORMAL_SELF_SHADOW )
-float g_flLightRangeForSelfShadowNormals < Default( 0.707 ); Range( 0.0, 1.0 ); UiGroup( "Normal" ); >;
+#ifndef S_ENABLE_NORMAL_SELF_SHADOW
+#define S_ENABLE_NORMAL_SELF_SHADOW 0
 #endif
+#ifndef S_CLOTH_SHADING
+#define S_CLOTH_SHADING 0
+#endif
+#ifndef S_TRANSMISSIVE_BACKFACE_NDOTL
+#define S_TRANSMISSIVE_BACKFACE_NDOTL 0
+#endif
+#ifndef S_TRANSMISSIVE
+#define S_TRANSMISSIVE 0
+#endif
+float g_flLightRangeForSelfShadowNormals < Default( 0.707 ); Range( 0.0, 1.0 ); UiGroup( "Normal" ); >;
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct LightingTerms_t
@@ -134,13 +144,12 @@ void ComputeDiffuseAndSpecularTerms( out float3 o_vDiffuseTerm, out float3 o_vSp
 	float3 vNormalWs = f.vNormalWs.xyz;
 
 	// Gets rid of bumps as light direction becomes more grazing
-	#if ( S_ENABLE_NORMAL_SELF_SHADOW )
+	if ( S_ENABLE_NORMAL_SELF_SHADOW != 0 )
 	{
 		float flDot = dot( vPositionToLightDirWs.xyz, f.vNormalWs.xyz ) * ( 1.0 / g_flLightRangeForSelfShadowNormals );
 		vNormalWs.xyz = lerp( f.vNormalWs.xyz, vNormalWs.xyz, saturate( flDot ) );
 		vNormalWs.xyz = normalize( vNormalWs.xyz );
 	}
-	#endif
 
 	// Diffuse
 	o_vDiffuseTerm = float3( 0.0, 0.0, 0.0 );
@@ -207,13 +216,14 @@ void ComputeDiffuseAndSpecularTerms( out float3 o_vDiffuseTerm, out float3 o_vSp
 		float flVdotH = ClampToPositive( dot( vPositionToCameraDirWs.xyz, vHalfAngleDirWs.xyz ) );
 
 		float flSpecularTerm = 0.0;
-		#if ( S_CLOTH_SHADING )
+		if ( S_CLOTH_SHADING != 0 )
 		{
 			float flIsotropicRoughness = IsotropicRoughnessFromAnisotropicRoughness( f.vRoughness.xy );
 			flSpecularTerm = ComputeCharlieSheenBRDF( flIsotropicRoughness, flNDotL, flNdotV, flNdotH );
 			flSpecularTerm *= flNDotL;
 		}
-		#elif ( S_ANISOTROPIC_GLOSS ) // Adds 34 asm instructions compared to isotropic spec in #else below
+		else
+		#if ( S_ANISOTROPIC_GLOSS ) // Adds 34 asm instructions compared to isotropic spec in #else below
 		{
 			flSpecularTerm = ComputeGGXAnisoBRDF( f.vRoughness.xy, flNDotL, flNdotV, flNdotH, flXdotH, flYdotH, flVdotH, f.vPositionSs.xy );
 			flSpecularTerm *= flNDotL;
@@ -241,12 +251,11 @@ void ComputeDiffuseAndSpecularTerms( out float3 o_vDiffuseTerm, out float3 o_vSp
 	}
 
 	o_vTransmissiveTerm.rgb = float3( 0.0, 0.0, 0.0 );
-	#if ( S_TRANSMISSIVE_BACKFACE_NDOTL || S_TRANSMISSIVE )
+	if ( S_TRANSMISSIVE_BACKFACE_NDOTL != 0 || S_TRANSMISSIVE != 0 )
 	{
 		float flBackfaceNdotL = ClampToPositive( -dot( f.vNormalWs.xyz, vPositionToLightDirWs.xyz ) );
 		o_vTransmissiveTerm.rgb = flBackfaceNdotL.xxx;
 	}
-	#endif
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -629,13 +638,14 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 		}
 		else
 		{
-			#if ( S_TRANSMISSIVE_BACKFACE_NDOTL )
+			if ( S_TRANSMISSIVE_BACKFACE_NDOTL != 0 )
 			{
 				flTargetLuminanceOfCubemap = RelativeLuminance( SampleIrradiance( vAmbientCube, vNormalWs.xyz ) );
 				lightingTerms.vIndirectDiffuse.rgb = SampleIrradiance( vAmbientCube, vNormalWs.xyz );
 				lightingTerms.vTransmissive.rgb += SampleIrradiance( vAmbientCube, -vNormalWs.xyz );
 			}
-			#elif ( S_SUBSURFACE_SCATTERING == SUBSURFACE_SCATTERING_PREINTEGRATED )
+			else
+			#if ( S_SUBSURFACE_SCATTERING == SUBSURFACE_SCATTERING_PREINTEGRATED )
 			{
 				float3 vNormalR = normalize( lerp( finalCombinerData.vNormalWs.xyz, vNormalWs, g_vAmbientNormalSoftness.r * finalCombinerData.flSSSMask ) );
 				float3 vNormalG = normalize( lerp( finalCombinerData.vNormalWs.xyz, vNormalWs, g_vAmbientNormalSoftness.g * finalCombinerData.flSSSMask ) );
@@ -758,29 +768,27 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 			//---------------------------------------------------------------------------------------------------------------------------------------------------------
 			float3 vCubeMapTexel = 0.0f;
 
-			#if ( S_CLOTH_SHADING )
+			if ( S_CLOTH_SHADING != 0 )
 			{
 				// For cloth shading, roughness needs be very low to fit with the specular shading.  The power here is arbitrary, based on look
 				vLevel /= vSQRTRoughness.xy;
 				vLevel *= pow( flIsotropicRoughness, 0.125 );
 			}
-			#endif
 
 			float3 vNormalWarpWs = normalize( lerp( vParallaxReflectionCubemapLocal.xyz, vNormalWs.xyz, vLevel.x ) ); // Used to deal with specular aliasing
 			vCubeMapTexel = SampleEnvironmentMapLevel( vNormalWarpWs.xyz, vLevel.x, index );
 
 			// Apply BRDFs
-			#if (S_CLOTH_SHADING)
+			if ( S_CLOTH_SHADING != 0 )
             {
 				float3 vHalfAngleDirWs = normalize(vNormalWs.xyz + vPositionToCameraDirWs.xyz);
                 float flNdotH = dot(vHalfAngleDirWs.xyz, vNormalWs.xyz);
                 vCubeMapTexel *= ComputeCharlieSheenBRDF(flIsotropicRoughness, 1, flNDotV, flNdotH);
             }
-			#else
+			else
             {
                 vCubeMapTexel *= CalcBRDFReflectionFactor(flNDotV, flIsotropicRoughness, finalCombinerData.vSpecularColor);
             }
-			#endif
 
 			// Two lobe specular has different logic
 			#if ( S_TWO_LOBE_SPECULAR )

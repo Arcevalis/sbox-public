@@ -42,6 +42,7 @@ internal static class PanelWindows
 
 	internal static void Unregister( IPanelWindow window )
 	{
+		PanelWindowInput.OnWindowClosed( window );
 		all.Remove( window );
 		DragSession?.OnWindowClosing( window );
 	}
@@ -85,7 +86,7 @@ internal static class PanelWindows
 
 		foreach ( var popup in all )
 		{
-			if ( !popup.IsPopup || !popup.IsOpen || popup.IgnoresInput ) continue;
+			if ( !popup.IsPopup || !popup.IsOpen || !popup.TakesKeyboardFocus ) continue;
 
 			var depth = Depth( popup );
 			if ( depth <= targetDepth ) continue;
@@ -221,7 +222,7 @@ internal static class PanelWindows
 
 			try
 			{
-				presented |= window.Frame( interactiveResize: false );
+				presented |= window.Frame();
 			}
 			catch ( Exception e )
 			{

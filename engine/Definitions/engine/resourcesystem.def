@@ -5,6 +5,10 @@ native accessor g_pResourceSystem as NativeEngine.g_pResourceSystem
 {
 	void ReloadSymlinkedResidentResources();
 	void UpdateSimple();
+	inline ITexture LoadTexture( string name )
+	{
+		return g_pResourceSystem->BlockingLoadResourceByName< RESOURCE_TYPE_TEXTURE >( CResourceName( name ), "Managed LoadTexture" );
+	}
 	bool HasPendingWork();
 	int GetNumPendingStreamingRequests();
 	bool IsShuttingDown();

@@ -1,6 +1,7 @@
 using NativeEngine;
 using Sandbox.Audio;
 using Sandbox.Engine;
+using Sandbox.Engine.Settings;
 using Sandbox.Internal;
 using Sandbox.Modals;
 using System;
@@ -17,6 +18,12 @@ internal class ToolsDll : IToolsDll
 	{
 		Global.Assembly = GetType().Assembly;
 	}
+
+	/// <inheritdoc />
+	public void SetRelativeMouseOverride( bool relative ) => g_pToolFramework2.SetOverrideCursor( relative );
+
+	/// <inheritdoc />
+	public bool IsApplicationActive => Native.QApp.IsApplicationActive();
 
 	public void Bootstrap()
 	{
@@ -251,7 +258,7 @@ internal class ToolsDll : IToolsDll
 
 	public void OnFunctionKey( ButtonCode key, KeyboardModifiers modifiers )
 	{
-		var keys = NativeEngine.InputSystem.CodeToString( key ).ToUpperInvariant();
+		var keys = Sandbox.Engine.KeyTranslation.CodeToString( key ).ToUpperInvariant();
 		if ( modifiers.HasFlag( KeyboardModifiers.Shift ) ) keys = "SHIFT+" + keys;
 		if ( modifiers.HasFlag( KeyboardModifiers.Alt ) ) keys = "ALT+" + keys;
 		if ( modifiers.HasFlag( KeyboardModifiers.Ctrl ) ) keys = "CTRL+" + keys;
@@ -320,6 +327,15 @@ internal class ToolsDll : IToolsDll
 	/// </summary>
 	[Obsolete]
 	public bool IsGameViewVisible => false;
+	public GameSurface GameSurface
+	{
+		get
+		{
+			var playWidget = GameMode.PlayWidget;
+			var window = playWidget is not null ? GameMode.PlayWindow : WindowInput.GetEditorMainWindow();
+			return new( window, playWidget?.SwapChain ?? default, RenderSettings.Instance.VSync );
+		}
+	}
 
 	public async Task OnInitializeHost()
 	{

@@ -179,7 +179,8 @@ int TextureDimensionsCubeArray( TextureCubeArray tex, int nMipLevel )
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 // Allows fxc to compile out combo and rule declarations
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------
-#define StaticCombo( comboName, range, sys ) ;
+#define StaticCombo( comboName, range, sys, ... ) ;
+#define SpecializationCombo( comboName, range, sys ) ;
 #define DynamicCombo( comboName, range, sys ) ;
 #define DynamicComboFromFeature( comboName, range, feature, sys ) ;
 

@@ -51,6 +51,31 @@ public class TextEntryScrollTests
 	static Label LabelOf( TextEntry entry ) => entry.Children.OfType<Label>().First();
 
 	[TestMethod]
+	public void CharacterHitTestCoversBothHalvesWhileScrolled()
+	{
+		var entry = CreateNarrowEntry( LongText );
+		try
+		{
+			var label = LabelOf( entry );
+			label.SetCaretPosition( label.TextLength );
+			for ( int i = label.TextLength - 4; i < label.TextLength; i++ )
+			{
+				var start = label.GetCaretRect( i );
+				var end = label.GetCaretRect( i + 1 );
+				foreach ( var fraction in new[] { 0.25f, 0.75f } )
+				{
+					var point = new Vector2( start.Left + (end.Left - start.Left) * fraction, start.Center.y );
+					Assert.AreEqual( i, label.GetCharacterAtScreenPosition( point ) );
+				}
+			}
+			var last = label.GetCaretRect( label.TextLength );
+			Assert.AreEqual( -1, label.GetCharacterAtScreenPosition( new Vector2( last.Left + 20, last.Center.y ) ) );
+			Assert.AreEqual( -1, label.GetCharacterAtScreenPosition( new Vector2( last.Left, last.Top - 100 ) ) );
+		}
+		finally { entry.FindRootPanel().Delete( true ); }
+	}
+
+	[TestMethod]
 	public void CaretAtStartIsVisible()
 	{
 		var entry = CreateNarrowEntry( LongText );

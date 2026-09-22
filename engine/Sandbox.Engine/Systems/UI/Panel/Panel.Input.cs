@@ -241,6 +241,15 @@ public partial class Panel
 	}
 
 	/// <summary>
+	/// Called for a typed character with the modifier keys held when it was received.
+	/// By default, forwards to <see cref="OnKeyTyped(char)"/>.
+	/// </summary>
+	public virtual void OnKeyTyped( char k, KeyboardModifiers modifiers )
+	{
+		OnKeyTyped( k );
+	}
+
+	/// <summary>
 	/// Called when any keyboard button has been typed (pressed) while this panel has input focus. (<see cref="Focus"/>)
 	/// </summary>
 	public virtual void OnButtonTyped( ButtonEvent e )

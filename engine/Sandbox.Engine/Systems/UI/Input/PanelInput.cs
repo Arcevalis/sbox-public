@@ -87,8 +87,8 @@ internal class PanelInput
 		// When we're ticking inputs, let's emulate the mouse if we're using a gamepad
 		if ( Input.EnableVirtualCursor && Input.CurrentController is { } controller )
 		{
-			var moveX = controller.GetAxis( NativeEngine.GameControllerAxis.LeftX );
-			var moveY = controller.GetAxis( NativeEngine.GameControllerAxis.LeftY );
+			var moveX = controller.GetAxis( Sandbox.GameControllerAxis.LeftX );
+			var moveY = controller.GetAxis( Sandbox.GameControllerAxis.LeftY );
 
 			if ( MathF.Abs( moveX ) > 0 || MathF.Abs( moveY ) > 0 )
 			{
@@ -126,10 +126,17 @@ internal class PanelInput
 	Vector2 mouseWheelValue { get; set; }
 
 	/// <summary>
+	/// Modifier keys held when the pending wheel movement was received.
+	/// </summary>
+	internal KeyboardModifiers WheelModifiers { get; private set; }
+
+
+	/// <summary>
 	/// Called from input when mouse wheel changes
 	/// </summary>
 	public void AddMouseWheel( Vector2 value, KeyboardModifiers modifiers )
 	{
+		WheelModifiers = modifiers;
 		//
 		// Windows apps will typically translate vertical mouse wheel movement into
 		// horizontal mouse wheel movement if the shift key is held down during a mouse
@@ -151,8 +158,15 @@ internal class PanelInput
 	/// </summary>
 	internal KeyboardModifiers MouseModifiers { get; private set; }
 
-	internal void AddMouseButton( ButtonCode code, bool down, KeyboardModifiers modifiers )
+	internal void SetClickCount( ButtonCode button, int count )
 	{
+		var index = button - ButtonCode.MouseLeft;
+		if ( index >= 0 && index < MouseStates.Length ) MouseStates[index].ClickCount = Math.Max( 1, count );
+	}
+
+	internal void AddMouseButton( ButtonCode code, bool down, KeyboardModifiers modifiers, int clickCount = 1 )
+	{
+		if ( down ) SetClickCount( code, clickCount );
 		MouseModifiers = modifiers;
 
 		if ( down ) mousebuttons.Add( code );
@@ -389,6 +403,7 @@ internal class PanelInput
 		public PanelInput Input { get; init; }
 		public ButtonCode MouseButton { get; init; }
 
+		internal int ClickCount = 1;
 		public bool Pressed;
 		public Panel Active;
 		public bool Dragged;
@@ -416,6 +431,7 @@ internal class PanelInput
 		{
 			Panel.Switch( PseudoClass.Active, false, Active );
 			Pressed = false;
+			ClickCount = 1;
 			Active = null;
 			Dragged = false;
 			DragTarget = null;
@@ -455,7 +471,7 @@ internal class PanelInput
 					{
 						Panel.Switch( PseudoClass.Active, false, Active );
 						Panel.Switch( PseudoClass.Hover, false, Active );
-						Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) );
+						Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) { KeyboardModifiers = Input.MouseModifiers } );
 						Active.OnButtonEvent( new ButtonEvent( MouseButton, false ) );
 						Active = null;
 						RestoreActive();
@@ -531,7 +547,8 @@ internal class PanelInput
 
 			Active.Focus();
 
-			MouseDownEvent = new MousePanelEvent( "onmousedown", Active, GetMouseButtonName( MouseButton ) ) { KeyboardModifiers = Input.MouseModifiers };
+			MouseDownEvent = new MousePanelEvent( "onmousedown", Active, GetMouseButtonName( MouseButton ) ) { KeyboardModifiers = Input.MouseModifiers, ClickCount = ClickCount };
+			ClickCount = 1;
 			Active.CreateEvent( MouseDownEvent );
 
 			Active.OnButtonEvent( new ButtonEvent( MouseButton, true ) );
@@ -579,7 +596,7 @@ internal class PanelInput
 
 			if ( canClick )
 			{
-				Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) );
+				Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) { KeyboardModifiers = Input.MouseModifiers } );
 
 				if ( MouseButton == ButtonCode.MouseLeft )
 				{
@@ -596,7 +613,7 @@ internal class PanelInput
 			}
 			else
 			{
-				Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) );
+				Active.CreateEvent( new MousePanelEvent( "onmouseup", Active, GetMouseButtonName( MouseButton ) ) { KeyboardModifiers = Input.MouseModifiers } );
 				Panel.Switch( PseudoClass.Hover, false, Active, hovered );
 			}
 

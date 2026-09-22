@@ -60,6 +60,7 @@ public class PanelAppSystem : AppSystem
 			throw new Exception( "SourceEnginePreInit failed" );
 		}
 
+		WindowInput.Initialize();
 		Graphics.Initialize();
 		Phase( "SourceEnginePreInit" );
 
@@ -215,7 +216,7 @@ public class PanelAppSystem : AppSystem
 		Time.Update( RealTime.Now, RealTime.Delta );
 		Sandbox.UI.PanelRealTime.Update();
 
-		// Input lands in the panel windows from inside this - see PanelWindowGlue::HandleEvent
+		SdlEvents.Poll();
 		NativeEngine.EngineGlobal.SourceEnginePanelAppFrame();
 
 		// Await continuations queue for the main thread - without this pump they'd wait forever
@@ -239,6 +240,8 @@ public class PanelAppSystem : AppSystem
 		{
 			loggedFirstFrame = true;
 			Phase( "First frame" );
+			_appSystem.StartBackgroundSystems();
+			SdlGamepads.Initialize();
 
 			// The backend comes up after the window is on screen, so it never costs startup
 			// time. It's an http client - no Steam, no auth needed for public reads
@@ -270,6 +273,6 @@ public class PanelAppSystem : AppSystem
 			if ( elapsed < IdleFrameMs ) Thread.Sleep( IdleFrameMs - elapsed );
 		}
 
-		return PanelWindows.All.Count > 0;
+		return !Application.WantsExit && PanelWindows.All.Count > 0;
 	}
 }

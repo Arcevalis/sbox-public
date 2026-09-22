@@ -6,6 +6,7 @@ namespace Sandbox;
 /// A stroke on a shape's path. Defaults to centered, with half its width on either side.
 /// Dimensions and dash phase are in drawing pixels. Defaults to no stroke.
 /// </summary>
+[Expose]
 public readonly record struct Stroke
 {
 	/// <summary>

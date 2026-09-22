@@ -6,16 +6,8 @@ internal static partial class InputRouter
 {
 	static RealTimeSince timeSinceWindowActive;
 
-	/// <summary>
-	/// Bumped by every real input event that reaches us. Frame() uses it to tell a mouse capture
-	/// that is delivering from one that has taken the cursor and gone silent.
-	/// </summary>
-	internal static int DeliveredEventCount { get; private set; }
-
-	internal static void OnMouseButton( ButtonCode button, bool down, int ikeymods )
+	internal static void OnMouseButton( ButtonCode button, bool down )
 	{
-		DeliveredEventCount++;
-
 		SetButtonState( button, down );
 
 		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
@@ -76,8 +68,6 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static void OnMouseMotion( float dx, float dy )
 	{
-		DeliveredEventCount++;
-
 		var delta = new Vector2( dx, dy );
 
 		MouseCursorDelta += delta;
@@ -97,11 +87,9 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static void OnMousePositionChange( float x, float y, float dx, float dy )
 	{
-		DeliveredEventCount++;
-
 		MouseCursorPosition = new Vector2( x, y );
 
-		if ( InputSystem.GetRelativeMouseMode() )
+		if ( WindowInput.GetRelativeMouseMode() )
 		{
 			dx = dy = 0;
 		}
@@ -217,9 +205,9 @@ internal static partial class InputRouter
 		OnGamepadCode( deviceId, code, ((float)value).Remap( 0, Controller.AXIS_RANGE.y, 0, 1 ) >= triggerDeadzone );
 	}
 
-	internal static void OnGameControllerConnected( int joystickId, int deviceId )
+	internal static void OnGameControllerConnected( int deviceId )
 	{
-		var controller = new Controller( joystickId, deviceId );
+		var controller = new Controller( deviceId );
 		Log.Info( $"New {controller} controller detected" );
 
 		Controller.All.Add( controller );
@@ -227,7 +215,7 @@ internal static partial class InputRouter
 
 	internal static void OnGameControllerDisconnected( int joystickId )
 	{
-		var controller = Controller.All.FirstOrDefault( x => x.SDLHandle == joystickId );
+		var controller = Controller.All.FirstOrDefault( x => x.DeviceId == joystickId );
 		if ( controller is not null )
 		{
 			Log.Info( $"{controller} controller removed" );
@@ -239,10 +227,8 @@ internal static partial class InputRouter
 		}
 	}
 
-	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat, int ikeymods )
+	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat )
 	{
-		DeliveredEventCount++;
-
 		if ( !repeat )
 		{
 			SetButtonState( scanButtonCode, down );
@@ -276,7 +262,7 @@ internal static partial class InputRouter
 
 			IToolsDll.Current?.OnFunctionKey( scanButtonCode, modifiers );
 
-			var bind = g_pInputService.GetBinding( scanButtonCode );
+			var bind = Sandbox.Engine.KeyBindings.GetBinding( scanButtonCode );
 			if ( string.IsNullOrEmpty( bind ) ) return;
 
 			ConVarSystem.Run( bind );
@@ -321,18 +307,13 @@ internal static partial class InputRouter
 	internal static void OnText( string text )
 	{
 		var keyboard = Contexts.FirstOrDefault( x => x.KeyboardState == InputContext.InputState.UI );
-		if ( keyboard is null )
-		{
-			keyboard = Contexts.FirstOrDefault( x => (x.KeyboardFocusPanel as Sandbox.UI.Panel)?.AcceptsImeInput == true );
-		}
-
 		if ( keyboard is not null )
 		{
 			keyboard.IN_Text( text );
 		}
 	}
 
-	internal static void OnMouseWheel( float x, float y, int ikeymods )
+	internal static void OnMouseWheel( float x, float y )
 	{
 		var value = new Vector2( x, y );
 		var mouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
@@ -390,22 +371,6 @@ internal static partial class InputRouter
 
 		var mouse = Contexts.FirstOrDefault( c => c.MouseState != InputContext.InputState.Ignore );
 		mouse?.IN_Drop( files, text, new Vector2( x, y ) );
-	}
-
-	/// <summary>
-	/// Convert engine (IE_ShiftPressed etc) to our KeyboardModifiers enum
-	/// </summary>
-	static KeyboardModifiers EngineToModifier( int engine )
-	{
-		KeyboardModifiers m = KeyboardModifiers.None;
-
-		if ( (engine & 1) == 1 ) m |= KeyboardModifiers.Shift;
-		if ( (engine & 2) == 2 ) m |= KeyboardModifiers.Ctrl;
-		if ( (engine & 4) == 4 ) m |= KeyboardModifiers.Alt;
-		//if ( (m_nData2 & 8) == 8 ) m |= KeyboardModifiers.Windows;
-		//if ( (m_nData2 & 16) == 8 ) m |= KeyboardModifiers.Finger;
-
-		return m;
 	}
 
 	/// <summary>

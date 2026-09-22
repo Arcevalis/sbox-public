@@ -300,7 +300,7 @@ public static partial class Input
 	{
 		if ( !down ) return;
 
-		var binding = g_pInputService.GetBinding( code );
+		var binding = Sandbox.Engine.KeyBindings.GetBinding( code );
 		if ( string.IsNullOrEmpty( binding ) ) return;
 
 		ConVarSystem.Run( $"{binding}\n" );
