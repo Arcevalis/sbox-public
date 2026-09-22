@@ -72,6 +72,20 @@ public static class GameMode
 		if ( _inPlay is null )
 			return;
 
+		InputDebug.Event( "gamemode", "ClearPlayMode" );
+
+		// Give the pointer back before we let go of the widget, or the cursor stays hidden
+		InputRouter.ManagedMouseCapture = null;
+
+		if ( _capturing )
+		{
+			_capturing = false;
+			_hasLastLocal = false;
+
+			if ( _inPlay.IsValid() )
+				_inPlay.Cursor = CursorShape.None;
+		}
+
 		var widget = _inPlay;
 		InputDebug.Event( "gamemode", "ClearPlayMode" );
 

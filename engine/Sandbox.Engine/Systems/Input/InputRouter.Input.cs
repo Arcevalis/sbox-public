@@ -1,4 +1,4 @@
-using NativeEngine;
+﻿using NativeEngine;
 using Sandbox.Modals;
 
 namespace Sandbox.Engine;
@@ -13,7 +13,7 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static int DeliveredEventCount { get; private set; }
 
-	internal static void OnMouseButton( ButtonCode button, bool down, int ikeymods )
+	internal static void OnMouseButton( ButtonCode button, bool down )
 	{
 		DeliveredEventCount++;
 
