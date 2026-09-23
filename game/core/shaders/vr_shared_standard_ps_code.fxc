@@ -130,7 +130,10 @@ CreateInputTexture2D( TextureTranslucency, Linear, 8, "", "_trans", "Translucent
 		Texture2D g_tNormal < Channel( RGBA, HemiOctIsoRoughness_RG_B( TextureNormal, TextureRoughness ), Linear ); OutputFormat( BC7 ); SrgbRead( false ); > ;
 	#endif
 	
-	Texture2D g_tBentNormal < Channel( RG, HemiOctIsoRoughness_RG_B( TextureBentNormal ), Linear );  OutputFormat( ATI2N ); SrgbRead( false ); >;
+	#ifndef BENT_NORMAL_ACTIVE_IF
+	#define BENT_NORMAL_ACTIVE_IF
+	#endif
+	Texture2D g_tBentNormal < Channel( RG, HemiOctIsoRoughness_RG_B( TextureBentNormal ), Linear );  OutputFormat( ATI2N ); SrgbRead( false ); BENT_NORMAL_ACTIVE_IF >;
 
 	float g_flNormalMapScaleFactor < Default( 1.0 ); Range( 0.0, 1.0 ); UiGroup( "Normal" ); >;
 	float g_flRoughnessScaleFactor < Default( 1.0 ); Range( 0.0, 2.0 ); UiGroup( "Roughness" ); >;
