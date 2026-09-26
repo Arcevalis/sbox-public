@@ -96,7 +96,13 @@ public static class McpServer
 
 			try
 			{
-				context = await incoming.GetContextAsync();
+				// Use blocking GetContext on a background thread instead of GetContextAsync.
+				// GetContextAsync routes through TaskFactory<T>.FromAsyncImpl which the
+				// hotload system patches (System.Private.CoreLib) and leaves wedged after
+				// any Editor hotload (see sbox-dev.log `Unable to resolve method definition
+				// FromAsyncImpl`). That wedges McpServer until editor restart. Blocking
+				// GetContext is safe because we isolate it with Task.Run.
+				context = await Task.Run( () => incoming.GetContext() );
 			}
 			catch ( Exception )
 			{

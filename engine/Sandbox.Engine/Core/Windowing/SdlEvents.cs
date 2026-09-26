@@ -82,7 +82,18 @@ internal static class SdlEvents
 				else if ( WindowInput.HasMouseFocus() )
 				{
 					ignoreNextRelativeMouseMove = false;
-					InputRouter.OnMousePositionChange( e.Motion.X, e.Motion.Y, e.Motion.XRel, e.Motion.YRel );
+					var x = e.Motion.X;
+					var y = e.Motion.Y;
+
+					// Play widget is a foreign Qt window: SDL reports motion in
+					// top-level-window space, so translate into widget space.
+					if ( IToolsDll.Current?.PlayWidgetMouseOffset is { } offset )
+					{
+						x -= offset.x;
+						y -= offset.y;
+					}
+
+					InputRouter.OnMousePositionChange( x, y, e.Motion.XRel, e.Motion.YRel );
 				}
 				break;
 			case Sdl.EventType.MouseButtonDown:

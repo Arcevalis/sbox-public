@@ -15,6 +15,24 @@ public static class GameMode
 	internal static SceneRenderingWidget PlayWidget => _inPlay.IsValid() ? _inPlay : null;
 
 	/// <summary>
+	/// Origin correction for SDL mouse positions over the play widget, which SDL
+	/// reports in top-level-window space. Null outside the widget.
+	/// </summary>
+	internal static Vector2? PlayWidgetMouseOffset
+	{
+		get
+		{
+			if ( !_inPlay.IsValid() ) return null;
+			if ( !_inPlay.ScreenRect.IsInside( Application.CursorPosition ) ) return null;
+
+			var main = Sandbox.Internal.GlobalToolsNamespace.EditorWindow;
+			if ( main is null || !main.IsValid() ) return null;
+
+			return _inPlay.ToScreen( default ) - main.ToScreen( default );
+		}
+	}
+
+	/// <summary>
 	/// Is a render widget the active play widget
 	/// </summary>
 	internal static bool IsPlayWidget( SceneRenderingWidget widget ) => widget == _inPlay;
@@ -199,6 +217,9 @@ public static class GameMode
 		// position, ToScreen() and Application.CursorPosition are all Qt logical coordinates.
 		Application.CursorPosition = _inPlay.ToScreen( centre );
 
+		// Mid-drag the plain warp never lands under XWayland's grab; assist via XTEST.
+		X11TestAssist.Fire( _inPlay, centre );
+
 		_lastLocal = centre;
 		_hasLastLocal = true;
 	}
@@ -253,7 +274,7 @@ public static class GameMode
 
 			if ( timeSinceQtMoveReport > 1.0f )
 			{
-				InputDebug.Event( "gamemode", $"qt mouse moves={qtMouseMoveCount - lastReportedQtMouseMoves}/s local={local} focused={_inPlay?.IsFocused}" );
+				InputDebug.Event( "gamemode", $"qt mouse moves={qtMouseMoveCount - lastReportedQtMouseMoves}/s local={local} sdl={InputRouter.MouseCursorPosition} screen={Screen.Size} off={PlayWidgetMouseOffset} focused={_inPlay?.IsFocused}" );
 				lastReportedQtMouseMoves = qtMouseMoveCount;
 				timeSinceQtMoveReport = 0;
 			}

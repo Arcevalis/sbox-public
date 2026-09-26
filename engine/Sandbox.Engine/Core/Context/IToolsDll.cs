@@ -1,4 +1,4 @@
-﻿using Editor;
+using Editor;
 using NativeEngine;
 
 namespace Sandbox.Engine;
@@ -53,6 +53,12 @@ internal unsafe interface IToolsDll
 	/// </summary>
 	public bool IsGameViewVisible { get; }
 	public GameSurface GameSurface { get; }
+
+	/// <summary>
+	/// Subtract from SDL mouse positions to land in play-widget space.
+	/// Null outside the play widget.
+	/// </summary>
+	public Vector2? PlayWidgetMouseOffset { get; }
 
 	/// <summary>
 	/// A public interface to the active editor system

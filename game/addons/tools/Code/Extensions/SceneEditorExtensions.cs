@@ -56,6 +56,9 @@ public static class SceneEditorExtensions
 
 		Application.UnscaledCursorPosition += (newPos - pos) * canvas.DpiScale;
 
+		// Mid-drag the plain warp never lands under XWayland's grab; assist via XTEST.
+		X11TestAssist.Fire( canvas, newPos );
+
 		return true;
 	}
 
