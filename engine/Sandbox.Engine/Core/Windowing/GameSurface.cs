@@ -30,4 +30,13 @@ internal readonly record struct GameSurface( IntPtr Window, SwapChainHandle_t Sw
 			return new Vector2( mode.m_nWidth, mode.m_nHeight );
 		}
 	}
+
+	/// <summary>
+	/// Whether a swapchain at <paramref name="current"/> pixels must be updated to
+	/// <paramref name="want"/> pixels. One-pixel tolerance; anything more is stale.
+	/// </summary>
+	internal static bool NeedsResync( Vector2 current, Vector2 want )
+	{
+		return Math.Abs( current.x - want.x ) > 1 || Math.Abs( current.y - want.y ) > 1;
+	}
 }
