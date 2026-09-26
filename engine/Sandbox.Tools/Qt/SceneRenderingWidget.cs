@@ -191,6 +191,8 @@ public class SceneRenderingWidget : Frame
 
 		if ( SwapChain == default ) return;
 
+		EnsureSwapChainSize();
+
 		using ( Scene.Push() )
 		{
 			using ( GizmoInstance.Push() )
@@ -283,6 +285,45 @@ public class SceneRenderingWidget : Frame
 		}
 
 		WidgetUtil.UpdateSwapChainMSAA( SwapChain, msaaAmount );
+	}
+
+	/// <summary>
+	/// Keep the swapchain matched to the live widget size, like
+	/// <c>SdlWindow.UpdateSwapChain</c>. In-place update only: recreating here
+	/// takes the editor down with no log output. Never throws.
+	/// </summary>
+	void EnsureSwapChainSize()
+	{
+		if ( SwapChain == default ) return;
+
+		var want = Size * DpiScale;
+		if ( want.x < 1 || want.y < 1 ) return;
+
+		var info = g_pRenderDevice.GetSwapChainInfo( SwapChain );
+		var current = new Vector2( info.m_DisplayMode.m_nWidth, info.m_DisplayMode.m_nHeight );
+		if ( !Sandbox.Engine.GameSurface.NeedsResync( current, want ) ) return;
+
+		try
+		{
+			if ( !g_pRenderDevice.CanRenderToSwapChain( SwapChain ) ) return;
+
+			// Inherit the live mode and resize it.
+			var mode = info;
+			mode.m_DisplayMode.m_nWidth = (int)want.x;
+			mode.m_DisplayMode.m_nHeight = (int)want.y;
+
+			if ( !g_pRenderDevice.UpdateSwapChain( SwapChain, mode ) )
+			{
+				Sandbox.Engine.InputDebug.Event( "gamemode", $"swapchain resync failed want={(int)want.x}x{(int)want.y}" );
+				return;
+			}
+
+			Sandbox.Engine.InputDebug.Event( "gamemode", $"swapchain resync {info.m_DisplayMode.m_nWidth}x{info.m_DisplayMode.m_nHeight} -> {(int)want.x}x{(int)want.y}" );
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( e, "Play widget swapchain resync failed; staying stale this frame" );
+		}
 	}
 
 	internal static void RenderAll()
