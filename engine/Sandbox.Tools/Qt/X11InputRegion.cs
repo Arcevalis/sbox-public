@@ -37,7 +37,7 @@ internal static class X11InputRegion
 	static extern IntPtr XOpenDisplay( IntPtr name );
 
 	[DllImport( "libX11.so.6", EntryPoint = "XFlush" )]
-	static extern int XFlush( IntPtr display );
+	internal static extern int XFlush( IntPtr display );
 
 	[DllImport( "libXext.so.6", EntryPoint = "XShapeCombineRectangles" )]
 	static extern void XShapeCombineRectangles( IntPtr display, IntPtr window, int destKind,
@@ -51,7 +51,7 @@ internal static class X11InputRegion
 	/// requests on its connection from the GUI thread; shape changes are rare and idempotent, so a
 	/// second connection is cheaper than synchronising with Qt's.
 	/// </summary>
-	static bool TryGetDisplay( out IntPtr display )
+	internal static bool TryGetDisplay( out IntPtr display )
 	{
 		display = _display;
 
