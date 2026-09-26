@@ -1,4 +1,4 @@
-﻿namespace Editor;
+namespace Editor;
 
 public partial class SceneViewWidget
 {
@@ -45,9 +45,15 @@ public partial class SceneViewWidget
 		Current?.ToggleEject();
 	}
 
+	// Qt + SDL deliver the same F8 press twice on Linux; ToggleEject flips state,
+	// so collapse deliveries within one human-tap window to a single flip.
+	RealTimeSince _timeSinceToggleEject = 1000;
+
 	public void ToggleEject()
 	{
 		if ( !Session.IsPlaying ) return;
+		if ( _timeSinceToggleEject < 0.15f ) return;
+		_timeSinceToggleEject = 0;
 
 		CurrentView = CurrentView == ViewMode.Game ? ViewMode.GameEjected : ViewMode.Game;
 
