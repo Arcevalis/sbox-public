@@ -13,6 +13,13 @@ internal static partial class InputRouter
 	/// </summary>
 	internal static int DeliveredEventCount { get; private set; }
 
+	/// <summary>
+	/// Time since a real SDL escape event arrived. The Qt key filter reads this to tell an
+	/// SDL-delivered press (swallow the Qt duplicate) from one SDL never saw (forward it) -
+	/// a native Esc grab can deliver the press to Qt while the SDL-wrapped subwindow stays blind.
+	/// </summary>
+	internal static RealTimeSince TimeSinceSdlEscape { get; private set; }
+
 	internal static void OnMouseButton( ButtonCode button, bool down )
 	{
 		DeliveredEventCount++;
@@ -265,6 +272,8 @@ internal static partial class InputRouter
 
 		if ( scanButtonCode == ButtonCode.KEY_ESCAPE )
 		{
+			TimeSinceSdlEscape = 0;
+
 			if ( repeat )
 				return;
 
