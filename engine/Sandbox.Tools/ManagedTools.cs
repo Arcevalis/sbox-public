@@ -1,3 +1,4 @@
+using NativeEngine;
 using Sandbox.Engine;
 using Sandbox.Internal;
 using System;
@@ -197,6 +198,26 @@ internal static class ManagedTools
 		}
 		else
 		{
+			// The play widget is a foreign window: a native Esc grab can deliver the press to Qt
+			// while the SDL-wrapped subwindow never sees it, so the engine would never hear it.
+			// Forward it here, unless SDL just delivered the same press (dual-delivery guard,
+			// same 50 ms window as the F-key path). Either way the game owns the keyboard, so
+			// claim the event instead of running editor shortcuts for it.
+			if ( OperatingSystem.IsLinux() && key == KeyCode.Escape && GameMode.GameHasKeyboardFocus && !ev.IsAutoRepeat )
+			{
+				if ( InputRouter.TimeSinceSdlEscape > 0.05f )
+				{
+					InputDebug.Event( "sdlkeys", $"forwarding esc to engine (press={press})" );
+					InputRouter.OnKey( ButtonCode.KEY_ESCAPE, ButtonCode.KEY_ESCAPE, press, false );
+				}
+				else
+				{
+					InputDebug.Event( "sdlkeys", "esc already delivered by SDL, swallowing Qt duplicate" );
+				}
+
+				return true;
+			}
+
 			if ( OperatingSystem.IsLinux() && GameMode.GameHasKeyboardFocus && !IsEditorReservedKey( key ) )
 			{
 				if ( !press )
