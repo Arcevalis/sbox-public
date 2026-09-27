@@ -65,6 +65,8 @@ internal static class SdlEvents
 			case Sdl.EventType.KeyUp:
 				if ( !WindowInput.HasMouseFocus() ) break;
 				var scanCode = Sandbox.Engine.KeyTranslation.ScanCodeToButtonCode( e.Key.Scancode );
+				if ( InputDebug.Enabled && scanCode == ButtonCode.KEY_ESCAPE )
+					InputDebug.Event( "sdlkeys", $"esc via SDL (down={e.Type == Sdl.EventType.KeyDown})" );
 				var repeat = e.Key.Repeat != 0 && scanCode is not (ButtonCode.KEY_LSHIFT or ButtonCode.KEY_RSHIFT);
 				InputRouter.OnKey( scanCode, Sandbox.Engine.KeyTranslation.KeyCodeToButtonCode( e.Key.Key ), e.Type == Sdl.EventType.KeyDown, repeat );
 				break;
