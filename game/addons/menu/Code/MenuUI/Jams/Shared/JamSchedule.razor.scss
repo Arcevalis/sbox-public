@@ -1,10 +1,8 @@
 @import "/styles/_theme.scss";
 @import "/styles/_front.scss";
 
-JamSchedule
+JamPage JamSchedule
 {
-	@include front-card;
-
 	width: 260px;
 	padding: 16px;
 	gap: 16px;
@@ -23,11 +21,6 @@ JamSchedule
 	{
 		flex-direction: column;
 		flex-shrink: 0;
-
-		.what
-		{
-			@include front-section-label;
-		}
 
 		.time
 		{

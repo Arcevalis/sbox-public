@@ -113,7 +113,7 @@
 	float? videoRequestedAt;
 	float? hoverStartedAt;
 
-	bool WantsVideo() => HasHovered || (VideoThumbs && (Rotation is null || Rotation.IsPlaying( this )));
+	bool WantsVideo() => AlwaysPlayVideo || HasHovered || (VideoThumbs && (Rotation is null || Rotation.IsPlaying( this )));
 	bool ShowVideo() => showVideo;
 
 	public override void Tick()
@@ -163,6 +163,9 @@
 
     string VideoUrl() => VideoUrl( Package, Quality == VideoQuality.Auto ? PickQuality( Box.Rect.Width ) : Quality );
 
+    /// <summary>
+    /// Resolves a package's video thumbnail to a playable clip at the requested quality.
+    /// </summary>
     public static string VideoUrl( Package package, VideoQuality quality )
     {
         var url = package?.VideoThumb;
@@ -202,6 +205,11 @@
     /// Takes turns with the other cards sharing it, so only a few play at once.
     /// </summary>
     [Parameter] public CardVideoRotation Rotation { get; set; }
+
+    /// <summary>
+    /// Keeps this card's video playing independently of shared shelf rotation and hover.
+    /// </summary>
+    [Parameter] public bool AlwaysPlayVideo { get; set; }
 
     [Parameter] public VideoQuality Quality { get; set; } = VideoQuality.Auto;
 
