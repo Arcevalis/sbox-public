@@ -1,4 +1,4 @@
-﻿using Editor.Preferences;
+using Editor.Preferences;
 using Sandbox.Network;
 using System.Diagnostics;
 
@@ -87,27 +87,52 @@ partial class ViewportTools
 		window.SwitchPage<PageNetworking>();
 	}
 
-	static void AddUserCommandLineArgs( ProcessStartInfo startInfo, string argumentString )
+	static void AddUserCommandLineArgs( IList<string> args, string argumentString )
 	{
 		if ( string.IsNullOrWhiteSpace( argumentString ) )
 			return;
 
 		foreach ( var arg in argumentString.Split( ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries ) )
 		{
-			startInfo.ArgumentList.Add( arg );
+			args.Add( arg );
 		}
 	}
 
 	void SpawnDedicatedServer()
 	{
+		var serverArgs = new List<string>
+		{
+			"+game",
+			Project.Current.GetProjectPath()
+		};
+		AddUserCommandLineArgs( serverArgs, EditorPreferences.DedicatedServerCommandLineArgs );
+
+		var serverExe = GameExecutables.FullPath( "sbox-server" );
+
 		using var p = new Process();
-		p.StartInfo.FileName = "sbox-server.exe";
 		p.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
 
-		p.StartInfo.ArgumentList.Add( "+game" );
-		p.StartInfo.ArgumentList.Add( Project.Current.GetProjectPath() );
+		if ( OperatingSystem.IsWindows() )
+		{
+			p.StartInfo.FileName = serverExe;
+		}
+		else if ( TerminalLauncher.TryGetTerminal( p.StartInfo.WorkingDirectory, out var terminal, out var prefixArgs ) )
+		{
+			// Linux has no OS console window: run the server inside the user's terminal
+			// emulator so its stats overlay and command input behave like the Windows console.
+			p.StartInfo.FileName = terminal;
+			foreach ( var arg in prefixArgs )
+				p.StartInfo.ArgumentList.Add( arg );
+			p.StartInfo.ArgumentList.Add( serverExe );
+		}
+		else
+		{
+			Log.Error( "Couldn't start dedicated server: no terminal emulator found (tried $TERMINAL, x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal, xterm). Install one to get a server console." );
+			return;
+		}
 
-		AddUserCommandLineArgs( p.StartInfo, EditorPreferences.DedicatedServerCommandLineArgs );
+		foreach ( var arg in serverArgs )
+			p.StartInfo.ArgumentList.Add( arg );
 
 		p.Start();
 	}

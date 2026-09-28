@@ -1,4 +1,4 @@
-﻿using Sandbox.Network;
+using Sandbox.Network;
 
 namespace Editor.Mcp;
 
@@ -80,7 +80,7 @@ public static class NetworkTools
 	}
 
 	/// <summary>
-	/// Launch another sbox.exe on this machine that joins the editor's game as a client. Takes a
+	/// Launch another sbox on this machine that joins the editor's game as a client. Takes a
 	/// while to boot; poll network_status until it appears in the connections. Returns the process
 	/// id and the folder the instance logs into, so you can read what happened on its side.
 	/// </summary>
