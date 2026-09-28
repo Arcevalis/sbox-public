@@ -25,8 +25,6 @@ public static class EditorShortcuts
 	/// </summary>
 	public static bool PassShortcut { get; set; }
 
-	internal static RealTimeSince _timeSinceGlobalShortcut = 0f;
-
 	[Event( "editor.created" )]
 	static void EditorCreated( EditorMainWindow _ )
 	{
