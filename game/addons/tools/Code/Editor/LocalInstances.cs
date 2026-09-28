@@ -9,13 +9,13 @@ namespace Editor;
 public static class LocalInstances
 {
 	/// <summary>
-	/// Launch sbox.exe with -joinlocal. Returns the process id.
+	/// Launch sbox with -joinlocal. Returns the process id.
 	/// </summary>
 	public static int Spawn( bool? windowed = null )
 	{
 		using var p = new Process();
 
-		p.StartInfo.FileName = "sbox.exe";
+		p.StartInfo.FileName = GameExecutables.FullPath( "sbox" );
 		p.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
 		p.StartInfo.CreateNoWindow = true;
 		p.StartInfo.RedirectStandardOutput = true;
