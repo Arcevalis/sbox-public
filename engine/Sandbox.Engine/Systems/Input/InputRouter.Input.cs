@@ -14,11 +14,41 @@ internal static partial class InputRouter
 	internal static int DeliveredEventCount { get; private set; }
 
 	/// <summary>
-	/// Time since a real SDL escape event arrived. The Qt key filter reads this to tell an
-	/// SDL-delivered press (swallow the Qt duplicate) from one SDL never saw (forward it) -
-	/// a native Esc grab can deliver the press to Qt while the SDL-wrapped subwindow stays blind.
+	/// Which pump delivered a key event. SDL is the normal delivery path (Qt→SDL bridge);
+	/// Qt is a manual forward from the Qt key filter for presses the bridge never sees
+	/// (native grabs, focus-consumed keys like TAB).
 	/// </summary>
-	internal static RealTimeSince TimeSinceSdlEscape { get; private set; }
+	internal enum KeyDeliverySource { Sdl, Qt }
+
+	/// <summary>
+	/// Dual-delivery window: the same physical press is visible at the Qt filter and SDL
+	/// within milliseconds, in either order. Replaces the per-key 50 ms stamps.
+	/// </summary>
+	internal const float KeyDedupeWindow = 0.05f;
+
+	static readonly Dictionary<ButtonCode, (KeyDeliverySource source, bool down, double time)> _recentKeyDeliveries = new();
+
+	/// <summary>
+	/// Record a key transition delivery. Repeats never touch dedupe state.
+	/// </summary>
+	internal static void NoteKeyDelivery( ButtonCode scan, bool down, KeyDeliverySource source, bool repeat, double now )
+	{
+		if ( repeat ) return;
+		_recentKeyDeliveries[scan] = (source, down, now);
+	}
+
+	/// <summary>
+	/// True if the same (key, transition) was recorded from any source within the window.
+	/// Transition-based so double-tap always delivers; symmetric press/release so a dropped
+	/// twin implies its sibling landed (no stuck keys). Explicit <paramref name="now"/>
+	/// so tests can inject fake clocks; production passes <c>RealTime.GlobalNow</c>.
+	/// </summary>
+	internal static bool WasKeyDeliveredRecently( ButtonCode scan, bool down, double now )
+	{
+		if ( _recentKeyDeliveries.TryGetValue( scan, out var entry ) )
+			return entry.down == down && (now - entry.time) <= KeyDedupeWindow;
+		return false;
+	}
 
 	internal static void OnMouseButton( ButtonCode button, bool down )
 	{
@@ -259,8 +289,16 @@ internal static partial class InputRouter
 		}
 	}
 
-	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat )
+	internal static void OnKey( ButtonCode scanButtonCode, ButtonCode keyButtonCode, bool down, bool repeat, KeyDeliverySource source = KeyDeliverySource.Sdl )
 	{
+		var now = RealTime.GlobalNow;
+
+		// Dual-delivery guard: the Qt filter and SDL both see the same physical press.
+		// Drop the twin regardless of which side runs second, so each transition lands once.
+		if ( !repeat && WasKeyDeliveredRecently( scanButtonCode, down, now ) )
+			return;
+		NoteKeyDelivery( scanButtonCode, down, source, repeat, now );
+
 		DeliveredEventCount++;
 
 		if ( !repeat )
@@ -272,8 +310,6 @@ internal static partial class InputRouter
 
 		if ( scanButtonCode == ButtonCode.KEY_ESCAPE )
 		{
-			TimeSinceSdlEscape = 0;
-
 			if ( repeat )
 				return;
 

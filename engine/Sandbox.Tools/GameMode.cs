@@ -151,12 +151,30 @@ public static class GameMode
 	}
 
 	/// <summary>
+	/// Reasons that must never pull focus off a running game. TAB/Shift+TAB are game keys
+	/// (forwarded by the Qt key filter), but Qt routes them into focus navigation anyway -
+	/// no verdict from that hook stops it. Letting the loss through would clear every held
+	/// button and gate SDL input, so a held TAB starves within seconds.
+	/// </summary>
+	internal static bool IsFocusTrapReason( FocusChangeReason reason ) => reason is FocusChangeReason.Tab or FocusChangeReason.Backtab;
+
+	/// <summary>
 	/// When the editor loses focus of the game widget, tell the input system so it stops trying to do mouse capture.
 	/// </summary>
 	private static void WidgetBlurred( FocusChangeReason reason )
 	{
 		if ( _inPlay is null )
 			return;
+
+		// Focus trap: pin focus back on the play widget and swallow the loss, so the
+		// engine never sees the transient excursion. Re-focusing only raises Focused,
+		// never Blurred, so this cannot recurse.
+		if ( Sandbox.Game.IsPlaying && IsFocusTrapReason( reason ) && _inPlay.IsValid() )
+		{
+			InputDebug.Event( "gamemode", $"trapping play widget focus loss ({reason})" );
+			_inPlay.Focus();
+			return;
+		}
 
 		InputDebug.Event( "gamemode", $"play widget blurred ({reason})" );
 
