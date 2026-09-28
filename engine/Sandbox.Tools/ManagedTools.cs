@@ -197,24 +197,31 @@ internal static class ManagedTools
 		{
 			// The play widget is a foreign window: a native Esc grab can deliver the press to Qt
 			// while the SDL-wrapped subwindow never sees it, so the engine would never hear it.
-			// Forward it here, unless SDL just delivered the same press (dual-delivery guard,
-			// same 50 ms window as the F-key path). Either way the game owns the keyboard, so
-			// claim the event instead of running editor shortcuts for it.
+			// Forward it here, unless SDL just delivered the same press (shared delivery ledger).
+			// Either way the game owns the keyboard, so claim the event instead of running
+			// editor shortcuts for it.
 			if ( OperatingSystem.IsLinux() && key == KeyCode.Escape && GameMode.GameHasKeyboardFocus && !ev.IsAutoRepeat )
 			{
-				if ( InputRouter.TimeSinceSdlEscape > 0.05f )
+				if ( !InputRouter.WasKeyDeliveredRecently( ButtonCode.KEY_ESCAPE, press, Sandbox.RealTime.GlobalNow ) )
 				{
 					InputDebug.Event( "sdlkeys", $"forwarding esc to engine (press={press})" );
-					InputRouter.OnKey( ButtonCode.KEY_ESCAPE, ButtonCode.KEY_ESCAPE, press, false );
+					InputRouter.OnKey( ButtonCode.KEY_ESCAPE, ButtonCode.KEY_ESCAPE, press, false, InputRouter.KeyDeliverySource.Qt );
 				}
 				else
 				{
 					InputDebug.Event( "sdlkeys", "esc already delivered by SDL, swallowing Qt duplicate" );
 				}
 
+				// Mark the Qt event accepted: the bool return only suppresses editor
+				// shortcuts, propagation (and focus handling) stops only via acceptance.
+				ev.Accepted = true;
 				return true;
 			}
 
+			// The game owns the keyboard: single choke for every other key. Claiming a Qt
+			// event stops bridge forwarding, so never claim unless the engine provably has
+			// the press (fresh in the ledger) or we forward it manually (stale). Unmappable
+			// keys keep status-quo passthrough; repeats ride the SDL path like before.
 			if ( OperatingSystem.IsLinux() && GameMode.GameHasKeyboardFocus && !IsEditorReservedKey( key ) )
 			{
 				if ( !press )
@@ -234,7 +241,23 @@ internal static class ManagedTools
 					}
 				}
 
-				return false;
+				if ( ev.IsAutoRepeat || !TryMapQtKey( ev.Name, out var mapped ) )
+					return false;
+
+				if ( InputRouter.WasKeyDeliveredRecently( mapped, press, Sandbox.RealTime.GlobalNow ) )
+				{
+					InputDebug.Event( "qtkeys", $"already delivered by SDL, swallowing Qt duplicate ({ev.Name} press={press})" );
+					ev.Accepted = true;
+					return true;
+				}
+
+				InputDebug.Event( "qtkeys", $"forwarding to engine ({ev.Name} press={press})" );
+				InputRouter.OnKey( mapped, mapped, press, false, InputRouter.KeyDeliverySource.Qt );
+				// Accepted pins focus on the play widget: without it Qt keeps routing
+				// the press into focusNextPrevChild, blurs the widget (killing the SDL
+				// path via HasMouseFocus), and a hold starves within seconds.
+				ev.Accepted = true;
+				return true;
 			}
 
 			if ( press )
@@ -251,8 +274,11 @@ internal static class ManagedTools
 					if ( modifiers.HasFlag( KeyboardModifiers.Ctrl ) && ev.Key != KeyCode.Control ) modifiedKey = "CTRL+" + modifiedKey;
 				}
 
-				// If we're "in game" these will be passed by the InputRouter whilst we're not focused
-				if ( EditorShortcuts._timeSinceGlobalShortcut <= 0.05f && ev.Key >= KeyCode.F1 && ev.Key <= KeyCode.F12 )
+				// If we're "in game" these will be passed by the InputRouter whilst we're not focused.
+				// SDL-first wins: OnKey runs OnFunctionKey, and the Qt twin for the same press
+				// finds it fresh in the shared delivery ledger and suppresses its own invoke.
+				if ( ev.Key >= KeyCode.F1 && ev.Key <= KeyCode.F12 && TryMapQtKey( ev.Name, out var fnKey ) &&
+					InputRouter.WasKeyDeliveredRecently( fnKey, true, Sandbox.RealTime.GlobalNow ) )
 					return false;
 
 				// Try with modifier first.
@@ -275,6 +301,44 @@ internal static class ManagedTools
 	static bool IsEditorReservedKey( KeyCode key )
 	{
 		return key == KeyCode.Escape || (key >= KeyCode.F1 && key <= KeyCode.F12);
+	}
+
+	/// <summary>
+	/// Map a Qt key name (<see cref="KeyEvent.Name"/>) to its engine <see cref="ButtonCode"/>.
+	/// Qt spellings mostly match engine key names
+	/// (<see cref="Sandbox.Engine.KeyTranslation.StringToButtonCode"/> is case-insensitive),
+	/// so only the known drifts need aliasing. Returns false for keys with no engine
+	/// equivalent - callers keep status-quo passthrough, never claim. Generic Qt modifiers
+	/// land on the left engine variants (same class as status quo).
+	/// </summary>
+	internal static bool TryMapQtKey( string qtName, out ButtonCode code )
+	{
+		var name = qtName switch
+		{
+			"Esc" => "ESCAPE",
+			"Backtab" => "TAB",
+			"Left" => "LEFTARROW",
+			"Right" => "RIGHTARROW",
+			"Up" => "UPARROW",
+			"Down" => "DOWNARROW",
+			"PageUp" => "PGUP",
+			"PageDown" => "PGDN",
+			"Insert" => "INS",
+			"Delete" => "DEL",
+			"Control" => "CTRL",
+			"Meta" => "LWIN",
+			"Super_L" => "LWIN",
+			"Super_R" => "RWIN",
+			"Menu" => "APP",
+			"Print" => "PRINTSCREEN",
+			"KP_Add" => "KP_PLUS",
+			"KP_Multiply" => "KP_MULTIPLY",
+			"KP_Divide" => "KP_DIVIDE",
+			_ => qtName,
+		};
+
+		code = Sandbox.Engine.KeyTranslation.StringToButtonCode( name );
+		return code != ButtonCode.BUTTON_CODE_INVALID;
 	}
 
 	internal static bool GlobalShortcutPressed()

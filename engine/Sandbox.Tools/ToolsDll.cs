@@ -266,10 +266,8 @@ internal class ToolsDll : IToolsDll
 		if ( modifiers.HasFlag( KeyboardModifiers.Alt ) ) keys = "ALT+" + keys;
 		if ( modifiers.HasFlag( KeyboardModifiers.Ctrl ) ) keys = "CTRL+" + keys;
 
-		// Claim the key first so the concurrent Qt event for the same press sees
-		// _timeSinceGlobalShortcut <= 0.05 and suppresses its own invoke.
-		EditorShortcuts._timeSinceGlobalShortcut = 0;
-
+		// OnKey records the delivery in the shared ledger before running this, so the
+		// concurrent Qt event for the same press finds it fresh and suppresses its own invoke.
 		EditorShortcuts.Invoke( keys, true );
 
 		// Note: this also covers F5, where stopping the game session defocuses the

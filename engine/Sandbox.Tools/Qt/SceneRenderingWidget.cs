@@ -335,4 +335,24 @@ public class SceneRenderingWidget : Frame
 			widget.Render();
 		}
 	}
+
+	/// <summary>
+	/// Backstop so TAB / Shift+TAB never move focus off the running game. Primary delivery
+	/// is the Qt key-filter forward in <c>ManagedTools.GlobalKeyPressed</c>; this only stops
+	/// Qt focus navigation if an event ever gets past it.
+	/// </summary>
+	protected override bool FocusNext()
+	{
+		if ( GameMode.IsPlayWidget( this ) && GameMode.GameHasKeyboardFocus )
+			return true;
+		return base.FocusNext();
+	}
+
+	/// <inheritdoc cref="FocusNext"/>
+	protected override bool FocusPrevious()
+	{
+		if ( GameMode.IsPlayWidget( this ) && GameMode.GameHasKeyboardFocus )
+			return true;
+		return base.FocusPrevious();
+	}
 }
