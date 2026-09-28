@@ -112,18 +112,26 @@ partial class ViewportTools
 		using var p = new Process();
 		p.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
 
-		if ( OperatingSystem.IsWindows() )
+		if ( OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() )
 		{
+			// Windows allocates a console for console exes on its own; macOS keeps the
+			// previous direct-spawn behavior until it gets its own terminal path.
 			p.StartInfo.FileName = serverExe;
 		}
-		else if ( TerminalLauncher.TryGetTerminal( p.StartInfo.WorkingDirectory, out var terminal, out var prefixArgs ) )
+		else if ( TerminalLauncher.TryBuildCommand( serverExe, serverArgs, p.StartInfo.WorkingDirectory,
+			out var terminal, out var argv, out var scrubbedNames ) )
 		{
 			// Linux has no OS console window: run the server inside the user's terminal
-			// emulator so its stats overlay and command input behave like the Windows console.
+			// emulator so its stats overlay and command input behave like the Windows
+			// console. The terminal gets a scrubbed environment (our bundled Qt/native
+			// session variables abort foreign terminals on startup); the inner command
+			// restores them via env so the server keeps its direct-spawn environment.
 			p.StartInfo.FileName = terminal;
-			foreach ( var arg in prefixArgs )
+			p.StartInfo.UseShellExecute = false;
+			foreach ( var name in scrubbedNames )
+				p.StartInfo.Environment.Remove( name );
+			foreach ( var arg in argv )
 				p.StartInfo.ArgumentList.Add( arg );
-			p.StartInfo.ArgumentList.Add( serverExe );
 		}
 		else
 		{
