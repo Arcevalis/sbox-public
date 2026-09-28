@@ -189,7 +189,10 @@ native class IRenderContext as NativeEngine.IRenderContext
 	void ReadBuffer( RenderBufferHandle_t hBuffer, IReadBufferCallback pCallback, int nOffset, int nBytesToRead, bool bDeleteCallbackWhenFinished );
 	
 	// PIX/RenderDoc markers
-	void BeginPixEvent( string name );
+	inline void BeginPixEvent( void* name )
+	{
+		self->BeginPixEvent( (const char*)name );
+	}
 	void EndPixEvent();
 	void PixSetMarker( string name );
 }
