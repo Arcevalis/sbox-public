@@ -20,7 +20,7 @@ internal sealed partial class GameWindow
 	internal void Render()
 	{
 		startupFinished = true;
-		
+
 		// All views join one batch so scene jobs overlap and we wait once at the end.
 		CSceneSystem.BeginRenderingViews( true );
 		try

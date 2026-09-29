@@ -681,6 +681,7 @@ public class SettingsCatalog
 
 		AddVolume( "audio.volume", "Master", "Everything, all at once.", "volume" );
 		AddVolume( "audio.music", "Music", "Menu music and whatever a game plays as music.", "music_volume" );
+		AddVolume( "audio.menu_music", "Menu Music", "Music in the menu, loading screens and avatar editor.", "music_volume_menu" );
 		AddVolume( "audio.voice", "Voice Chat", "How loud other players are when they talk.", "voip_volume" );
 
 		Items.Add( new SettingItem
@@ -955,6 +956,7 @@ public class SettingsCatalog
 		ConsoleSystem.SetValue( "snd_simulation_enable", true );
 		ConsoleSystem.SetValue( "volume", 1.0f );
 		ConsoleSystem.SetValue( "music_volume", 1.0f );
+		ConsoleSystem.SetValue( "music_volume_menu", 1.0f );
 		ConsoleSystem.SetValue( "voip_volume", 1.0f );
 		ConsoleSystem.SetValue( "voip_mode", (int)VoiceMode.PushToTalk );
 		ConsoleSystem.SetValue( "voip_device", "" );

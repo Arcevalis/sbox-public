@@ -156,6 +156,12 @@ public partial class MenuSystem : IMenuSystem
 	SoundFile avatarTrack;
 
 	/// <summary>
+	/// Volume multiplier for menu, loading screen and avatar editor music.
+	/// </summary>
+	[MenuConVar( "music_volume_menu", Help = "Menu music volume", Saved = true, Min = 0, Max = 1 )]
+	public static float MenuMusicVolume { get; set; } = 1.0f;
+
+	/// <summary>
 	/// Music is one shared channel, so only ever touch it when it's silent or playing one of our tracks.
 	/// A game's music carries on through loading screens and after it starts.
 	/// </summary>
@@ -176,7 +182,7 @@ public partial class MenuSystem : IMenuSystem
 
 		if ( isLoading )
 		{
-			Game.Music.Play( loadingTrack, fade: 0.5f, volume: 0.5f );
+			Game.Music.Play( loadingTrack, fade: 0.5f, volume: 0.5f * MenuMusicVolume );
 		}
 		else if ( isInGame )
 		{
@@ -184,11 +190,11 @@ public partial class MenuSystem : IMenuSystem
 		}
 		else if ( isAvatarMenu )
 		{
-			Game.Music.Play( avatarTrack, fade: 0.5f, volume: 0.1f );
+			Game.Music.Play( avatarTrack, fade: 0.5f, volume: 0.1f * MenuMusicVolume );
 		}
 		else
 		{
-			Game.Music.Play( menuTrack, fade: 0.5f, volume: 0.1f );
+			Game.Music.Play( menuTrack, fade: 0.5f, volume: 0.1f * MenuMusicVolume );
 		}
 	}
 
