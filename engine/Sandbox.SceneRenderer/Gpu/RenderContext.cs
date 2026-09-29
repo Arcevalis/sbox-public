@@ -1017,15 +1017,15 @@ internal sealed class RenderContext : IDisposable
 	}
 
 	/// <summary>
-	/// Render a contact-shadow mask using <c>ShadowMapper.RenderContactShadows</c>. Direction points toward the sun.
+	/// Render a contact-shadow mask using <c>ContactShadows.Render</c>. Direction points toward the sun.
 	/// </summary>
 	public void RenderContactShadows( Graphics.ManagedView frame, Texture mask, Matrix worldToProjection, Vector3 lightDirection, float shadowHardness,
-		Sandbox.Rendering.ShadowMapper.ContactShadowSteps steps = Sandbox.Rendering.ShadowMapper.ContactShadowSteps.All )
+		Sandbox.Rendering.ContactShadows.Steps steps = Sandbox.Rendering.ContactShadows.Steps.All )
 	{
 		Invalidate();
 		using ( new Graphics.Scope( context, frame ) )
 		{
-			Sandbox.Rendering.ShadowMapper.RenderContactShadows( mask, worldToProjection, lightDirection, shadowHardness, steps );
+			Sandbox.Rendering.ContactShadows.Render( mask, worldToProjection, lightDirection, shadowHardness, steps );
 		}
 	}
 

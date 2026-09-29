@@ -397,7 +397,9 @@ public class AppSystem
 		}
 
 		gameWindow?.InitializeRendering();
+		gameWindow?.UpdateStartupProgress( 0.5f );
 		Bootstrap.Init();
+		gameWindow?.UpdateStartupProgress( 1.0f );
 	}
 
 	protected void SetWindowTitle( string title )

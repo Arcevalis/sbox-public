@@ -5,8 +5,8 @@
 	[
 		"CDmeInputTexture"
 		{
-			"m_name" "string" "logo"
-			"m_fileName" "string" "materials/startup_background_color.png"
+			"m_name" "string" "backdrop"
+			"m_fileName" "string" "materials/startup_backdrop_color.png"
 			"m_colorSpace" "string" "linear"
 			"m_typeString" "string" "2D"
 			"m_imageProcessorArray" "element_array"
@@ -20,11 +20,12 @@
 	]
 	"m_outputTypeString" "string" "2D"
 	"m_outputFormat" "string" "RGBA8888"
+	"m_nOutputMaxDimension" "int" "512"
 	"m_textureOutputChannelArray" "element_array"
 	[
 		"CDmeTextureOutputChannel"
 		{
-			"m_inputTextureArray" "string_array" [ "logo" ]
+			"m_inputTextureArray" "string_array" [ "backdrop" ]
 			"m_srcChannels" "string" "rgba"
 			"m_dstChannels" "string" "rgba"
 			"m_outputColorSpace" "string" "linear"

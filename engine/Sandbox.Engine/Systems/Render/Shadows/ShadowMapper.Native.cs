@@ -166,7 +166,7 @@ internal partial class ShadowMapper
 
 		public uint GetShadowMaskIndex( object light )
 		{
-			if ( !ContactShadowsEnabled || light is not SceneLight sceneLight || !sceneLight.ContactShadows )
+			if ( !ContactShadows.Enabled || light is not SceneLight sceneLight || !sceneLight.ContactShadows )
 				return 0;
 
 			return sceneLight.GetShadowMask( mapper.SceneView ) is { } mask ? (uint)mask.Index : 0;

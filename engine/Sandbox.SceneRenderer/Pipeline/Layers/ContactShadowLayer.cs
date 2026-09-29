@@ -3,7 +3,7 @@ using Sandbox.Rendering;
 namespace Sandbox.SceneRenderer;
 
 /// <summary>
-/// Screen-space sun shadows using <c>ShadowMapper.RenderContactShadows</c>, before <c>AfterDepthPrepass</c>.
+/// Screen-space sun shadows using <c>ContactShadows.Render</c>, before <c>AfterDepthPrepass</c>.
 /// Supplements cascades, including static casters excluded by baked suns.
 /// </summary>
 internal sealed class ContactShadowLayer : RenderLayer
@@ -25,7 +25,7 @@ internal sealed class ContactShadowLayer : RenderLayer
 	// Its dispatches, anyway: the mask's clear and barriers are graphics, in HandOff and TakeBack
 	public override bool AsyncCompute => true;
 
-	public override void HandOff( RenderFrame frame, RenderContext rc ) => Render( frame, rc, ShadowMapper.ContactShadowSteps.Prepare );
+	public override void HandOff( RenderFrame frame, RenderContext rc ) => Render( frame, rc, ContactShadows.Steps.Prepare );
 
 	public override void TakeBack( RenderFrame frame, RenderContext rc ) => rc.BarrierComputeToPixelShaderRead( frame.ContactShadowMask );
 
@@ -38,10 +38,7 @@ internal sealed class ContactShadowLayer : RenderLayer
 		var lighting = frame.World.Lighting;
 		var view = frame.View;
 		if ( frame.Stages is null || !frame.System.DepthPrepass || !frame.System.Shadows || view.Orthographic ) return null;
-		if ( !ShadowMapper.ContactShadowsEnabled || !lighting.SunEnabled || !lighting.SunShadows || !lighting.SunContactShadows ) return null;
-
-		// Material creation must precede the frame's Graphics block.
-		if ( !ShadowMapper.PrepareContactShadows() ) return null;
+		if ( !ContactShadows.Enabled || !lighting.SunEnabled || !lighting.SunShadows || !lighting.SunContactShadows ) return null;
 
 		var width = (int)view.Viewport.Width;
 		var height = (int)view.Viewport.Height;
@@ -53,10 +50,10 @@ internal sealed class ContactShadowLayer : RenderLayer
 
 	public override void Record( RenderFrame frame, RenderContext rc, ref RenderStats stats )
 	{
-		Render( frame, rc, rc.AsyncCompute ? ShadowMapper.ContactShadowSteps.Dispatch : ShadowMapper.ContactShadowSteps.All );
+		Render( frame, rc, rc.AsyncCompute ? ContactShadows.Steps.Dispatch : ContactShadows.Steps.All );
 	}
 
-	void Render( RenderFrame frame, RenderContext rc, ShadowMapper.ContactShadowSteps steps )
+	void Render( RenderFrame frame, RenderContext rc, ContactShadows.Steps steps )
 	{
 		var target = frame.Output.Target;
 		graphicsView ??= new Graphics.ManagedView();
