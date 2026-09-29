@@ -151,14 +151,6 @@ public class SceneRenderingWidget : Frame
 			_sizeLockedForRecording = false;
 		}
 
-		// Standalone pumps envmaps in GameWindow.Render, but this widget is a
-		// separate render path and lost its pump when it moved out of
-		// PreCameraRender. Without it realtime probes never render here, and
-		// scene loading waits on them forever.
-		var pumpScene = Camera.IsValid() ? Camera.Scene : Scene;
-		if ( pumpScene.IsValid() )
-			pumpScene.RenderEnvmaps();
-
 		if ( Camera.IsValid() )
 		{
 			Camera.Scene?.PreCameraRender();
