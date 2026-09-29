@@ -50,15 +50,13 @@ public partial class ViewportTools : Widget
 
 		var left = toolbar.AddRow( 1 );
 		left.Spacing = Spacing;
-		left.Alignment = TextFlag.LeftCenter;
 
-		var center = toolbar.AddRow( 1 );
+		var center = toolbar.AddRow();
 		center.Spacing = Spacing;
 		center.Alignment = TextFlag.Center;
 
 		var right = toolbar.AddRow( 1 );
 		right.Spacing = Spacing;
-		right.Alignment = TextFlag.RightCenter;
 
 		// These only get built for game view mode, clear them.
 		FrameTimeLabel = null;
@@ -77,12 +75,14 @@ public partial class ViewportTools : Widget
 			BuildToolExtensionToolbar( left );
 		}
 
-		toolbar.AddStretchCell();
+		left.AddStretchCell( 1 );
 
 		PlayToolbar = center.Add( AddGroup() );
 		PlayToolbar.Layout.Spacing = Spacing;
 		BuildPlayToolbar( PlayToolbar.Layout );
 
+		right.Add( StatusIndicator );
+		right.AddStretchCell( 1 );
 		BuildToolbarRight( right );
 
 		Layout.AddStretchCell();
@@ -152,6 +152,31 @@ public partial class ViewportTools : Widget
 
 		layout.Add( b );
 		return b;
+	}
+
+	private Widget CreateStatusBadge( string text, string icon, Color color, string tooltip )
+	{
+		var textInset = string.IsNullOrEmpty( icon ) ? 6 : 24;
+		Paint.SetDefaultFont( 8 );
+		var badge = new Widget
+		{
+			FixedSize = new Vector2( MathF.Ceiling( Paint.MeasureText( text ).x ) + textInset + 6, 20 ),
+			ToolTip = tooltip
+		};
+		badge.OnPaintOverride = () =>
+		{
+			Paint.Antialiasing = true;
+			Paint.ClearPen();
+			Paint.SetBrush( color.WithAlpha( 0.06f ) );
+			Paint.DrawRect( badge.LocalRect, 4 );
+			Paint.SetDefaultFont( 8 );
+			Paint.SetPen( color.WithAlpha( 0.85f ) );
+			if ( !string.IsNullOrEmpty( icon ) )
+				Paint.DrawIcon( new Rect( 6, 0, 16, badge.Height ), icon, 14, TextFlag.Center );
+			Paint.DrawText( badge.LocalRect.Shrink( textInset, 0, 6, 0 ), text, TextFlag.Center );
+			return true;
+		};
+		return badge;
 	}
 
 	private Widget AddGroup()

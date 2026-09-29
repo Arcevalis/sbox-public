@@ -20,6 +20,8 @@ native class SceneSystemPerFrameStats_t
 	uint m_nAggregateSceneObjectPrimDraws;
 	uint m_nAggregateSceneObjectsFullyCulled;
 	uint m_nAggregateSceneObjectDrawCalls;
+	uint m_nAggregateSceneObjectIndirectSubmits;
+	uint m_nAggregateSceneObjectIndirectFragments;
 	uint m_nNumMaterialCompute;
 	uint m_nNumMaterialSet;
 	uint m_nNumSimilarMaterialSet;
@@ -196,6 +198,9 @@ native accessor g_pSceneSystem as NativeEngine.CSceneSystem
 	// (used by AO/SSR so shaders read a fixed descriptor binding instead of a racy attribute).
 	void SetPipelineTextureIndex( int nSlot, int nBindlessIndex );
 
+	// Upload the slots as they are now into a context's stream, for a renderer that submits before frame end does
+	void UploadPipelineTextureIndices( IRenderContext pRenderContext );
+
 	// Ray Tracing
 	IRayTraceSceneWorld CreateRayTraceWorld( string pWorldDebugName, int nMaxRayTypes );
 	void DestroyRayTraceWorld( IRayTraceSceneWorld pRayTraceSceneWorld );
@@ -257,5 +262,11 @@ native accessor g_pSceneSystem as NativeEngine.CSceneSystem
 		{
 			g_pSceneSystem->SetNextRenderTime( flNextTime );
 		}
+	}
+
+	// The time this frame's views render at (g_flTime), latched from SetNextRenderTime when views begin rendering
+	inline float GetCurrentRenderTime()
+	{
+		return g_pSceneSystem ? g_pSceneSystem->GetCurrentRenderTime() : 0.0f;
 	}
 }

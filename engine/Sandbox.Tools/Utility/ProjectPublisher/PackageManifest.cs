@@ -38,11 +38,16 @@ public partial class ProjectPublisher
 
 
 		public List<ProjectFile> Assets { get; set; } = new();
+		SceneCompilePublication _sceneCompiles = new();
 
+		internal void ValidatePublication() => _sceneCompiles.Validate( Assets );
+
+		internal void ValidateUploadContents( ProjectFile file, byte[] contents ) => _sceneCompiles.ValidateUploadContents( file, contents );
 
 		public async Task BuildFromAssets( Project project, IProgress progress = null, CancellationToken cancel = default )
 		{
 			Assets.Clear();
+			_sceneCompiles = new();
 
 			var rootFolder = project.RootDirectory.FullName;
 
@@ -111,6 +116,7 @@ public partial class ProjectPublisher
 				await CollectAssets( project, cancel );
 			}
 
+			ValidatePublication();
 			this.progress = null;
 		}
 
@@ -143,6 +149,7 @@ public partial class ProjectPublisher
 		internal async Task BuildFrom( Asset singleAsset, Project project = null, CancellationToken cancel = default )
 		{
 			Assets.Clear();
+			_sceneCompiles = new();
 
 			var assetList = new List<Asset>
 			{
@@ -165,11 +172,14 @@ public partial class ProjectPublisher
 
 			if ( Assets.Count == 0 )
 				Errors.Add( "No files found" );
+
+			ValidatePublication();
 		}
 
 		public async Task BuildFromSource( Project addon, IProgress progress = null, CancellationToken cancel = default )
 		{
 			Assets.Clear();
+			_sceneCompiles = new( sourcePackage: true );
 
 			var rootFolder = addon.RootDirectory.FullName;
 
@@ -231,22 +241,38 @@ public partial class ProjectPublisher
 			}
 		}
 
-		private async Task CollectAssets( List<Asset> assets, CancellationToken cancel )
+		HashSet<Asset> CollectAssetsAndReferences( IEnumerable<Asset> roots, CancellationToken cancel )
 		{
-			HashSet<Asset> AddedAssets = new();
+			HashSet<Asset> assets = new();
+			var pending = new Queue<Asset>( roots );
 
-			foreach ( var asset in assets )
+			while ( pending.TryDequeue( out var asset ) )
 			{
 				cancel.ThrowIfCancellationRequested();
+				if ( assets.Contains( asset ) || !_sceneCompiles.IncludeAsset( asset ) )
+					continue;
 
-				AddedAssets.Add( asset );
+				assets.Add( asset );
+				foreach ( var a in asset.GetReferences( false ) )
+					pending.Enqueue( a );
+			}
 
-				foreach ( var a in asset.GetReferences( true ) )
-				{
-					AddedAssets.Add( a );
-					await CollectInputDependencies( a );
-				}
+			return assets;
+		}
 
+		private async Task CollectAssets( List<Asset> assets, CancellationToken cancel )
+		{
+			var addedAssets = CollectAssetsAndReferences( assets, cancel );
+
+			foreach ( var asset in addedAssets )
+			{
+				cancel.ThrowIfCancellationRequested();
+				await CollectInputDependencies( asset );
+			}
+
+			foreach ( var asset in assets.Where( addedAssets.Contains ) )
+			{
+				cancel.ThrowIfCancellationRequested();
 				foreach ( var file in asset.GetAdditionalContentFiles() )
 				{
 					if ( !IncludeSourceFiles && !file.EndsWith( ".rect" ) )
@@ -270,25 +296,26 @@ public partial class ProjectPublisher
 					}
 				}
 
-				progress?.SetProgressMessage( $"Found {AddedAssets.Count:n0}" );
+				progress?.SetProgressMessage( $"Found {addedAssets.Count:n0}" );
 			}
 
 			List<Task> tasks = new List<Task>();
 			int i = 0;
-			foreach ( var a in AddedAssets )
+			foreach ( var a in addedAssets )
 			{
 				cancel.ThrowIfCancellationRequested();
 
-				progress?.SetProgress( i++, AddedAssets.Count );
-				progress?.SetProgressMessage( $"Adding Asset {i:n0} of {AddedAssets.Count:n0} - {a.RelativePath}" );
+				progress?.SetProgress( i++, addedAssets.Count );
+				progress?.SetProgressMessage( $"Adding Asset {i:n0} of {addedAssets.Count:n0} - {a.RelativePath}" );
 
 
 				tasks.Add( AddAsset( a ) );
 
 				while ( tasks.Count > 8 )
 				{
-					await Task.WhenAny( tasks.ToArray() );
-					tasks.RemoveAll( x => x.IsCompleted );
+					var completed = await Task.WhenAny( tasks );
+					await completed;
+					tasks.Remove( completed );
 				}
 			}
 
@@ -370,43 +397,13 @@ public partial class ProjectPublisher
 			await AddFile( png, thumbName );
 		}
 
-		private async Task AddFile( string absPath, string relativePath )
+		private Task AddFile( string absPath, string relativePath )
 		{
-			if ( !System.IO.File.Exists( absPath ) )
+			return AddFile( new ProjectFile
 			{
-				Errors.Add( $"File not found \"{absPath}\" ({relativePath})" );
-				return;
-			}
-
-			relativePath = relativePath.NormalizeFilename( false, false ).TrimStart( '/' );
-
-			//
-			// already added
-			//
-			if ( Assets.Any( x => string.Equals( x.Name, relativePath, StringComparison.OrdinalIgnoreCase ) ) )
-				return;
-
-			var info = new System.IO.FileInfo( absPath );
-
-			var e = new ProjectFile
-			{
-				Name = relativePath,
-				Size = (int)info.Length,
+				Name = relativePath?.NormalizeFilename( false, false ).TrimStart( '/' ),
 				AbsolutePath = absPath
-			};
-
-			// run in a thread to make it happen in the background
-			await Task.Run( async () =>
-			{
-				using ( var stream = info.OpenRead() )
-				{
-					e.Hash = (await Sandbox.Utility.Crc64.FromStreamAsync( stream )).ToString( "x" );
-				}
 			} );
-
-			scannedBytes += (ulong)e.Size;
-
-			Assets.Add( e );
 		}
 
 		internal async Task IncludeCursorImages()
@@ -495,32 +492,42 @@ public partial class ProjectPublisher
 			await AddFile( bytes, relativePath );
 		}
 
-		internal async Task AddFile( byte[] contents, string relativePath )
+		internal Task AddFile( byte[] contents, string relativePath )
 		{
-			//
-			// already added
-			//
-			if ( Assets.Any( x => string.Equals( x.Name, relativePath, StringComparison.OrdinalIgnoreCase ) ) )
-				return;
-
-			var e = new ProjectFile
+			return AddFile( new ProjectFile
 			{
 				Name = relativePath,
-				Size = (int)contents.Length,
 				Contents = contents
-			};
-
-			// run in a thread to make it super fast
-			await Task.Run( async () =>
-			{
-				using ( var stream = new MemoryStream( contents ) )
-				{
-					e.Hash = (await Sandbox.Utility.Crc64.FromStreamAsync( stream )).ToString( "x" );
-				}
 			} );
+		}
 
-			scannedBytes += (ulong)e.Size;
-			Assets.Add( e );
+		private async Task AddFile( ProjectFile file )
+		{
+			foreach ( var entry in _sceneCompiles.PrepareFiles( file ) )
+			{
+				if ( FindAsset( entry.Name ) is not null )
+					continue;
+
+				if ( entry.Contents is null && !File.Exists( entry.AbsolutePath ) )
+				{
+					Errors.Add( $"File not found \"{entry.AbsolutePath}\" ({entry.Name})" );
+					continue;
+				}
+
+				await Task.Run( async () =>
+				{
+					using Stream stream = entry.Contents is not null ? new MemoryStream( entry.Contents ) : File.OpenRead( entry.AbsolutePath );
+					entry.Size = checked((int)stream.Length);
+					entry.Hash = (await Sandbox.Utility.Crc64.FromStreamAsync( stream )).ToString( "x" );
+				} );
+
+				// Another add may have completed while this file was being hashed.
+				if ( FindAsset( entry.Name ) is not null )
+					continue;
+
+				scannedBytes += (ulong)entry.Size;
+				Assets.Add( entry );
+			}
 		}
 
 		/// <summary>
@@ -576,12 +583,8 @@ public partial class ProjectPublisher
 
 			CodePackageReferences.Add( package.ToLower() );
 
-			await AddAsset( asset );
-
-			foreach ( var a in asset.GetReferences( true ) )
-			{
+			foreach ( var a in CollectAssetsAndReferences( [asset], default ) )
 				await AddAsset( a );
-			}
 		}
 	}
 }

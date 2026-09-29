@@ -193,6 +193,8 @@ public partial class ProjectPublisher
 
 		await TryWorkshopUpload();
 
+		Manifest.ValidatePublication();
+
 		await PostManifest( Manifest, cancel );
 	}
 
@@ -201,6 +203,8 @@ public partial class ProjectPublisher
 	/// </summary>
 	public async Task PrePublish( CancellationToken cancellationToken = default )
 	{
+		Manifest.ValidatePublication();
+
 		FinishAddingFiles();
 
 		if ( Project.Config.IsStandaloneOnly )
@@ -430,12 +434,15 @@ public partial class ProjectPublisher
 			//
 			while ( tasks.Count > 8 )
 			{
-				await Task.WhenAny( tasks.ToArray() );
-				tasks.RemoveAll( x => x.IsCompleted );
+				var completed = await Task.WhenAny( tasks );
+				await completed;
+				tasks.Remove( completed );
 			}
 		}
 
 		await Task.WhenAll( tasks.ToArray() );
+
+		Manifest.ValidatePublication();
 	}
 
 
@@ -443,14 +450,15 @@ public partial class ProjectPublisher
 	{
 		file.SizeUploaded = 1;
 
-		if ( file.Contents is not null )
+		var contents = file.Contents;
+		if ( contents is null && file.AbsolutePath is not null )
+			contents = await System.IO.File.ReadAllBytesAsync( file.AbsolutePath );
+
+		if ( contents is not null )
 		{
-			var r = await Project.Package.UploadFile( file.Contents, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
-			if ( r ) file.Skip = true;
-		}
-		else if ( file.AbsolutePath is not null )
-		{
-			var r = await Project.Package.UploadFile( file.AbsolutePath, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
+			// Upload the bytes we checked, not a path that can be replaced after validation.
+			Manifest.ValidateUploadContents( file, contents );
+			var r = await Project.Package.UploadFile( contents, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
 			if ( r ) file.Skip = true;
 		}
 		else

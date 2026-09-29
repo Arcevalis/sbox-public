@@ -160,6 +160,7 @@
     string videoUrl;
     Rect placed;
     bool introPending = true;
+    bool hoverReported;
 
     Jam _jam;
     JamEntryStatus _entry;
@@ -328,6 +329,13 @@
             return;
         }
 
+        // Only a card that finished appearing counts - not one flown over on the way elsewhere
+        if ( !hoverReported && age >= IntroTime )
+        {
+            hoverReported = true;
+            Discovery.Hovered( Source, Package );
+        }
+
         if ( !showVideo && age >= VideoDelay )
         {
             showVideo = true;
@@ -388,7 +396,8 @@
         var bounds = Source.Ancestors.FirstOrDefault( x => x.ComputedStyle?.Overflow is not (null or OverflowMode.Visible) )
             ?.Box.ClipRect ?? new Rect( 0, 0, Screen.Width, Screen.Height );
 
-        if ( Parent?.Children.OfType<Footer>().FirstOrDefault( x => x.IsVisible ) is { Box.Rect: var dock } )
+        // Keep clear of the party deck in the bottom right, if we'd run into it
+        if ( Footer.Current?.Children.FirstOrDefault() is { Box.Rect: var dock } && dock.Left < Source.Box.Rect.Right && dock.Right > Source.Box.Rect.Left )
             bounds.Bottom = Math.Min( bounds.Bottom, dock.Top );
 
         return bounds;
@@ -404,6 +413,7 @@
 
     void Play()
     {
+        Discovery.Launching( Package, "hovercard", Source );
         MenuHelpers.PlayGame( Package );
         Close();
     }

@@ -12,6 +12,12 @@ public partial class MenuOverlay : RootPanel
 	public ToastArea TopLeft;
 	public ToastArea TopCenter;
 
+	/// <summary>
+	/// Holds the bottom right toasts (the post-game popup and friends). The party deck moves it up to
+	/// sit above itself when it's showing.
+	/// </summary>
+	public Panel NotificationCorner;
+
 	public static void Init()
 	{
 		Shutdown();
@@ -29,14 +35,26 @@ public partial class MenuOverlay : RootPanel
 		Top = AddChild<ToastArea>( "popup_canvas" );
 		TopCenter = AddChild<ToastArea>( "popup_canvas_top" );
 		TopLeft = AddChild<ToastArea>( "popup_canvas_topleft" );
-		var corner = AddChild<Panel>( "notification-corner" );
-		BottomRight = corner.AddChild<ToastArea>( "popup_canvas_bottomright" );
-		corner.AddChild<MenuProject.PartyJoinStatus>();
+		NotificationCorner = AddChild<Panel>( "notification-corner" );
+		BottomRight = NotificationCorner.AddChild<ToastArea>( "popup_canvas_bottomright" );
 
 		AddChild<LoadingOverlay>();
 		AddChild<MicOverlay>();
 		AddChild<SubtitleOverlay>();
 		AddChild<ChatOverlay>();
+
+		// The party deck. It moves itself between here and the menu page - see Footer.razor
+		AddChild<Sandbox.UI.Footer>();
+	}
+
+	public override void Tick()
+	{
+		base.Tick();
+
+		// The deck spends most of its time living in the menu page, and goes with it if the page is
+		// torn down (the avatar editor swaps the scene) - bring a new one back
+		if ( !Sandbox.UI.Footer.Instance.IsValid() )
+			AddChild<Sandbox.UI.Footer>();
 	}
 
 	protected override void UpdateScale( Rect screenSize )

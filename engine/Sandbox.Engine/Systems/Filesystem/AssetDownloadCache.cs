@@ -130,6 +130,15 @@ static class AssetDownloadCache
 		return $"{path.ToLowerInvariant().Md5()}.{crc}.cache";
 	}
 
+	/// <summary>
+	/// Is this file in the game cache, core content or the download cache, without mounting it
+	/// </summary>
+	internal static bool IsCached( string path, ulong crc )
+	{
+		var gc = "/gamecache/" + CreateGameCacheFilename( path, crc.ToString( "x" ) );
+		return EngineFileSystem.Root.FileExists( gc ) || IsFileDownloaded( path, crc, out _ );
+	}
+
 	internal static bool TryMount( RedirectFileSystem fs, string path, ulong crc )
 	{
 		var gc = "/gamecache/" + CreateGameCacheFilename( path, crc.ToString( "x" ) );

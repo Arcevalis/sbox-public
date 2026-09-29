@@ -158,6 +158,9 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 
 	public void Tick()
 	{
+		if ( Scene.Source is SceneFile { IsSourceSnapshot: true } source )
+			SceneSource.FindAsset( source );
+
 		//
 		// If this is an editor scene, tick it to flush deleted objects etc
 		//
@@ -210,7 +213,7 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 
 	protected virtual void OnEdited()
 	{
-
+		SceneCompileSession.Current.OnSceneEdited( Scene );
 	}
 
 	static RealTimeSince timeSinceLastUpdatePrefabs;
@@ -282,8 +285,14 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 		if ( Scene.Source is null )
 			return;
 
+		var source = Scene.Source;
+		if ( source is SceneFile sceneFile && SceneSource.FindAsset( sceneFile ) is Asset asset && File.Exists( asset.GetSourceFile( true ) ) )
+		{
+			source = SceneSource.LoadForEditing( asset );
+		}
+
 		InitUndo();
-		Scene.Load( Scene.Source );
+		Scene.Load( source );
 
 		Selection.Clear();
 	}
@@ -293,6 +302,9 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 		// Mounted scenes live at a read-only mount:// path - they can't be saved or saved as.
 		if ( IsMounted )
 			return;
+
+		if ( Scene.Source is SceneFile source )
+			SceneSource.FindAsset( source );
 
 		bool isPrefab = Scene is PrefabScene;
 		string extension = isPrefab ? "prefab" : "scene";
@@ -334,14 +346,21 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 		Assert.NotNull( asset, $"Failed to CreateResource for {fileType} at {saveLocation}" );
 
 		GameResource resource = Scene is PrefabScene prefabScene ? prefabScene.ToPrefabFile() : Scene.CreateSceneFile();
-		asset.SaveToDisk( resource );
+		if ( resource is SceneFile sceneFile )
+			sceneFile.InitializeSource( asset.Path, asset.Guid );
+
+		if ( !asset.SaveToDisk( resource ) )
+		{
+			Log.Error( $"Could not save {asset.Path}." );
+			return;
+		}
 
 		// Update this scene's path
 		Scene.Source = resource;
 		Scene.Name = System.IO.Path.GetFileNameWithoutExtension( saveLocation );
 
 		HasUnsavedChanges = false;
-		EditorEvent.Run( "scene.saved", Active.Scene );
+		EditorEvent.Run( "scene.saved", Scene );
 
 		UpdateEditorTitle();
 	}
@@ -492,7 +511,14 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 	/// </summary>
 	public static SceneEditorSession CreateFromPath( string path )
 	{
-		var resource = ResourceLibrary.Get<Resource>( path );
+		Resource resource = null;
+
+		if ( AssetSystem.FindByPath( path ) is Asset asset && asset.AssetType.FileExtension == "scene" && File.Exists( asset.GetSourceFile( true ) ) )
+		{
+			resource = SceneSource.LoadForEditing( asset );
+		}
+
+		resource ??= ResourceLibrary.Get<Resource>( path );
 
 		// Not loaded yet? It might be a mounted scene/prefab.
 		resource ??= SceneFile.Load( path );
@@ -500,6 +526,12 @@ public partial class SceneEditorSession : Scene.ISceneEditorSession
 
 		if ( resource is SceneFile sceneFile )
 		{
+			if ( sceneFile.IsCompiled )
+			{
+				Log.Error( $"Cannot edit compiled scene '{path}' without its .scene source file." );
+				return null;
+			}
+
 			if ( SceneEditorSession.Resolve( sceneFile ) is SceneEditorSession existingSession )
 			{
 				existingSession.MakeActive();

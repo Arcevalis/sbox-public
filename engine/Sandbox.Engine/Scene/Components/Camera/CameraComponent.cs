@@ -227,6 +227,9 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		sceneCamera = new( GameObject.Name );
 
 		sceneCamera.OnRenderStageHook = ExecuteCommandLists;
+		sceneCamera.WantsDepthNormalsHook = WantsDepthNormals;
+		sceneCamera.HasAsyncComputeHook = HasAsyncCompute;
+		sceneCamera.RenderAsyncComputeHook = RenderAsyncCompute;
 	}
 
 	protected override void OnAwake()
@@ -238,6 +241,7 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 	protected override void OnDestroy()
 	{
 		Scene.Cameras.Remove( this );
+		Rendering.ManagedSceneRendering.Forget( this );
 		sceneCamera?.Dispose();
 		sceneCamera = null;
 	}
@@ -384,6 +388,9 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 	/// Update a SceneCamera with the settings from this component
 	/// </summary>
 	Action<Stage, SceneCamera> executeCommandListsHook;
+	Func<bool> wantsDepthNormalsHook;
+	Func<Stage, bool> hasAsyncComputeHook;
+	Action<Stage> renderAsyncComputeHook;
 
 	public void UpdateSceneCamera( SceneCamera camera, bool includeTags = true )
 	{
@@ -452,10 +459,13 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		}
 
 		//
-		// Child camera executes command lists from this camera. The delegate is made once: this runs every frame, and a
+		// Child camera executes command lists from this camera. The delegates are made once: this runs every frame, and a
 		// method group assigned here allocated a delegate each time
 		//
 		camera.OnRenderStageHook = executeCommandListsHook ??= ExecuteCommandLists;
+		camera.WantsDepthNormalsHook = wantsDepthNormalsHook ??= WantsDepthNormals;
+		camera.HasAsyncComputeHook = hasAsyncComputeHook ??= HasAsyncCompute;
+		camera.RenderAsyncComputeHook = renderAsyncComputeHook ??= RenderAsyncCompute;
 
 		//
 		// Hack because I don't want this to have to be on a camera. This
@@ -582,6 +592,10 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		using ( Scene.Push() )
 		{
 			InitializeRendering();
+
+			// r_managed_scene: the managed scene renderer takes the whole frame
+			if ( Rendering.ManagedSceneRendering.TryRender( this, swapChain, CustomSize ?? size ) )
+				return;
 
 			if ( RenderTarget is not null && RenderTarget.native.IsValid )
 			{

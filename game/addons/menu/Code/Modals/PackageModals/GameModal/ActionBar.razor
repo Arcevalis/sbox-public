@@ -234,6 +234,7 @@
 
     void OnPlay()
     {
+		Discovery.Launching( Package, "gamepage" );
 		MenuHelpers.PlayGame( Package, MapPackage );
     }
 
@@ -243,6 +244,7 @@
         LoadingScreen.Title = "Finding Game..";
         LoadingScreen.Subtitle = "Please wait while we find a game for you to join.";
 
+        Discovery.Launching( Package, "gamepage-join" );
         bool success = await MenuUtility.TryJoinLobby(Package.FullIdent);
         if (success)
             return true;

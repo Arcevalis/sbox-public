@@ -161,6 +161,8 @@ public static partial class MenuUtility
 		var connectString = friend.GetRichPresence( "connect" );
 		if ( string.IsNullOrWhiteSpace( connectString ) ) return;
 
+		Api.Activity.GameRequested( new( "friend" ), replace: false );
+
 		connectString = connectString.Replace( "+connect", "" );
 		connectString = connectString.Replace( " ", "" );
 
@@ -247,6 +249,7 @@ public static partial class MenuUtility
 	public static void Connect( ulong lobbyId )
 	{
 		CloseAllModals();
+		Api.Activity.GameRequested( new( "server" ), replace: false );
 		Networking.Connect( lobbyId );
 	}
 

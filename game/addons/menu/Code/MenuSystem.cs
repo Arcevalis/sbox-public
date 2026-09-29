@@ -36,6 +36,7 @@ public partial class MenuSystem : IMenuSystem
 		var startupGameIdent = MenuUtility.StartupGameIdent;
 		if ( !string.IsNullOrEmpty( startupGameIdent ) )
 		{
+			Discovery.Clicked( new DiscoveryContext { Surface = "web" }, startupGameIdent );
 			Game.Overlay.ShowGameModal( startupGameIdent );
 		}
 	}
@@ -203,6 +204,19 @@ public partial class MenuSystem : IMenuSystem
 	public static void GoTo( string url )
 	{
 		MainMenu.Instance?.Navigator?.Navigate( url );
+	}
+
+	/// <summary>Start a party with just you in it, without having to invite someone first.</summary>
+	[MenuConCmd( "party_create" )]
+	public static async Task CreateParty()
+	{
+		if ( PartyRoom.Current is not null )
+		{
+			Log.Info( "Already in a party" );
+			return;
+		}
+
+		await PartyDeck.EnsureLobbyExists();
 	}
 
 	[MenuConCmd( "menu_packageclosed" )]

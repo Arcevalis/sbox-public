@@ -15,7 +15,37 @@ internal partial class ShadowMapper
 	const int WaveSize = 64;
 	const int MaxDispatches = 8;
 
-	static readonly ComputeShader ContactShadowCompute = new( "screen_space_shadows_cs" );
+	// Created on first use: a static initializer here would stop the mapper working without the engine. Only on
+	// the main thread, though - contact shadows render from native's layer callbacks, on render threads, where
+	// creating a material throws. Reached from one first, it's queued for the main thread and this frame goes
+	// without.
+	static ComputeShader contactShadowCompute;
+	static bool contactShadowComputeQueued;
+
+	static ComputeShader ContactShadowCompute
+	{
+		get
+		{
+			if ( contactShadowCompute is not null ) return contactShadowCompute;
+
+			if ( ThreadSafe.IsMainThread )
+				return contactShadowCompute = new( "screen_space_shadows_cs" );
+
+			if ( !contactShadowComputeQueued )
+			{
+				contactShadowComputeQueued = true;
+				MainThread.Queue( () => contactShadowCompute ??= new( "screen_space_shadows_cs" ) );
+			}
+
+			return null;
+		}
+	}
+
+	/// <summary>
+	/// Make the contact shadow compute shader now, on the main thread outside rendering, where it can be made - for a renderer
+	/// that calls <see cref="RenderContactShadows"/> inside a <see cref="Graphics"/> block. False if it can't be yet.
+	/// </summary>
+	internal static bool PrepareContactShadows() => ContactShadowCompute is not null;
 
 	internal void RenderScreenSpaceShadows( ISceneView view )
 	{
@@ -26,16 +56,37 @@ internal partial class ShadowMapper
 		if ( !ContactShadowsEnabled || !light.IsValid() || !light.ContactShadows )
 			return;
 
+		// Not made yet (see ContactShadowCompute): no contact shadows this frame
+		var compute = ContactShadowCompute;
+		if ( compute is null )
+			return;
+
 		var mask = light.GetShadowMask( view );
 		if ( mask is null )
+			return;
+
+		// Directional WorldDirection is already -Forward (CSceneLightObject::SetWorldDirection).
+		RenderContactShadows( mask, view.GetFrustum().GetReverseZViewProjTranspose(), light.WorldDirection, light.ShadowHardness );
+	}
+
+	/// <summary>
+	/// Draw a directional light's contact shadows into <paramref name="mask"/>, from the depth chain (<c>DepthChainDownsample</c>) of a
+	/// view whose world to projection matrix is <paramref name="viewProjection"/> (reverse-Z, row-vector), for a light pointing
+	/// <paramref name="lightDirection"/> (towards the light) with <paramref name="shadowHardness"/>, into the current
+	/// <see cref="Graphics"/> context. The body of <see cref="RenderScreenSpaceShadows"/>, which the managed scene renderer runs
+	/// too, for its own frames. It can run in <paramref name="steps"/>: the mask's clear and barriers on the graphics queue, and
+	/// the dispatches between them on the async compute queue, which neither clears nor names graphics stages.
+	/// </summary>
+	internal static void RenderContactShadows( Texture mask, Matrix viewProjection, Vector3 lightDirection, float shadowHardness, ContactShadowSteps steps = ContactShadowSteps.All )
+	{
+		var compute = ContactShadowCompute;
+		if ( compute is null )
 			return;
 
 		int width = mask.Width;
 		int height = mask.Height;
 
-		// Directional WorldDirection is already -Forward (CSceneLightObject::SetWorldDirection).
-		var viewProjection = view.GetFrustum().GetReverseZViewProjTranspose();
-		var lightProjection = viewProjection.Transform( new Vector4( light.WorldDirection, 0.0f ) );
+		var lightProjection = viewProjection.Transform( new Vector4( lightDirection, 0.0f ) );
 
 		Span<DispatchData> dispatches = stackalloc DispatchData[MaxDispatches];
 		int dispatchCount = BuildDispatchList( lightProjection, width, height, dispatches, out var lightCoordinate );
@@ -49,7 +100,7 @@ internal partial class ShadowMapper
 			DepthBounds = new Vector2( 0.0f, 1.0f ),
 			SurfaceThickness = 0.01f,
 			BilinearThreshold = 0.02f,
-			ShadowContrast = 1.0f + light.ShadowHardness * 4.0f, // same as CSM penumbra
+			ShadowContrast = 1.0f + shadowHardness * 4.0f, // same as CSM penumbra
 			FarDepthValue = 0.0f,  // reverse-Z
 			NearDepthValue = 1.0f,
 			IgnoreEdgePixels = 0,
@@ -59,8 +110,17 @@ internal partial class ShadowMapper
 		};
 
 		// Sparse wavefront writes — unwritten pixels stay lit.
-		mask.Clear( Color.White );
-		Graphics.ResourceBarrierTransition( mask, ResourceState.UnorderedAccess );
+		if ( (steps & ContactShadowSteps.Prepare) != 0 )
+		{
+			mask.Clear( Color.White );
+			Graphics.ResourceBarrierTransition( mask, ResourceState.UnorderedAccess );
+		}
+
+		if ( (steps & ContactShadowSteps.Dispatch) == 0 )
+		{
+			if ( (steps & ContactShadowSteps.Finish) != 0 ) Graphics.ResourceBarrierTransition( mask, ResourceState.PixelShaderResource );
+			return;
+		}
 
 		var attrs = Graphics.Attributes;
 		attrs.Set( "OutputShadow", mask );
@@ -73,10 +133,25 @@ internal partial class ShadowMapper
 			attrs.SetData( "SssConstants", constants );
 
 			// Bend group counts: Dispatch divides by numthreads[WAVE_SIZE,1,1].
-			ContactShadowCompute.DispatchWithAttributes( attrs, d.WaveCount0 * WaveSize, d.WaveCount1, d.WaveCount2 );
+			compute.DispatchWithAttributes( attrs, d.WaveCount0 * WaveSize, d.WaveCount1, d.WaveCount2 );
 		}
 
-		Graphics.ResourceBarrierTransition( mask, ResourceState.PixelShaderResource );
+		if ( (steps & ContactShadowSteps.Finish) != 0 ) Graphics.ResourceBarrierTransition( mask, ResourceState.PixelShaderResource );
+	}
+
+	/// <summary>
+	/// The parts of <see cref="RenderContactShadows"/>, in order.
+	/// </summary>
+	[Flags]
+	internal enum ContactShadowSteps
+	{
+		/// <summary>Clear the mask and make it writable: graphics.</summary>
+		Prepare = 1,
+		/// <summary>March the depth chain into it: compute only.</summary>
+		Dispatch = 2,
+		/// <summary>Make it readable by pixel shaders: graphics.</summary>
+		Finish = 4,
+		All = Prepare | Dispatch | Finish,
 	}
 
 	[StructLayout( LayoutKind.Sequential )]

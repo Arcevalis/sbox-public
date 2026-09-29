@@ -325,6 +325,9 @@ internal static class EngineLoop
 
 		using var _outputScope = _clientOutput.Start();
 
+		// r_managed_scene_compare renders to a bitmap, which has to happen before any views are rendering
+		Rendering.ManagedSceneRendering.BeforeRenderingViews();
+
 		// UI windows own their own swap chains, they're not part of anyone's view
 		Sandbox.UI.PanelWindows.FrameAll();
 

@@ -4,6 +4,7 @@
 @using System.Globalization
 @namespace MenuProject.UI
 @inherits Panel
+@implements IDiscoverySurface
 
 <root class=@BuildClass() @onrightclick=@OnCardRightClicked onclick=@OnCardClicked>
     <div class="image" style="background-image: url(@(Image() ?? "/ui/sbox-logo-square.svg"))">
@@ -107,7 +108,7 @@
     public static int VideoThumbsPerGrid { get; set; } = 6;
     public static float VideoThumbsSeconds { get; set; } = 10f;
     // Past the card's 0.3s video start + 0.4s fade, so the preview inherits a settled video.
-    const float HoverPreviewDelay = 0.3f;
+    const float HoverPreviewDelay = 0.4f;
 	const float VideoActivationDelay = 0.3f;
 	bool showVideo;
 	float? videoRequestedAt;
@@ -120,6 +121,7 @@
 	{
 		base.Tick();
 
+		Discovery.Track( this, Package );
 		TickHoverPreview();
 
 		if ( !WantsVideo() )
@@ -194,6 +196,11 @@
     [Parameter] public Package Package { get; set; }
     [Parameter] public SizeType Size { get; set; }
 
+    /// <summary>
+    /// Where this card is shown, when its container can't say - e.g. one of several shelves in a panel.
+    /// </summary>
+    [Parameter] public DiscoveryContext DiscoveryContext { get; set; }
+
 	/// <summary>
 	/// Displays this package's nomination count from the menu's shared jam state.
 	/// </summary>
@@ -253,7 +260,11 @@
     /// </summary>
     [Parameter] public Action RightClicked { get; set; }
 
-    void OnCardClicked() => Clicked?.Invoke();
+    void OnCardClicked()
+    {
+        Discovery.Clicked( this, Package );
+        Clicked?.Invoke();
+    }
     void OnCardRightClicked() => RightClicked?.Invoke();
 
     string BuildClass() => $"package-card {Size.ToString().ToLower()}";

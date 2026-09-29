@@ -43,7 +43,7 @@
         MenuUtility.JoinFriendGame(new Friend(UserId));
     }
 
-    FriendPopup popup;
+    FriendCard popup;
 
     protected override void OnMouseUp(MousePanelEvent e)
     {
@@ -58,7 +58,7 @@
         }
 
         Popup.CloseAll();
-        popup = FriendPopup.Show(this, new Friend(UserId), Popup.PositionMode.AboveCenter, 32);
+        popup = FriendCard.Show(this, new Friend(UserId), Popup.PositionMode.AboveCenter, 20);
     }
 
     protected override int BuildHash() => HashCode.Combine( CssClasses() );

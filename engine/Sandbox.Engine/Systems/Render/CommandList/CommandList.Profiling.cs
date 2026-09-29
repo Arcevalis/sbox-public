@@ -77,7 +77,8 @@ public sealed unsafe partial class CommandList
 		var pix = DebugMarkersEnabled;
 		if ( pix ) context.BeginPixEvent( sampler.NamePtr );
 
-		var marker = Diagnostics.GpuProfilerStats.Enabled
+		// None on the async compute queue, whose timestamps native doesn't support (CSceneSystem::SubmitViews)
+		var marker = Diagnostics.GpuProfilerStats.Enabled && !Graphics.OnComputeQueue
 			? CSceneSystem.BeginManagedPerfMarker( context, sampler.NamePtr )
 			: IntPtr.Zero;
 

@@ -19,6 +19,9 @@ internal sealed partial class GameWindow
 
 	internal void Render()
 	{
+		foreach ( var scene in Scene.All )
+			scene.RenderEnvmaps();
+
 		// All views join one batch so scene jobs overlap and we wait once at the end.
 		CSceneSystem.BeginRenderingViews( true );
 		try

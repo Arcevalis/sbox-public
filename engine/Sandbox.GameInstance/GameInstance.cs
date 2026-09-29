@@ -28,6 +28,10 @@ internal class GameInstance : IGameInstance
 	public void OnLoadingFinished()
 	{
 		_loadingFinished = true;
+
+		// A joining client isn't in the game until the host activates it
+		if ( flags.Contains( GameLoadingFlags.Host ) )
+			Api.Activity.LoadFinished();
 	}
 
 	public bool IsLoading => !_loadingFinished;
@@ -166,6 +170,7 @@ internal class GameInstance : IGameInstance
 		SentrySdk.AddBreadcrumb( $"Loading Game {Ident}", "gameinstance.load" );
 
 		LoadingScreen.Title = "Fetching Package Info";
+		Api.Activity.LoadStage( "fetch" );
 		_package = await Package.FetchAsync( Ident, false );
 
 		// A newer load may have started while we were fetching. Bail before we
@@ -209,6 +214,7 @@ internal class GameInstance : IGameInstance
 
 		Log.Trace( $"Install Async {Package.Title}" );
 		LoadingScreen.Title = $"Installing {Package.Title}";
+		Api.Activity.LoadStage( "install" );
 		LoadingScreen.Media = Package.LoadingScreen.MediaUrl;
 
 		var identWithVersion = Package.FullIdent;
@@ -244,6 +250,7 @@ internal class GameInstance : IGameInstance
 
 		Log.Trace( $"Loading package {Package.Title}" );
 		LoadingScreen.Title = $"Loading {Package.Title}";
+		Api.Activity.LoadStage( "assemblies" );
 		await Task.Delay( 5, token ); // make frame
 
 		try
@@ -273,6 +280,7 @@ internal class GameInstance : IGameInstance
 		{
 			var map = LaunchArguments.Map;
 			Application.Map = map;
+			Api.Activity.LoadStage( "map" );
 
 			await LoadMapPackage( map, token );
 			Application.MapPackage = _mapPackage;
@@ -287,6 +295,7 @@ internal class GameInstance : IGameInstance
 		}
 
 		LoadingScreen.Title = $"Loading Resources";
+		Api.Activity.LoadStage( "resources" );
 		await Task.Delay( 5, token ); // make frame
 
 		Log.Trace( $"All Loaded" );
@@ -310,10 +319,12 @@ internal class GameInstance : IGameInstance
 		if ( !achievementTask.IsCompleted )
 		{
 			LoadingScreen.Title = $"Loading Achievements";
+			Api.Activity.LoadStage( "achievements" );
 			await achievementTask;
 		}
 
 		LoadingScreen.Title = $"Loading Fonts";
+		Api.Activity.LoadStage( "fonts" );
 		await Task.Delay( 5, token ); // make frame
 
 		Log.Trace( $"Loading Fonts" );
@@ -529,6 +540,10 @@ internal class GameInstance : IGameInstance
 			options.IsAdditive = true;
 
 			if ( !options.SetScene( startupScene ) )
+				return false;
+
+			using var runtimePreparation = options.RuntimePreparationScope();
+			if ( !options.PrepareRuntime() )
 				return false;
 
 			Game.ActiveScene.RunEvent<ISceneStartup>( x => x.OnHostPreInitialize( options.GetSceneFile() ) );

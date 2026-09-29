@@ -381,6 +381,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 	public void CloseGame()
 	{
+		Api.Activity.LoadAbandoned( null );
 		CancelLoad();
 
 		if ( gameInstance is null ) return;
@@ -542,6 +543,9 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 			return;
 		}
 
+		Api.Activity.SetExitReason( string.IsNullOrEmpty( message ) ? "leave" : "disconnect", message );
+		Api.Activity.LoadAbandoned( string.IsNullOrEmpty( message ) ? null : message );
+
 		// cancel any in-progress load right now instead of waiting for tick
 		CancelLoad();
 		Game.Close();
@@ -603,14 +607,26 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 		// The previous load hid the loading screen on its way out, it's ours now
 		LoadingScreen.IsVisible = true;
 
+		var launch = Api.Activity.LoadBegin( ident, flags.Contains( GameLoadingFlags.Remote ) );
+
 		try
 		{
 			await DoLoadGamePackageAsync( ident, flags, token );
 
-			return !token.IsCancellationRequested;
+			if ( token.IsCancellationRequested )
+			{
+				launch.End( "cancel" );
+				return false;
+			}
+
+			// Hosts finish when the startup scene has loaded, clients when the server lets them in
+			launch.Stage( flags.Contains( GameLoadingFlags.Host ) ? "scene" : "join" );
+			return true;
 		}
 		catch ( System.Exception e )
 		{
+			launch.End( e is OperationCanceledException ? "cancel" : "fail", e is OperationCanceledException ? null : e.Message );
+
 			ResetEnvironment();
 
 			if ( e is not OperationCanceledException )
@@ -837,12 +853,12 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	/// <summary>
 	/// The play button was pressed in the editor
 	/// </summary>
-	public void EditorPlay()
+	public bool EditorPlay()
 	{
 		if ( gameInstance is null )
 		{
 			Log.Warning( "Tried to editor play but we don't have a game instance" );
-			return;
+			return false;
 		}
 
 		Game.IsPlaying = true;
@@ -850,8 +866,13 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 		if ( !gameInstance.OpenStartupScene() )
 		{
 			Log.Warning( "There was a problem opening the StartupScene" );
-			return;
+			Game.ActiveScene?.Destroy();
+			Game.ActiveScene = null;
+			Game.IsPlaying = false;
+			return false;
 		}
+
+		return true;
 	}
 
 	public TypeLibrary TypeLibrary => Sandbox.Internal.GlobalGameNamespace.TypeLibrary;
@@ -906,6 +927,8 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 		// We don't want to open games in the editor
 		if ( Application.IsEditor )
 			return;
+
+		Api.Activity.GameRequested( new( "console", gameIdent ), replace: false );
 
 		// We can load and run projects if we're a Dedicated Server.
 		if ( Application.IsDedicatedServer && gameIdent.ToLower().Contains( ".sbproj" ) )

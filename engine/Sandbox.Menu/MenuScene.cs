@@ -33,11 +33,7 @@ public static class MenuScene
 	internal static void Render( SwapChainHandle_t swapChain )
 	{
 		if ( Scene is null || Scene.IsSuspended ) return;
-		if ( Scene.IsLoading )
-		{
-			Scene.RenderEnvmaps();
-			return;
-		}
+		if ( Scene.IsLoading ) return;
 
 		Scene.Camera?.SceneCamera.EnableEngineOverlays = true;
 		SceneCamera.RecordingCamera = Scene.Camera?.SceneCamera;
