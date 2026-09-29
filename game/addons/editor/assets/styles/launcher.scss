@@ -203,6 +203,29 @@ LauncherWindow.dropping .projects { background-color: rgba( $accent, 0.06 ); bor
 .projectrow .runningtag .icon { flex-shrink: 0; font-size: 9px; margin-right: 5px; }
 .projectrow .runningtag .running-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+// The editor can take several seconds to create its first window.
+.projectrow .launchingtag
+{
+	display: none;
+	flex-shrink: 0.35;
+	min-width: 0;
+	flex-direction: row;
+	align-items: center;
+	margin-right: 12px;
+	color: $accent;
+	font-size: 11px;
+	font-weight: 600;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.projectrow .launchingtag .icon { flex-shrink: 0; font-size: 9px; margin-right: 5px; }
+.projectrow .launchingtag .launching-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projectrow.launching { border-color: rgba( $accent, 0.45 ); }
+.projectrow.launching:hover { border-color: $accent; }
+.projectrow.launching .launchingtag { display: flex; }
+.projectrow.launching .open { display: none; }
+
 .projectrow.running { border-color: rgba( $positive, 0.45 ); }
 .projectrow.running:hover { border-color: $positive; }
 .projectrow.running .runningtag { display: flex; }

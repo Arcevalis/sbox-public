@@ -42,6 +42,7 @@ class LauncherWindow : Panel
 
 	// Projects with an editor open, and the row showing each project - see WatchRunningEditorsAsync
 	HashSet<string> runningProjects = new( StringComparer.OrdinalIgnoreCase );
+	readonly Dictionary<string, Process> launchingProjects = new( StringComparer.OrdinalIgnoreCase );
 	readonly Dictionary<Panel, string> rowProjects = new();
 
 	public LauncherWindow( Editor.PanelWindow window )
@@ -103,18 +104,43 @@ class LauncherWindow : Panel
 		while ( this.IsValid() )
 		{
 			var running = await Task.RunInThreadAsync( RunningEditors.Scan );
+			var stateChanged = !running.SetEquals( runningProjects );
 
-			if ( !running.SetEquals( runningProjects ) )
+			foreach ( var (path, process) in launchingProjects.ToArray() )
 			{
-				runningProjects = running;
+				var finished = false;
 
-				foreach ( var (row, path) in rowProjects )
+				try
 				{
-					if ( row.IsValid() ) row.SetClass( "running", running.Contains( path ) );
+					finished = process.HasExited || running.Contains( path );
 				}
+				catch ( InvalidOperationException )
+				{
+					finished = true;
+				}
+
+				if ( !finished ) continue;
+
+				process.Dispose();
+				launchingProjects.Remove( path );
+				stateChanged = true;
 			}
 
-			await Task.Delay( 2000 );
+			runningProjects = running;
+			if ( stateChanged ) UpdateProjectRows();
+
+			await Task.Delay( 500 );
+		}
+	}
+
+	void UpdateProjectRows()
+	{
+		foreach ( var (row, path) in rowProjects )
+		{
+			if ( !row.IsValid() ) continue;
+
+			row.SetClass( "running", runningProjects.Contains( path ) );
+			row.SetClass( "launching", launchingProjects.ContainsKey( path ) );
 		}
 	}
 
@@ -640,9 +666,15 @@ class LauncherWindow : Panel
 		runningTag.Add.Icon( "circle", "icon" );
 		runningTag.Add.Label( "Running", "running-label" );
 
+		var launchingTag = row.AddChild<Panel>();
+		launchingTag.AddClass( "launchingtag" );
+		launchingTag.Add.Icon( "hourglass_top", "icon" );
+		launchingTag.Add.Label( "Launching", "launching-label" );
+
 		var path = ProjectPath( project );
 		rowProjects[row] = path;
 		row.SetClass( "running", runningProjects.Contains( path ) );
+		row.SetClass( "launching", launchingProjects.ContainsKey( path ) );
 
 		var stats = row.AddChild<Panel>();
 		stats.AddClass( "statswrap" );
@@ -846,13 +878,12 @@ class LauncherWindow : Panel
 	static string ProjectPath( Project project ) => System.IO.Path.GetFullPath( project.ConfigFilePath );
 
 	/// <summary>
-	/// Open a project - unless an editor is already on it, in which case this does nothing.
-	/// A second instance is almost never what anyone wants; right click has Launch Another
-	/// Instance for when it really is.
+	/// Open a project - unless an editor is already on the project or it is still starting.
 	/// </summary>
 	void OpenProject( Project project )
 	{
-		if ( runningProjects.Contains( ProjectPath( project ) ) )
+		var path = ProjectPath( project );
+		if ( runningProjects.Contains( path ) || launchingProjects.ContainsKey( path ) )
 			return;
 
 		LaunchProject( project );
@@ -874,25 +905,41 @@ class LauncherWindow : Panel
 	}
 
 	/// <summary>
-	/// Launch the editor on a project - same as the Qt launcher, hand off to sbox-dev.
+	/// Launch the editor on a project - hand off directly to sbox-dev.
 	/// </summary>
 	void LaunchProject( Project project )
 	{
+		var path = ProjectPath( project );
+		var info = new ProcessStartInfo
+		{
+			FileName = NetCore.GetExecutablePath( "sbox-dev" ),
+			UseShellExecute = false,
+			CreateNoWindow = true,
+			WorkingDirectory = Environment.CurrentDirectory
+		};
+
+		foreach ( var argument in Environment.GetCommandLineArgs().Skip( 1 ) )
+			info.ArgumentList.Add( argument );
+
+		info.ArgumentList.Add( "-project" );
+		info.ArgumentList.Add( project.ConfigFilePath );
+
+		Process process;
+		try
+		{
+			process = Process.Start( info );
+			if ( process is null ) throw new InvalidOperationException( "The editor process was not created." );
+		}
+		catch ( Exception e )
+		{
+			Log.Warning( e, $"Couldn't launch editor for {project.ConfigFilePath}" );
+			return;
+		}
+
+		launchingProjects[path] = process;
 		project.LastOpened = DateTimeOffset.Now;
 		ProjectList.SaveList();
-
-		var info = new ProcessStartInfo( NetCore.GetExecutablePath( "sbox-dev" ), $"{Environment.CommandLine} -project \"{project.ConfigFilePath}\"" );
-
-		// Only let the shell start it on Windows - on Linux UseShellExecute goes through
-		// xdg-open, which opens the editor in a web browser rather than running it.
-		info.UseShellExecute = OperatingSystem.IsWindows();
-		info.CreateNoWindow = true;
-		info.WorkingDirectory = Environment.CurrentDirectory;
-
-		Process.Start( info );
-
-		// Mark it running right away rather than waiting on the next scan
-		runningProjects.Add( ProjectPath( project ) );
+		UpdateProjectRows();
 
 		if ( LauncherPreferences.CloseOnLaunch )
 		{
