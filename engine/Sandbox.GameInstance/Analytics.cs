@@ -71,17 +71,21 @@ internal static class Analytics
 
 	/// <summary>
 	/// Solo, hosting or joined, and how many others were there - playing alone is the norm for new players.
+	/// And how many are in our party, 0 without one.
 	/// </summary>
 	static object SampleNetwork()
 	{
+		var party = PartyRoom.Current?.MemberCount ?? 0;
+
 		if ( !Networking.IsActive )
-			return new { mode = "solo", players = 1, max = 1 };
+			return new { mode = "solo", players = 1, max = 1, party };
 
 		return new
 		{
 			mode = Networking.IsHost ? "host" : "client",
 			players = Connection.All.Count( x => x.State == Connection.ChannelState.Connected ),
 			max = Networking.MaxPlayers,
+			party,
 		};
 	}
 }
