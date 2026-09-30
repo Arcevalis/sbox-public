@@ -635,20 +635,9 @@ public class ResourceSystem
 
 		try
 		{
-<		if ( knownToExist )
+			if ( knownToExist || fs.FileExists( file ) )
 			{
 				data = fs.ReadAllBytes( file );
-			}
-			else
-			{
-				// No FileExists first: on an aggregate filesystem that's a second search over every
-				// mounted filesystem, and the open below does the same search anyway.
-				try
-				{
-					data = fs.ReadAllBytes( file );
-				}
-				catch ( FileNotFoundException ) { }
-				catch ( DirectoryNotFoundException ) { }
 			}
 
 			if ( data.Length <= 3 )
@@ -676,17 +665,12 @@ public class ResourceSystem
 
 			if ( Application.IsEditor )
 			{
-				// Open directly rather than ReadAllText, which checks FileExists first and so
-				// searches every mounted filesystem twice. Decoding matches ReadAllText, the
-				// file watcher hashes that and compares it to this.
-				try
+				var sourceFilePath = file.Substring( 0, file.Length - 2 );
+				if ( fs.FileExists( sourceFilePath ) )
 				{
-					using var stream = fs.OpenRead( file.Substring( 0, file.Length - 2 ) );
-					using var reader = new StreamReader( stream, System.Text.Encoding.UTF8, true );
-					se.LastSavedSourceHash = reader.ReadToEnd().FastHash();
+					var jsonBlob = fs.ReadAllText( sourceFilePath );
+					se.LastSavedSourceHash = jsonBlob.FastHash();
 				}
-				catch ( FileNotFoundException ) { }
-				catch ( DirectoryNotFoundException ) { }
 			}
 
 			//
