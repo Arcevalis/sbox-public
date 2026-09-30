@@ -10,7 +10,7 @@ public class AssetPathFlagTests
 	{
 		public void SetPath( string path ) => AbsolutePath = path;
 
-		internal override void UpdateInternals( bool compileImmediately = true ) { }
+		internal override void UpdateInternals() { }
 		public override bool CanRecompile => false;
 		public override string GetCompiledFile( bool absolute ) => null;
 		public override string GetSourceFile( bool absolute ) => null;
