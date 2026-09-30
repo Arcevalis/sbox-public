@@ -5,6 +5,7 @@ partial class CloudLocalNode : AssetFilterNode, ResourceLibrary.IEventListener
 	public CloudLocalNode() : base( "attach_file", "Referenced", "@referenced" )
 	{
 		EditorEvent.Register( this );
+		UpdateCount();
 	}
 
 	~CloudLocalNode()
@@ -12,29 +13,13 @@ partial class CloudLocalNode : AssetFilterNode, ResourceLibrary.IEventListener
 		EditorEvent.Unregister( this );
 	}
 
-	void ResourceLibrary.IEventListener.OnSave( GameResource resource ) => InvalidateCount();
-	void ResourceLibrary.IEventListener.OnExternalChanges( GameResource resource ) => InvalidateCount();
+	void ResourceLibrary.IEventListener.OnSave( GameResource resource ) => UpdateCount();
+	void ResourceLibrary.IEventListener.OnExternalChanges( GameResource resource ) => UpdateCount();
 
-	/// <summary>
-	/// Counting scans every project resource, so it only happens when the node is painted. Hidden or
-	/// closed browsers never pay for it, and a burst of saves (scene + terrain + prefabs) costs one recount.
-	/// </summary>
-	bool _countStale = true;
-
-	void InvalidateCount()
+	void UpdateCount()
 	{
-		_countStale = true;
-		TreeView?.Update();
-	}
-
-	public override void OnPaint( VirtualWidget item )
-	{
-		if ( _countStale )
-		{
-			_countStale = false;
-			Count = CloudAsset.GetAssetReferences( true ).Count;
-		}
-
-		base.OnPaint( item );
+		var packages = CloudAsset.GetAssetReferences( true );
+		Count = packages.Count;
+		Dirty();
 	}
 }

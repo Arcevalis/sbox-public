@@ -32,33 +32,29 @@ internal class NativeAsset : Asset
 		AbsoluteCompiledPath = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( native.GetAbsolutePath_Transient( AssetLocation_t.Game ).NormalizeFilename( false, false ) );
 		IsDeleted = string.IsNullOrEmpty( AbsolutePath );
 
-		// The guid write, user tags and the @published auto tag all read the meta file - parse it once
-		using ( MetaData.CacheReads( MetaData ) )
+		if ( MetaData is { } meta && NativeEngine.g_pResourceSystem.NeedsGuidWrite( RelativePath ) )
 		{
-			if ( MetaData is { } meta && NativeEngine.g_pResourceSystem.NeedsGuidWrite( RelativePath ) )
-			{
-				// DB has minted a new guid for this asset, make sure it's persisted in the .meta
-				meta.Set( "guid", Guid );
-			}
-
-			if ( AssetSystem.CloudDirectory is not null )
-			{
-				Package = AssetSystem.CloudDirectory.FindPackage( AbsolutePath, RelativePath );
-			}
-
-			// If we need a dependency update at this point, then this has taken a weird path through AssetSystem.AssetChanged
-			// And will be resolved on the very next tick
-			// The weird path it's taking was calling these below methods which resolving unresolved references before those assets had a chance to register...
-			// I don't have a better solution that doesn't involve ripping it all up
-			if ( native.NeedAnyDependencyUpdate_Virtual() )
-				return;
-
-			IsTrivialChild = native.IsTrivialChildAsset();
-
-			// Reload all tags.
-			LoadUserTags();
-			UpdateAutoTags();
+			// DB has minted a new guid for this asset, make sure it's persisted in the .meta
+			meta.Set( "guid", Guid );
 		}
+
+		if ( AssetSystem.CloudDirectory is not null )
+		{
+			Package = AssetSystem.CloudDirectory.FindPackage( AbsolutePath, RelativePath );
+		}
+
+		// If we need a dependency update at this point, then this has taken a weird path through AssetSystem.AssetChanged
+		// And will be resolved on the very next tick
+		// The weird path it's taking was calling these below methods which resolving unresolved references before those assets had a chance to register...
+		// I don't have a better solution that doesn't involve ripping it all up
+		if ( native.NeedAnyDependencyUpdate_Virtual() )
+			return;
+
+		IsTrivialChild = native.IsTrivialChildAsset();
+
+		// Reload all tags.
+		LoadUserTags();
+		UpdateAutoTags();
 
 		if ( compileImmediately && !IsCompiled && AssetType.IsGameResource )
 		{
