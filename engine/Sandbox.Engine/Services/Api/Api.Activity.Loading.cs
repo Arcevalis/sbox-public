@@ -49,6 +49,29 @@ internal static partial class Api
 
 		public static Load CurrentLoad { get; private set; }
 
+		static FastTimer runTimer;
+		static int runLoads;
+		static int runGames;
+		static float? runFirstGame;
+
+		internal static void RunStarted() => runTimer = FastTimer.StartNew();
+
+		/// <summary>
+		/// Once, on the way out: how long s&amp;box was open and whether a game was ever played. A run
+		/// with no game is someone who opened the menu and left. Lost if the process dies.
+		/// </summary>
+		internal static void ReportRun()
+		{
+			if ( Application.IsEditor || Application.IsDedicatedServer || Application.IsHeadless ) return;
+
+			var e = new Events.EventRecord( "app.run" );
+			e.SetValue( "s", (int)runTimer.ElapsedSeconds );
+			e.SetValue( "loads", runLoads );
+			e.SetValue( "games", runGames );
+			if ( runFirstGame is { } first ) e.SetValue( "first_game_s", (int)first );
+			e.Submit();
+		}
+
 		/// <summary>
 		/// The player asked for a game. With <paramref name="replace"/> off, a generic route (a console
 		/// command) doesn't overwrite what the menu already said about the same game.
@@ -100,6 +123,7 @@ internal static partial class Api
 
 				request = null;
 
+				runLoads++;
 				CurrentLoad = new Load( ident, remote, origin, waited );
 				return CurrentLoad;
 			}
@@ -150,6 +174,9 @@ internal static partial class Api
 		{
 			lock ( loadLock )
 			{
+				runGames++;
+				runFirstGame ??= (float)runTimer.ElapsedSeconds;
+
 				completedLoad = data;
 				completedOrigin = load.Origin;
 

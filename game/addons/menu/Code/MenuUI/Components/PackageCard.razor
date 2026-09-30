@@ -113,6 +113,7 @@
 	bool showVideo;
 	float? videoRequestedAt;
 	RealTimeSince? hoverStartedAt;
+	bool hoverReported;
 
 	bool WantsVideo() => AlwaysPlayVideo || HasHovered || (VideoThumbs && (Rotation is null || Rotation.IsPlaying( this )));
 	bool ShowVideo() => showVideo;
@@ -158,18 +159,22 @@
 		base.OnMouseOut(e);
 
 		hoverStartedAt = null;
+		hoverReported = false;
 	}
 
 	void TickHoverPreview()
 	{
-		if ( hoverStartedAt is null ) return;
+		if ( hoverStartedAt is null || Package is null ) return;
+		if ( hoverStartedAt.Value <= HoverPreviewDelay ) return;
 
-		if ( !HoverPreview || Size == SizeType.List || Package is null )
+		// A hover counts whether or not a hover card opens - the tile plays its video either way
+		if ( !hoverReported )
 		{
-			return;
+			hoverReported = true;
+			Discovery.Hovered( this, Package );
 		}
 
-		if ( hoverStartedAt.Value > HoverPreviewDelay )
+		if ( HoverPreview && Size != SizeType.List )
 			PackageHoverCard.Show( this, Package, PlayingVideoUrl );
 	}
 

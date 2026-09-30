@@ -98,6 +98,19 @@ public static class Discovery
 	static int clickedPosition;
 	static RealTimeSince clickedAge;
 
+	sealed class Preview
+	{
+		public string Kind;
+		public string Ident;
+		public DiscoveryContext Context;
+		public int Position;
+		public RealTimeSince Age;
+		public string Played;
+		public string Then;
+	}
+
+	static readonly List<Preview> previews = new();
+
 	/// <summary>
 	/// Call every tick from a panel that shows a package. Reports it once when it has been seen.
 	/// </summary>
@@ -131,13 +144,15 @@ public static class Discovery
 	}
 
 	/// <summary>
-	/// The hover card for a package opened.
+	/// The pointer rested on a package tile. Once per tile, like views - players sweep the mouse across shelves.
 	/// </summary>
 	public static void Hovered( Panel source, Package package )
 	{
 		if ( package is null ) return;
 
 		var context = Find( source );
+		if ( !FirstTime( $"hover|{context.Surface}|{context.Shelf}|{package.FullIdent}" ) ) return;
+
 		Submit( "discovery.hover", Describe( package, context, context.PositionOf( package ) ) );
 	}
 
@@ -201,11 +216,60 @@ public static class Discovery
 		var data = Describe( package, context, position );
 		data["via"] = via;
 
+		foreach ( var preview in previews )
+		{
+			if ( preview.Ident == package.FullIdent ) preview.Played ??= via;
+		}
+
 		// Views first, so the play lands after what led to it
 		Flush();
 		Submit( "discovery.play", data );
 
 		Api.Activity.GameRequested( new Api.Activity.Origin( "menu", package.FullIdent, context.Surface, context.Shelf, position, ListId( context ), via ) );
+	}
+
+	/// <summary>
+	/// Something showing a package before the player commits to it opened: <paramref name="kind"/> is
+	/// "page" for its game page, "hovercard" for the hover card. With <see cref="PreviewClosed"/> it says
+	/// how long it was open, whether Play was pressed and what opened next. Without a
+	/// <paramref name="context"/> it's credited to the tile last clicked for the package.
+	/// </summary>
+	public static void PreviewOpened( string kind, string ident, DiscoveryContext context = null, int position = -1 )
+	{
+		if ( string.IsNullOrEmpty( ident ) ) return;
+		if ( previews.Any( x => x.Kind == kind && x.Ident == ident ) ) return;
+
+		// One of each kind at a time
+		PreviewClosed( kind );
+
+		foreach ( var other in previews )
+		{
+			if ( other.Ident == ident ) other.Then ??= kind;
+		}
+
+		if ( context is null && clickedIdent == ident && clickedAge < ClickLifetime )
+		{
+			context = clickedContext;
+			position = clickedPosition;
+		}
+
+		previews.Add( new Preview { Kind = kind, Ident = ident, Context = context ?? new DiscoveryContext { Surface = "unknown" }, Position = position, Age = 0 } );
+	}
+
+	public static void PreviewClosed( string kind, string ident = null )
+	{
+		var preview = previews.FirstOrDefault( x => x.Kind == kind && (ident is null || x.Ident == ident) );
+		if ( preview is null ) return;
+
+		previews.Remove( preview );
+
+		var data = Describe( preview.Ident, preview.Context, preview.Position );
+		data["kind"] = kind;
+		data["s"] = MathF.Round( preview.Age, 1 );
+		if ( preview.Played is not null ) data["played"] = preview.Played;
+		if ( preview.Then is not null ) data["then"] = preview.Then;
+
+		Submit( "discovery.preview", data );
 	}
 
 	/// <summary>
@@ -236,13 +300,16 @@ public static class Discovery
 	static void Seen( Panel tile, Package package )
 	{
 		var context = Find( tile );
-		var key = $"{context.Surface}|{context.Shelf}|{context.List}|{context.Query}|{package.FullIdent}";
-
-		if ( seen.Count > 10_000 ) seen.Clear();
-		if ( !seen.Add( key ) ) return;
+		if ( !FirstTime( $"{context.Surface}|{context.Shelf}|{context.List}|{context.Query}|{package.FullIdent}" ) ) return;
 
 		if ( pending.Count == 0 ) sinceFlush = 0;
 		pending.Add( Describe( package, context, context.PositionOf( package ) ) );
+	}
+
+	static bool FirstTime( string key )
+	{
+		if ( seen.Count > 10_000 ) seen.Clear();
+		return seen.Add( key );
 	}
 
 	static void Flush()

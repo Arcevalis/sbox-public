@@ -121,6 +121,8 @@
         if (PackageIdent is null)
             return;
 
+        Discovery.PreviewOpened( "page", PackageIdent );
+
         // Get whatever package info we have
         Package.TryGetCached(PackageIdent, out Package, true);
 
@@ -153,6 +155,12 @@
         }
 
         StateHasChanged();
+    }
+
+    public override void OnDeleted()
+    {
+        base.OnDeleted();
+        Discovery.PreviewClosed( "page", PackageIdent );
     }
 
     protected override int BuildHash() => System.HashCode.Combine(Package, HasAchievements);

@@ -307,6 +307,9 @@
 
         if ( Current == this )
             Current = null;
+
+        if ( hoverReported )
+            Discovery.PreviewClosed( "hovercard", Package?.FullIdent );
     }
 
     public override void Tick()
@@ -334,7 +337,9 @@
         if ( !hoverReported && age >= IntroTime )
         {
             hoverReported = true;
-            Discovery.Hovered( Source, Package );
+
+            var context = Discovery.Find( Source );
+            Discovery.PreviewOpened( "hovercard", Package.FullIdent, context, context.PositionOf( Package ) );
         }
 
         if ( !showVideo && age >= VideoDelay )

@@ -53,6 +53,14 @@ public static partial class MenuUtility
 
 		using var scope = Networking.MatchmakingScope();
 
+		// What the search found and where it ended up, so an empty or failed search can be told apart
+		// from a join. Without a join the caller usually starts its own server.
+		var report = new Api.Events.EventRecord( "quickplay" );
+		report.SetValue( "ident", ident );
+		report.StartTimer( "ms" );
+		var tried = 0;
+		int? joinedMembers = null;
+
 		try
 		{
 			_isJoiningLobby = true;
@@ -61,6 +69,9 @@ public static partial class MenuUtility
 			Log.Info( "Searching for games.." );
 			var lobbies = await Networking.QueryLobbies( ident );
 			Log.Info( $"..found {lobbies.Count} available matches" );
+
+			report.SetValue( "found", lobbies.Count );
+			report.SetValue( "open", lobbies.Count( x => !x.IsFull ) );
 
 			var orderedLobbies = lobbies.OrderBy( lobby => lobby.ContainsFriends )
 				.ThenByDescending( lobby => lobby.Members );
@@ -75,8 +86,10 @@ public static partial class MenuUtility
 				Log.Info( $"Attempting to join available lobby {lobby.LobbyId}" );
 
 				// Try to join this one
+				tried++;
 				if ( await Networking.TryConnectSteamId( lobby.LobbyId ) )
 				{
+					joinedMembers = lobby.Members;
 					CloseAllModals();
 					return true;
 				}
@@ -87,6 +100,12 @@ public static partial class MenuUtility
 		finally
 		{
 			_isJoiningLobby = false;
+
+			report.FinishTimer( "ms" );
+			report.SetValue( "tried", tried );
+			report.SetValue( "joined", joinedMembers is not null );
+			if ( joinedMembers is { } members ) report.SetValue( "members", members );
+			report.Submit();
 		}
 	}
 }
