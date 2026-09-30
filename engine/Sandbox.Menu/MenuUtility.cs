@@ -318,11 +318,11 @@ public static partial class MenuUtility
 
 	/// <summary>
 	/// Whether this friend can be invited to your current (or about-to-be-created) party -
-	/// ie. they're online, not you, and not already in it.
+	/// ie. not you, and not already in it. Offline doesn't rule them out: people set to appear
+	/// offline in Steam are often really there, and still get the invite.
 	/// </summary>
 	public static bool CanInviteToParty( Friend friend )
 	{
-		if ( !friend.IsOnline ) return false;
 		if ( friend.IsMe ) return false;
 		if ( PartyRoom.Current is not null && PartyRoom.Current.Members.Contains( friend ) ) return false;
 

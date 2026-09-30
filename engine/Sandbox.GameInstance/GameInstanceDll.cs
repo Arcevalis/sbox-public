@@ -670,6 +670,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 		// Tear down the current game in its own scope. We may have been called from the
 		// menu, and the shutdown clears per-context state.
+		Api.Activity.LoadStage( "teardown" );
 		using ( GlobalContext.GameScope() )
 		{
 			gameInstance?.Shutdown();
@@ -701,7 +702,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 				_ = playerStats.Refresh();
 			}
 
-			await Task.Delay( 10 );
+			await Task.Yield();
 			LoadingScreen.Title ??= "Loading..";
 		}
 
@@ -720,6 +721,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 			using var _ = GlobalContext.GameScope();
 
+			Api.Activity.LoadStage( "reset" );
 			ResetEnvironment();
 
 			NativeErrorReporter.Breadcrumb( true, "game", $"Loading game package {ident}" );
@@ -728,7 +730,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 			if ( !Application.IsDedicatedServer && !Application.IsStandalone )
 			{
-				await Task.Delay( 10 );
+				await Task.Yield();
 			}
 
 			if ( !await newInstance.LoadAsync( AssemblyEnroller, ct ) )
@@ -744,9 +746,9 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 			if ( ct.IsCancellationRequested )
 				return;
 
-			await Task.Delay( 10 );
+			await Task.Yield();
 			GC.Collect( GC.MaxGeneration, GCCollectionMode.Optimized, false, false );
-			await Task.Delay( 10 );
+			await Task.Yield();
 
 			if ( Package.TryParseIdent( ident, out var parsed ) )
 			{
@@ -785,6 +787,12 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 			//
 			if ( flags.Contains( GameLoadingFlags.Host ) )
 			{
+				Api.Activity.LoadStage( "scene" );
+
+				// The scene loads synchronously, so the title shown until it returns is whatever the last frame drew
+				LoadingScreen.Title = "Loading Scene";
+				await Task.Yield();
+
 				if ( !gameInstance.OpenStartupScene() )
 				{
 					throw new Exception( "Failed to load startup scene" );

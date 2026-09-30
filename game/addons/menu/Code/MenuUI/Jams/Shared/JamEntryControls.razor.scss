@@ -61,7 +61,7 @@ JamPage JamEntryControls
 		flex-grow: 1;
 		flex-shrink: 1;
 		margin-left: auto;
-		border: 1px solid $front-hairline;
+		border: $front-border-width solid $front-hairline;
 		background-color: rgba( 0, 0, 0, 0.25 );
 		color: $front-body;
 		pointer-events: all;

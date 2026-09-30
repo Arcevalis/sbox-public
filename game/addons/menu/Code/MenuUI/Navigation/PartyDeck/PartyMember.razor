@@ -7,7 +7,8 @@
 
 <root class="@(IsTalking ? "talking" : "") @StatusClass" tooltip=@StatusTooltip>
 
-	<Avatar UserId="@((long)Friend.Id)" />
+	@* No status ring - everyone here's in s&box. The only ring in the deck means talking *@
+	<Avatar UserId="@((long)Friend.Id)" ShowStatus="@false" />
 
 	@if (IsOwner)
 	{

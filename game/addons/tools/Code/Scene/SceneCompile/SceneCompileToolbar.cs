@@ -1,11 +1,9 @@
-using System;
-
 namespace Editor;
 
 /// <summary>
 /// Quick scene compilation and status, with settings and diagnostics available on demand.
 /// </summary>
-sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
+sealed class SceneCompileToolbar : Widget
 {
 	readonly SceneCompileSession _session = SceneCompileSession.Current;
 	readonly ViewportButton _button;
@@ -20,17 +18,7 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 	Option _log;
 	bool _menuReady;
 
-	Scene _scene;
-	string _path;
-	bool _unsaved;
-	bool _playing;
 	bool _wasRunning;
-	bool _invalidated = true;
-	bool _validating;
-	string _compileState = "Not compiled";
-	string _compileDetail = "Compile this scene to build its runtime geometry and collision.";
-	string _compileError;
-	Color _compileColor = Theme.Yellow;
 
 	public SceneCompileToolbar( Widget parent ) : base( parent )
 	{
@@ -56,19 +44,6 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 		base.OnDestroyed();
 	}
 
-	void AssetSystem.IEventListener.OnAssetChanged( Asset asset )
-	{
-		if ( _session.IsCompileDependency( asset ) )
-			_invalidated = true;
-	}
-
-	[Event( "scene.saved" )]
-	void OnSceneChanged( Scene scene )
-	{
-		if ( scene == _session.Scene )
-			_invalidated = true;
-	}
-
 	[EditorEvent.Frame]
 	void UpdateScene()
 	{
@@ -83,25 +58,6 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 			return;
 		}
 
-		var scene = active?.Scene;
-		var path = scene?.Source?.ResourcePath;
-		var unsaved = scene?.Editor?.HasUnsavedChanges ?? false;
-		var changed = scene != _scene || path != _path || unsaved != _unsaved || _playing != Game.IsPlaying;
-
-		if ( changed && !_session.Running )
-		{
-			_scene = scene;
-			_path = path;
-			_unsaved = unsaved;
-			_playing = Game.IsPlaying;
-			_invalidated = true;
-			_menu?.Close();
-		}
-
-		// Hash generated resources only after an invalidation, never on every editor frame.
-		if ( _invalidated && !_session.Running )
-			ValidateCompilation();
-
 		UpdateControls();
 	}
 
@@ -110,88 +66,25 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 		if ( _wasRunning != _session.Running )
 		{
 			_wasRunning = _session.Running;
-			_invalidated = true;
 			_menu?.Close();
-			if ( !_session.Running )
-				ValidateCompilation();
 		}
 
 		UpdateControls();
 	}
 
-	async void ValidateCompilation()
-	{
-		if ( _validating || _session.Running )
-			return;
-
-		_validating = true;
-		try
-		{
-			_session.Refresh();
-			_invalidated = false;
-			var scene = _session.Scene;
-			var path = scene?.Source?.ResourcePath;
-			_compileError = null;
-			if ( !_session.HasCompileGeometry || scene?.Editor?.HasUnsavedChanges == true )
-				return;
-
-			var compilation = await _session.ValidateCompilationAsync();
-			if ( !IsValid || _invalidated || _session.Running || scene != _session.Scene
-				|| scene?.Editor?.HasUnsavedChanges == true
-				|| path != _session.Scene?.Source?.ResourcePath )
-			{
-				_invalidated = true;
-				return;
-			}
-			_compileState = "Not compiled";
-			_compileDetail = "Compile this scene to build its runtime geometry and collision.";
-			_compileError = null;
-			_compileColor = Theme.Yellow;
-			if ( !compilation.HasCompilation )
-				return;
-
-			if ( !compilation.IsCurrent )
-			{
-				_compileState = "Out of date";
-				_compileDetail = "Compile again to rebuild missing or outdated scene data.";
-				_compileError = compilation.Error;
-				_compileColor = Theme.Yellow;
-				return;
-			}
-
-			_compileState = "Up to date";
-			_compileDetail = "";
-			_compileColor = Theme.Green;
-		}
-		catch ( Exception e )
-		{
-			Log.Error( e, "Could not check scene compilation" );
-			_compileState = "Could not check compilation";
-			_compileDetail = _compileError = e.Message;
-			_compileColor = Theme.Yellow;
-		}
-		finally
-		{
-			_validating = false;
-			UpdateControls();
-		}
-	}
-
 	(string Title, string Detail, Color Color) Status()
 	{
 		if ( _session.Running )
-			return _session.Cancelling
-				? ("Cancelling", "Stopping compilation and removing unfinished output.", Theme.Blue)
-				: (_session.Status, "Editing this scene cancels the compile.", Theme.Blue);
+			return (_session.Status, "", Theme.Blue);
 
 		if ( Game.IsPlaying )
 			return ("Play mode", "Stop playing before compiling the scene.", Theme.TextLight);
 
-		if ( _session.Error is null && _session.HasSources && !_session.HasCompileGeometry )
+		if ( _session.Error is null && _session.HasSources && !_session.HasCompileGeometry && !_session.HasCompilation )
 			return ("Nothing to compile", "This scene has no geometry to bake.", Theme.TextLight);
 
 		if ( _session.Scene?.Editor?.HasUnsavedChanges == true )
-			return ("Unsaved changes", "Save this scene before compiling it.", Theme.Yellow);
+			return ("Needs compile (unsaved)", "Play uses the uncompiled scene. Save before compiling.", Theme.Yellow);
 
 		if ( _session.HasResult && _session.Status == "Failed" )
 			return ("Compile failed", _session.Error ?? "Open the log to see why compilation failed.", Theme.Red);
@@ -199,13 +92,12 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 		if ( _session.Error is not null )
 			return ("Cannot compile", _session.Error, Theme.Yellow);
 
-		if ( _validating || _invalidated )
-			return ("Checking compilation", "", Theme.Yellow);
+		if ( !_session.HasCompilation )
+			return ("Not compiled", "Play uses the uncompiled scene.", Theme.Yellow);
 
-		if ( _session.HasPendingSettings )
-			return ("Settings changed", "Compile again to apply these settings.", Theme.Yellow);
-
-		return (_compileState, _compileDetail, _compileColor);
+		return _session.NeedsCompilation
+			? ("Needs compile", "Play uses the uncompiled scene.", Theme.Yellow)
+			: ("Compiled", "Play uses the compiled scene.", Theme.Green);
 	}
 
 	void UpdateControls()
@@ -233,9 +125,8 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 		_state.Text = status.Title;
 		_state.Color = status.Color;
 		_description.Text = status.Detail;
-		_description.ToolTip = _session.Error ?? _compileError ?? "";
-		_description.Visible = !string.IsNullOrEmpty( status.Detail )
-			&& (_session.Running || !_session.CanCompile || _compileState == "Out of date" || _session.HasPendingSettings);
+		_description.ToolTip = _session.Error ?? "";
+		_description.Visible = !string.IsNullOrEmpty( status.Detail );
 		if ( _cancel.IsValid() )
 		{
 			_cancel.Text = _session.Cancelling ? "Cancelling..." : "Cancel compile";
@@ -267,7 +158,7 @@ sealed class SceneCompileToolbar : Widget, AssetSystem.IEventListener
 		}
 
 		if ( !_session.Running )
-			ValidateCompilation();
+			_session.Refresh();
 
 		_menuReady = false;
 		_menu = new ContextMenu( this );

@@ -13,6 +13,11 @@ public partial class MenuOverlay : RootPanel
 	public ToastArea TopCenter;
 
 	/// <summary>
+	/// Along the bottom, in the middle - the post-game "thanks for playing" card.
+	/// </summary>
+	public ToastArea BottomCenter;
+
+	/// <summary>
 	/// Holds the bottom right toasts (the post-game popup and friends). The party deck moves it up to
 	/// sit above itself when it's showing.
 	/// </summary>
@@ -22,12 +27,18 @@ public partial class MenuOverlay : RootPanel
 	{
 		Shutdown();
 		Instance = new MenuOverlay();
+
+		// After the overlay, so it draws over it - see LoadingRoot
+		LoadingRoot.Instance = new LoadingRoot();
 	}
 
 	public static void Shutdown()
 	{
 		Instance?.Delete();
 		Instance = null;
+
+		LoadingRoot.Instance?.Delete();
+		LoadingRoot.Instance = null;
 	}
 
 	public MenuOverlay()
@@ -35,10 +46,10 @@ public partial class MenuOverlay : RootPanel
 		Top = AddChild<ToastArea>( "popup_canvas" );
 		TopCenter = AddChild<ToastArea>( "popup_canvas_top" );
 		TopLeft = AddChild<ToastArea>( "popup_canvas_topleft" );
+		BottomCenter = AddChild<ToastArea>( "popup_canvas_bottomcenter" );
 		NotificationCorner = AddChild<Panel>( "notification-corner" );
 		BottomRight = NotificationCorner.AddChild<ToastArea>( "popup_canvas_bottomright" );
 
-		AddChild<LoadingOverlay>();
 		AddChild<MicOverlay>();
 		AddChild<SubtitleOverlay>();
 		AddChild<ChatOverlay>();
@@ -57,17 +68,10 @@ public partial class MenuOverlay : RootPanel
 			AddChild<Sandbox.UI.Footer>();
 	}
 
-	protected override void UpdateScale( Rect screenSize )
-	{
-		Scale = Screen.DesktopScale;
-
-		var minimumHeight = 1080.0f * Screen.DesktopScale;
-
-		if ( screenSize.Height < minimumHeight )
-		{
-			Scale *= screenSize.Height / minimumHeight;
-		}
-	}
+	// No UpdateScale override - the root panel's own sizes things by screen height (1080 tall is 1:1),
+	// the same as the main menu. It used to go by desktop scale, which left everything in here (the
+	// post-game toast, the party deck when it's up here) smaller than the menu it sits over on any
+	// screen taller than 1080.
 
 	public static void Show( Panel content, float duration = 4f )
 		=> Instance.Top.Show( content, duration );

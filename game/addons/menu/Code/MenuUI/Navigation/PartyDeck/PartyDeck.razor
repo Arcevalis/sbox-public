@@ -84,13 +84,24 @@
 	}
 
 	@* Roomy faces while the party's small, smaller ones once it fills up - 16 fit in two rows of 8 *@
-	<div class="members @(MemberCount > 5 ? "compact" : "")">
+	<div class="members @(SeatsTaken > 5 ? "compact" : "")">
 		<PartyMember Friend="@Me" Status="@StatusOf( Me )" />
 		@foreach ( var member in Members.Where( x => !x.IsMe ) )
 		{
 			<PartyMember Friend="@member" Status="@StatusOf( member )" />
 		}
-		@if ( MemberCount < MaxMembers )
+
+		@* Asked in, not here yet - their seat's held, greyed out, until they turn up or it lapses.
+		   Clicking one lets it go (the invite itself is already with them). *@
+		@foreach ( var invited in PartyInvites.Pending )
+		{
+			<div class="pending-seat" tooltip="@PendingTooltip( invited )" onmouseup="@( () => PartyInvites.Dismiss( invited.Id ) )">
+				<Avatar UserId="@((long)invited.Id)" ShowStatus="@false" />
+				<div class="pending-badge"><icon class="waiting">hourglass_top</icon><icon class="dismiss">close</icon></div>
+			</div>
+		}
+
+		@if ( SeatsTaken < MaxMembers )
 		{
 			@* Docked in the rail, the friends list is right there above it, so this just shows there's
 			   room. Popped out (over a modal, or on a page without the rail) it opens the friends list. *@
@@ -110,6 +121,18 @@
 
 	int MemberCount => PartyView.MemberCount;
 	int MaxMembers => PartyView.MaxMembers;
+
+	/// <summary>
+	/// Everyone in, plus everyone asked who hasn't answered - their seats are spoken for.
+	/// </summary>
+	int SeatsTaken => MemberCount + PartyInvites.Pending.Count;
+
+	static string PendingTooltip( Friend invited )
+	{
+		var seconds = (int)PartyInvites.SecondsSince( invited.Id );
+		var ago = seconds < 60 ? $"{seconds}s ago" : $"{seconds / 60}m ago";
+		return $"{invited.Name} - invite sent {ago}. Click to stop waiting";
+	}
 
 	string Heading => PartyView.OwnerIsMe ? "Your party" : $"{PartyView.Owner.Name}'s party";
 
@@ -263,7 +286,7 @@
 		foreach ( var member in Members )
 			members.Add( StatusOf( member ) );
 
-		return System.HashCode.Combine( PartyView.Exists, MemberCount, PartyView.Owner, VoiceClass, Lifted, Status, members.ToHashCode(), HashCode.Combine( GameThumb, GameArt ) );
+		return System.HashCode.Combine( PartyView.Exists, MemberCount, PartyView.Owner, VoiceClass, Lifted, Status, members.ToHashCode(), HashCode.Combine( GameThumb, GameArt, PartyInvites.Hash ) );
 	}
 
 	public async static Task EnsureLobbyExists()

@@ -3,10 +3,8 @@ namespace Editor;
 sealed class SceneCompileToast : ToastWidget
 {
 	[Event( "scene.compile.finished" )]
-	static void OnCompileFinished( SceneCompileSession report, string detail, Action openReport )
+	static void OnCompileFinished( string name, string status, string detail )
 	{
-		var name = report.Name;
-		var status = report.Status;
 		var failed = status == "Failed";
 		if ( !EditorPreferences.NotificationPopups
 			|| EditorPreferences.CompileNotifications != EditorPreferences.NotificationLevel.ShowAlways
@@ -31,20 +29,8 @@ sealed class SceneCompileToast : ToastWidget
 		var body = new Widget() { FixedWidth = 300 };
 		body.Layout = Layout.Column();
 		body.Layout.Spacing = 4;
-		var heading = body.Layout.AddRow();
-		heading.Spacing = 8;
-		heading.Add( new Label( name ) { WordWrap = true, MaximumWidth = 200 }, 1 )
+		body.Layout.Add( new Label( name ) { WordWrap = true } )
 			.SetStyles( "font-weight: bold;" );
-		heading.Add( new Button.Clear( failed ? "Open log" : "Report", "arrow_forward" )
-		{
-			FixedHeight = 20,
-			ToolTip = failed ? "Open the compile log" : "View the compile report",
-			Clicked = () =>
-			{
-				openReport();
-				ToastManager.Dismiss( toast );
-			}
-		} );
 		body.Layout.Add( new Label( failed ? detail : detail.Replace( "\n", ", " ) )
 		{
 			WordWrap = true,

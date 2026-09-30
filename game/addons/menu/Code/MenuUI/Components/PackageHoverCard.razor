@@ -22,9 +22,9 @@
         @if ( Package.Usage.UsersNow > 0 )
         {
             <div class="facts">
-                <div class="fact live">
+                <div class="fact live" tooltip="Playing now">
                     <div class="live-dot" />
-                    <label>@Compact( Package.Usage.UsersNow ) playing</label>
+                    <label>@Compact( Package.Usage.UsersNow )</label>
                 </div>
             </div>
         }
@@ -47,16 +47,17 @@
 
         <div class="byline">
             <label>@Byline()</label>
-            @if ( Package.TypeName == "game" && Package.Info.MaxPlayers > 1 )
-            {
-                <label class="sep">·</label>
-                <div class="fact">
-                    <icon>groups</icon>
-                    <label>@PlayersText()</label>
-                </div>
-            }
 
             <div class="grow" />
+
+            @* How it's played gets its own chip, so multiplayer stands out from the genres *@
+            @if ( PlayerModes.For( Package ) is { Label: { } modeLabel } modes )
+            {
+                <a class="mode @(modes.Multiplayer ? "multiplayer" : "")" href=@TagUrl( ModeTag( modes ) ) tooltip="@modes.Hint">
+                    <icon>@modes.Icon</icon>
+                    <label>@modeLabel</label>
+                </a>
+            }
 
             @{ var tags = Tags().ToList(); }
             @for ( int i = 0; i < tags.Count; i++ )
@@ -463,13 +464,6 @@
         return string.IsNullOrEmpty( org ) ? $"Updated {updated}" : $"by {org}  ·  Updated {updated}";
     }
 
-    string PlayersText()
-    {
-        var max = Package.Info.MaxPlayers;
-        var min = Package.Info.MinPlayers;
-        return min > 1 && max > min ? $"{min} - {max}" : $"Up to {max}";
-    }
-
     // Review stats when there are any, else the up/down votes. -1 = unrated.
     (int Percent, int Count) Rating()
     {
@@ -540,22 +534,27 @@
     IEnumerable<string> Tags()
     {
         var tags = Package.Tags ?? Array.Empty<string>();
-        var genres = tags.Where( x => GenreLabels.ContainsKey( x ) ).Select( x => x.ToLowerInvariant() ).DistinctBy( x => GenreLabels[x] );
-        var mode = PlayerMode();
 
-        return mode is null ? genres.Take( 2 ) : genres.Take( 1 ).Prepend( mode );
+        // The mode chip covers how it's played, so these are just what kind of game it is - and
+        // the chip takes one of the two places when there is one
+        return tags.Where( x => GenreLabels.ContainsKey( x ) && !ModeTags.Contains( x ) )
+            .Select( x => x.ToLowerInvariant() )
+            .DistinctBy( x => GenreLabels[x] )
+            .Take( PlayerModes.For( Package ).IsUnknown ? 2 : 1 );
     }
 
-    // Listings carry tags but not the MaxPlayers meta, so check both.
-    string PlayerMode()
+    static readonly HashSet<string> ModeTags = new( StringComparer.OrdinalIgnoreCase ) { "singleplayer", "multiplayer", "coop", "versus", "pvp" };
+
+    /// <summary>
+    /// The tag the mode chip browses to - the most specific one the game actually has.
+    /// </summary>
+    string ModeTag( PlayerModes modes )
     {
-        var tags = Package.Tags ?? Array.Empty<string>();
-        var max = Package.GetMeta( "MaxPlayers", 0 );
+        if ( modes.Coop ) return "coop";
+        if ( modes.Versus ) return HasTag( "versus" ) ? "versus" : "pvp";
+        if ( modes.Multiplayer ) return "multiplayer";
 
-        if ( tags.Contains( "multiplayer" ) || tags.Contains( "coop" ) || tags.Contains( "pvp" ) || max > 1 ) return "multiplayer";
-        if ( tags.Contains( "singleplayer" ) || max == 1 ) return "singleplayer";
-
-        return null;
+        return "singleplayer";
     }
 
     static string Compact( long n )

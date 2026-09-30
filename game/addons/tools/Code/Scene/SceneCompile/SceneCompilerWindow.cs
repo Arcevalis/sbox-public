@@ -8,14 +8,13 @@ namespace Editor;
 /// </summary>
 internal sealed class SceneCompilerWindow : Dialog
 {
-	SceneCompileSession _session;
+	readonly SceneCompileSession _session = SceneCompileSession.Current;
 
 	readonly Label _title;
 	readonly Label _status;
 	readonly Bar _bar;
 	readonly SegmentedControl _tabs;
 	readonly Dictionary<string, Widget> _pages = new();
-	readonly Widget _options;
 	readonly ListView _report;
 	readonly TextEdit _log;
 	readonly Button _compile;
@@ -27,6 +26,7 @@ internal sealed class SceneCompilerWindow : Dialog
 	string _error;
 	string[] _summary;
 
+	IReadOnlyList<string> _displayedLines;
 	int _displayedLineCount;
 	bool _wasRunning;
 
@@ -44,28 +44,22 @@ internal sealed class SceneCompilerWindow : Dialog
 	/// <summary>
 	/// Bring up the compiler for the active scene, reusing the window if it's already open.
 	/// </summary>
+	[Event( "scene.compile.show-report" )]
 	internal static void Open( string page = "Report" )
 	{
-		var session = SceneCompileSession.Current;
-		session.Refresh();
-		Open( session.HasResult ? session.CreateReportSnapshot() : session, page );
-	}
+		SceneCompileSession.Current.Refresh();
 
-	[Event( "scene.compile.show-report" )]
-	internal static void Open( SceneCompileSession session, string page )
-	{
 		if ( _current is { IsValid: true } )
 		{
-			_current.Bind( session );
 			_current.SelectPage( page );
 			_current.Show();
 			return;
 		}
 
-		_current = new SceneCompilerWindow( session, page );
+		_current = new SceneCompilerWindow( page );
 	}
 
-	SceneCompilerWindow( SceneCompileSession session, string page ) : base( EditorWindow )
+	SceneCompilerWindow( string page ) : base( EditorWindow )
 	{
 		Window.Title = "Scene Compile Report";
 		Window.SetWindowIcon( "hardware" );
@@ -92,6 +86,7 @@ internal sealed class SceneCompilerWindow : Dialog
 		report.ItemSize = new Vector2( 0, 22 );
 		report.ItemPaint = PaintEntry;
 		report.ItemClicked = OnEntryClicked;
+		report.ItemContextMenu = OnEntryContextMenu;
 		report.Margin = 4;
 		_report = report;
 
@@ -100,11 +95,9 @@ internal sealed class SceneCompilerWindow : Dialog
 		_log.HorizontalScrollbarMode = ScrollbarMode.Off;
 		_log.SetStyles( "font-family: Consolas, monospace; padding: 8px;" );
 
-		_options = new SceneCompileSettingsWidget( this );
-
 		AddPage( "Report", "list", _report );
 		AddPage( "Log", "notes", _log );
-		AddPage( "Settings", "settings", _options );
+		AddPage( "Settings", "settings", new SceneCompileSettingsWidget( this ) );
 
 		ShowPage( "Report" );
 
@@ -118,7 +111,10 @@ internal sealed class SceneCompilerWindow : Dialog
 
 		_compile = footer.Add( new Button.Primary( "Compile", "hardware" ) { Clicked = OnCompile } );
 
-		Bind( session );
+		_session.Changed += OnSessionChanged;
+		_wasRunning = _session.Running;
+		BuildReport();
+		RefreshView();
 		SelectPage( page );
 
 		Show();
@@ -155,23 +151,6 @@ internal sealed class SceneCompilerWindow : Dialog
 		ShowPage( title );
 	}
 
-	void Bind( SceneCompileSession session )
-	{
-		if ( _session is not null )
-			_session.Changed -= OnSessionChanged;
-
-		_session = session;
-		_session.Changed += OnSessionChanged;
-		_wasRunning = session.Running;
-		_displayedLineCount = 0;
-		_log.Clear();
-		_sources = session.Report;
-		_summary = session.Summary;
-		_error = session.Error;
-		BuildReport();
-		RefreshView();
-	}
-
 	void OnSessionChanged()
 	{
 		if ( !IsValid )
@@ -183,15 +162,11 @@ internal sealed class SceneCompilerWindow : Dialog
 
 		if ( finished )
 		{
-			Bind( _session.CreateReportSnapshot() );
+			BuildReport();
 			SelectPage( _session.Status == "Failed" ? "Log" : "Report" );
-			return;
 		}
-
-		if ( started )
+		else if ( started )
 		{
-			_displayedLineCount = 0;
-			_log.Clear();
 			SelectPage( "Log" );
 		}
 
@@ -200,7 +175,6 @@ internal sealed class SceneCompilerWindow : Dialog
 
 	void RefreshView()
 	{
-		_title.Text = _session.Name;
 		_status.Text = _session.Status switch
 		{
 			"" => _session.Error ?? "Ready to compile",
@@ -210,26 +184,21 @@ internal sealed class SceneCompilerWindow : Dialog
 		};
 		_bar.Visible = _session.Running;
 		_bar.Fraction = _session.Fraction;
-		_bar.Update();
 
-		if ( _displayedLineCount > _session.Lines.Count )
+		if ( !ReferenceEquals( _displayedLines, _session.Lines ) )
 		{
+			_displayedLines = _session.Lines;
 			_log.Clear();
 			_displayedLineCount = 0;
 		}
 
-		while ( _displayedLineCount < _session.Lines.Count )
-			_log.AppendPlainText( _session.Lines[_displayedLineCount++] );
+		while ( _displayedLineCount < _displayedLines.Count )
+			_log.AppendPlainText( _displayedLines[_displayedLineCount++] );
 
 		_log.ScrollToBottom();
 
 		if ( _sources != _session.Report || _summary != _session.Summary || _error != _session.Error )
-		{
-			_sources = _session.Report;
-			_summary = _session.Summary;
-			_error = _session.Error;
 			BuildReport();
-		}
 
 		UpdateControls();
 	}
@@ -237,38 +206,32 @@ internal sealed class SceneCompilerWindow : Dialog
 	[EditorEvent.Frame]
 	void UpdateControls()
 	{
-		if ( !IsValid || _session is null )
+		if ( !IsValid )
 			return;
 
 		if ( _session.Running )
 			_bar.Update();
 
-		var current = SceneCompileSession.Current;
-		_title.Text = _options.Visible ? current.Name : _session.Name;
-		var running = current.Running && current.Scene == _session.Scene;
-		_compile.Text = running ? current.Cancelling ? "Cancelling" : "Cancel" : "Compile";
+		_title.Text = _session.Name;
+		var running = _session.Running;
+		_compile.Text = running ? _session.Cancelling ? "Cancelling" : "Cancel" : "Compile";
 		_compile.Icon = running ? "close" : "hardware";
 		_compile.Tint = running ? Theme.ButtonBackground : Theme.Primary;
-		_compile.Enabled = running ? !current.Cancelling : current.Scene == _session.Scene && current.CanCompile;
+		_compile.Enabled = running ? !_session.Cancelling : _session.CanCompile;
 	}
 
 	async void OnCompile()
 	{
-		var current = SceneCompileSession.Current;
-		if ( current.Scene != _session.Scene )
-			return;
-
-		if ( current.Running )
+		if ( _session.Running )
 		{
-			current.RequestCancel();
+			_session.RequestCancel();
 			return;
 		}
 
-		if ( !current.CanCompile )
+		if ( !_session.CanCompile )
 			return;
 
-		Bind( current );
-		await current.StartAsync();
+		await _session.StartAsync();
 	}
 
 	/// <summary>
@@ -280,6 +243,9 @@ internal sealed class SceneCompilerWindow : Dialog
 		if ( !IsValid )
 			return;
 
+		_sources = _session.Report;
+		_summary = _session.Summary;
+		_error = _session.Error;
 		_lines.Clear();
 		_groups.Clear();
 
@@ -323,15 +289,20 @@ internal sealed class SceneCompilerWindow : Dialog
 			Icon = "category"
 		} );
 
-		var groups = new Dictionary<string, Group>();
+		var groups = new Dictionary<(string Label, SceneCompileSkipReason Reason), Group>();
+		var reasons = EditorTypeLibrary.GetEnumDescription( typeof( SceneCompileSkipReason ) );
 
 		foreach ( var skip in _sources.Skipped )
 		{
-			var key = $"{skip.Label} excluded from aggregates - {skip.Reason}";
+			var key = (skip.Label, skip.Reason);
 
 			if ( !groups.TryGetValue( key, out var group ) )
 			{
-				group = new Group { Reason = key };
+				group = new Group
+				{
+					Title = $"{skip.Label} excluded from aggregates - {reasons.GetEntry( skip.Reason ).Title}",
+					Reason = skip.Reason
+				};
 				groups[key] = group;
 				_groups.Add( group );
 			}
@@ -343,7 +314,7 @@ internal sealed class SceneCompilerWindow : Dialog
 
 		if ( _session.Statistics is { } completed )
 		{
-			var timings = new Group { Reason = "compile stages" };
+			var timings = new Group { Title = "compile stages" };
 			foreach ( var stage in completed.Stages )
 				timings.Entries.Add( new Entry { Text = $"{stage.Name}: {stage.Duration.TotalSeconds:n2} s", Icon = "schedule", Indent = 20.0f } );
 			_groups.Insert( 0, timings );
@@ -358,12 +329,7 @@ internal sealed class SceneCompilerWindow : Dialog
 	/// </summary>
 	void Flatten()
 	{
-		var items = new List<object>();
-
-		foreach ( var line in _lines )
-		{
-			items.Add( line );
-		}
+		var items = new List<object>( _lines );
 
 		foreach ( var group in _groups )
 		{
@@ -399,6 +365,54 @@ internal sealed class SceneCompilerWindow : Dialog
 		{
 			Reveal( entry.Target );
 		}
+	}
+
+	void OnEntryContextMenu( object item )
+	{
+		if ( item is not Entry { Group: { } group } )
+			return;
+
+		var menu = new ContextMenu( this );
+		switch ( group.Reason )
+		{
+			case SceneCompileSkipReason.NotStatic:
+				menu.AddOption( "Make All Static", "push_pin", () => MakeStatic( group ) ).Enabled =
+					!_session.Running && !Game.IsPlaying
+					&& group.Objects.Any( x => x.IsValid() && x.Scene == _session.Scene && !x.GameObject.IsStatic );
+				break;
+		}
+
+		if ( menu.HasOptions || menu.HasMenus )
+			menu.OpenAtCursor();
+		else
+			menu.Destroy();
+	}
+
+	void MakeStatic( Group group )
+	{
+		if ( _session.Running || Game.IsPlaying
+			|| SceneEditorSession.Active is not { IsPrefabSession: false, IsMounted: false } editor
+			|| editor.Scene != _session.Scene )
+			return;
+
+		var objects = group.Objects
+			.Where( x => x.IsValid() && x.Scene == editor.Scene )
+			.Select( x => x.GameObject )
+			.Where( x => !x.IsStatic )
+			.Distinct()
+			.ToArray();
+
+		if ( objects.Length == 0 )
+			return;
+
+		using var scene = editor.Scene.Push();
+		using ( editor.UndoScope( "Make Objects Static" ).WithGameObjectChanges( objects, GameObjectUndoFlags.Properties ).Push() )
+		{
+			foreach ( var go in objects )
+				go.IsStatic = true;
+		}
+
+		_session.Refresh();
 	}
 
 	static void PaintEntry( VirtualWidget item )
@@ -460,7 +474,8 @@ internal sealed class SceneCompilerWindow : Dialog
 	/// </summary>
 	sealed class Group
 	{
-		public string Reason { get; init; }
+		public string Title { get; init; }
+		public SceneCompileSkipReason Reason { get; init; }
 		public List<Component> Objects { get; } = new();
 		public List<Entry> Entries { get; } = new();
 		public bool Open { get; set; }
@@ -471,7 +486,7 @@ internal sealed class SceneCompilerWindow : Dialog
 		/// The row that folds this group open and shut. Held onto rather than remade, so the list
 		/// keeps the item it already has laid out when the group opens.
 		/// </summary>
-		public Entry Header => _header ??= new Entry { Text = $"{Objects.Count + Entries.Count} {Reason}", Group = this };
+		public Entry Header => _header ??= new Entry { Text = $"{Objects.Count + Entries.Count} {Title}", Group = this };
 	}
 
 	/// <summary>

@@ -5,7 +5,9 @@ namespace MenuProject;
 
 /// <summary>
 /// What the party deck shows - the real <see cref="PartyRoom"/>, or made up data while <c>party_mock</c>
-/// is set, so every state can be looked at without a second account and a slow download.
+/// or <c>friends_mock</c> is set, so every state can be looked at without a second account and a slow
+/// download. The made up party is the friends list's (<see cref="MenuUI.Front.RailPresence"/>), so the
+/// deck and the list always show the same people.
 /// </summary>
 public static class PartyView
 {
@@ -18,9 +20,15 @@ public static class PartyView
 	public static string Mock { get; set; } = "off";
 
 	/// <summary>
-	/// Showing made up data instead of the real party.
+	/// <c>party_mock</c> is set to one of its states.
 	/// </summary>
-	public static bool IsMocking => !string.IsNullOrWhiteSpace( Mock ) && Mock != "off" && MockStates.Contains( Mock );
+	public static bool IsMockingJoin => !string.IsNullOrWhiteSpace( Mock ) && Mock != "off" && MockStates.Contains( Mock );
+
+	/// <summary>
+	/// Showing made up data instead of the real party - a <c>party_mock</c> state, or <c>friends_mock</c>'s
+	/// party sat idle.
+	/// </summary>
+	public static bool IsMocking => IsMockingJoin || MenuUI.Front.RailPresence.Mocking;
 
 	static PartyRoom Party => PartyRoom.Current;
 
@@ -37,7 +45,7 @@ public static class PartyView
 
 	public static int MaxMembers => IsMocking ? PartyDeck.MAX_MEMBERS : Party?.MaxMembers ?? PartyDeck.MAX_MEMBERS;
 
-	public static Friend Owner => IsMocking ? (Mock == "idle" || Mock == "full" ? Me : MockMembers.FirstOrDefault( x => !x.IsMe, Me )) : Party?.Owner ?? Me;
+	public static Friend Owner => IsMocking ? MockMembers.FirstOrDefault( x => x.Id == MenuUI.Front.RailPresence.MockPartyOwner, Me ) : Party?.Owner ?? Me;
 
 	public static bool OwnerIsMe => Owner.IsMe;
 
@@ -77,7 +85,14 @@ public static class PartyView
 
 	public static void Leave()
 	{
-		if ( IsMocking ) { Mock = "off"; return; }
+		// Leaving the made up party ends both mocks - there's no party left for the list to show either
+		if ( IsMocking )
+		{
+			Mock = "off";
+			MenuUI.Front.RailPresence.Mock = "off";
+			return;
+		}
+
 		Party?.Leave();
 	}
 
@@ -101,7 +116,7 @@ public static class PartyView
 	{
 		"waiting" => PartyRoom.OwnerJoinState.Loading,
 		"unavailable" => PartyRoom.OwnerJoinState.Unavailable,
-		"idle" or "full" => PartyRoom.OwnerJoinState.None,
+		"idle" or "full" or "off" => PartyRoom.OwnerJoinState.None,
 		_ => PartyRoom.OwnerJoinState.Ready
 	};
 
@@ -122,22 +137,10 @@ public static class PartyView
 		: null;
 
 	/// <summary>
-	/// You and some of your friends - real names and avatars, so it looks like the real thing.
+	/// You and some of your friends - real names and avatars, so it looks like the real thing. The same
+	/// party the friends list shows under <c>friends_mock</c>.
 	/// </summary>
-	static List<Friend> MockMembers
-	{
-		get
-		{
-			var friends = MenuUtility.Friends.Where( x => !x.IsMe ).OrderBy( x => x.Id ).ToList();
-			var count = Mock == "full" ? PartyDeck.MAX_MEMBERS : 5;
-
-			var members = new List<Friend> { Me };
-			for ( int i = 0; members.Count < count && friends.Count > 0; i++ )
-				members.Add( friends[i % friends.Count] );
-
-			return members;
-		}
-	}
+	static List<Friend> MockMembers => MenuUI.Front.RailPresence.MockPartyMembers.ToList();
 
 	/// <summary>
 	/// A spread of states across the party, so every badge shows up somewhere.
@@ -148,7 +151,7 @@ public static class PartyView
 			return new PartyRoom.MemberStatus( MockStage, (float?)MockDownload?.Fraction );
 
 		// Just a party, nobody doing anything
-		if ( Mock == "idle" )
+		if ( Mock is "idle" or "off" )
 			return default;
 
 		if ( member.Id == Owner.Id )

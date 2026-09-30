@@ -6,7 +6,6 @@ partial class ViewportTools
 	EditorToolButton PauseButton { get; set; }
 	EditorToolButton EjectButton { get; set; }
 	Widget PlayToolbar { get; set; }
-	Widget StatusIndicator { get; set; }
 
 	enum PlayControlState
 	{
@@ -31,9 +30,6 @@ partial class ViewportTools
 		PauseButton = AddButton( toolbar, "Pause", "pause", Pause );
 		EjectButton = AddButton( toolbar, "Eject", "eject", Eject );
 
-		StatusIndicator = CreateStatusBadge( "Scene needs compiling", "info_outline", Theme.Yellow,
-			"You're playing an uncompiled version of this scene.\nCompile the scene before playing to use the compiled version." );
-		StatusIndicator.Visible = false;
 		UpdateState();
 	}
 
@@ -56,7 +52,6 @@ partial class ViewportTools
 	{
 		_playState = CurrentPlayState;
 		PlayToolbar.Visible = _playState != PlayControlState.Hidden;
-		UpdateStatusIndicator();
 
 		if ( _playState == PlayControlState.Hidden ) return;
 
@@ -108,13 +103,7 @@ partial class ViewportTools
 		if ( _playState != CurrentPlayState )
 			UpdateState();
 
-		UpdateStatusIndicator();
 		PauseButton.Color = _playState == PlayControlState.Playing && Game.IsPaused ? Theme.Blue : Theme.TextLight;
-	}
-
-	void UpdateStatusIndicator()
-	{
-		StatusIndicator.Visible = _playState == PlayControlState.Playing && sceneViewWidget.Session.IsUncompiledPreview;
 	}
 
 	[Shortcut( "editor.pause", "F7", ShortcutType.Window )]

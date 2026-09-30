@@ -81,7 +81,7 @@
     /// <summary>
     /// In a party, on the main menu - the deck exists, even if this page has it faded out.
     /// </summary>
-    static bool InParty => PartyView.Exists && !Game.InGame && !LoadingScreen.IsVisible && MenuProject.MainMenu.Instance.IsValid() && MenuProject.MainMenu.Instance.Active;
+    static bool InParty => PartyView.Exists && !Game.InGame && !MenuProject.LoadingView.IsVisible &&MenuProject.MainMenu.Instance.IsValid() && MenuProject.MainMenu.Instance.Active;
 
     bool _wasVisible;
     RealTimeSince _timeSinceShown;

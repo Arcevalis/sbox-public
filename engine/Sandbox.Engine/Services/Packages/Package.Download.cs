@@ -85,17 +85,23 @@ public partial class Package
 
 		var downloadQueue = new ConcurrentBag<FileDownloadEntry>();
 
+		// Finding each file in the caches is a few file stats, so that runs for all of them at once off the main thread
+		var resolved = new string[entries.Length];
+		await Task.Run( () => Parallel.For( 0, entries.Length, i => resolved[i] = AssetDownloadCache.ResolveCached( entries[i].Path, Convert.ToUInt64( entries[i].Crc, 16 ) ) ), token );
+		token.ThrowIfCancellationRequested();
+
 		var loopSw = Stopwatch.StartNew();
-		foreach ( var e in entries )
+		for ( int i = 0; i < entries.Length; i++ )
 		{
-			TryAddToDownloadQueue( e, fs, downloadQueue, token );
+			TryAddToDownloadQueue( entries[i], resolved[i], fs, downloadQueue, token );
 			if ( loopSw.ElapsedMilliseconds > 8 )
 			{
-				if ( fs is not null ) global::Sandbox.LoadingScreen.Subtitle = System.IO.Path.GetFileName( e.Path );
+				if ( fs is not null ) global::Sandbox.LoadingScreen.Subtitle = System.IO.Path.GetFileName( entries[i].Path );
 				await Task.Yield();
 				loopSw.Restart();
 			}
 		}
+
 
 		// nothing to download
 		if ( downloadQueue.Count <= 0 )
@@ -230,14 +236,20 @@ public partial class Package
 		return true;
 	}
 
-	private void TryAddToDownloadQueue( ManifestSchema.File entry, PackageFileSystem fs, ConcurrentBag<FileDownloadEntry> queue, CancellationToken token )
+	/// <summary>
+	/// Mount the file where <see cref="AssetDownloadCache.ResolveCached"/> found it, or queue its download.
+	/// </summary>
+	private void TryAddToDownloadQueue( ManifestSchema.File entry, string resolved, PackageFileSystem fs, ConcurrentBag<FileDownloadEntry> queue, CancellationToken token )
 	{
 		ThreadSafe.AssertIsMainThread();
 
 		var crc = Convert.ToUInt64( entry.Crc, 16 );
 
-		if ( fs is null ? AssetDownloadCache.IsCached( entry.Path, crc ) : AssetDownloadCache.TryMount( fs.Redirect, entry.Path, crc ) )
+		if ( resolved is not null )
+		{
+			if ( fs is not null ) AssetDownloadCache.Mount( fs.Redirect, entry.Path, resolved );
 			return;
+		}
 
 		// Web.DownloadFile makes the directory off the main thread. A new one can take a millisecond with a virus scanner watching.
 		var targetFile = AssetDownloadCache.GetAbsolutePath( entry.Path, crc );

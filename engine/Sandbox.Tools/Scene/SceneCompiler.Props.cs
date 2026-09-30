@@ -100,15 +100,13 @@ partial class SceneCompiler
 		if ( group <= 0 )
 			return null;
 
-		var defaults = new List<Material>( model.GetMaterials( 0 ) );
-		var replacements = new List<Material>( model.GetMaterials( group ) );
 		var swap = new Dictionary<Material, Material>();
 
-		for ( int i = 0; i < defaults.Count && i < replacements.Count; i++ )
+		foreach ( var (original, replacement) in model.GetMaterials( 0 ).Zip( model.GetMaterials( group ) ) )
 		{
-			if ( defaults[i].IsValid() && replacements[i].IsValid() )
+			if ( original.IsValid() && replacement.IsValid() )
 			{
-				swap[defaults[i]] = replacements[i];
+				swap[original] = replacement;
 			}
 		}
 

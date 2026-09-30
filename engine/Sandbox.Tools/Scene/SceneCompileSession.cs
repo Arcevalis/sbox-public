@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using Sandbox;
@@ -11,18 +10,17 @@ namespace Editor;
 /// <summary>
 /// Owns scene compilation independently of the controls displaying its progress.
 /// </summary>
-public sealed class SceneCompileSession : AssetSystem.IEventListener
+public sealed class SceneCompileSession
 {
 	/// <summary>
 	/// The shared editor compile job, independent of any toolbar, popup, or report window.
 	/// </summary>
-	public static SceneCompileSession Current { get; } = new( followActiveScene: true );
+	public static SceneCompileSession Current { get; } = new();
 
-	readonly List<string> _lines = new();
+	List<string> _lines = new();
 	readonly List<SceneCompileStage> _stages = new();
 	SceneCompilerSettings _settings = new();
 	SceneCompiler.Sources _sources;
-	SceneCompiler.Sources _resultSources;
 	SceneCompileReport _sourceReport;
 	SceneCompileReport _resultReport;
 	string _path;
@@ -34,133 +32,10 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	bool _unsaved;
 	bool _playing;
 	bool _notifying;
-	bool _compileOnSave;
-	Scene _queuedScene;
-	string _queuedPath;
+	bool _savedCompilationDirty;
 	CancellationTokenSource _cancel = new();
 	FastTimer _elapsed;
 	FastTimer _phaseElapsed;
-	SceneCompilerSettings _validatedSettings;
-	Scene _validatedScene;
-	bool _compilationValidated;
-	bool _compilationCurrent;
-	int _compilationRevision;
-	HashSet<string> _compileDependencyPaths;
-	HashSet<Asset> _compileDependencyAssets;
-
-	void InvalidateCompilation()
-	{
-		_compilationValidated = false;
-		_compilationRevision++;
-	}
-
-	void AssetSystem.IEventListener.OnAssetChanged( Asset asset )
-	{
-		if ( IsCompileDependency( asset ) )
-			InvalidateCompilation();
-	}
-
-	/// <summary>
-	/// Whether an asset change can affect the last scene compilation validation.
-	/// </summary>
-	public bool IsCompileDependency( Asset asset )
-	{
-		if ( asset is null )
-			return false;
-
-		var source = AssetSystem.FindByPath( Scene?.Source?.ResourcePath );
-		if ( asset == source || _compileDependencyAssets?.Contains( asset ) == true )
-			return true;
-
-		if ( _compileDependencyPaths is null )
-			return false;
-
-		return Matches( asset.GetSourceFile( true ) ) || Matches( asset.GetCompiledFile( true ) );
-
-		bool Matches( string path ) => !string.IsNullOrEmpty( path )
-			&& _compileDependencyPaths.Contains( Path.GetFullPath( path ) );
-	}
-
-	/// <summary>
-	/// Whether the draft recipe differs from the last validated compilation's saved recipe.
-	/// </summary>
-	public bool HasPendingSettings => Scene == _validatedScene && _validatedSettings is not null && Settings != _validatedSettings;
-
-	/// <summary>
-	/// Validate the saved compilation and its dependencies. This reads generated resources and should
-	/// only be called when opening compile controls or after an asset invalidation, not per frame.
-	/// </summary>
-	public (bool HasCompilation, bool IsCurrent, string Error) ValidateCompilation()
-	{
-		InvalidateCompilation();
-		_compilationValidated = true;
-		_compilationCurrent = false;
-		_validatedSettings = null;
-		_validatedScene = Scene;
-		var validation = new SceneCompileCache.ValidationScope();
-		_compileDependencyPaths = validation.Paths;
-		_compileDependencyAssets = validation.Assets;
-		var asset = AssetSystem.FindByPath( Scene?.Source?.ResourcePath );
-		if ( asset is null || !SceneCompileCache.HasCompilation( asset, validation ) )
-			return (false, true, null);
-
-		if ( !SceneCompileCache.Validate( asset, out var error, validation ) )
-			return (true, false, error);
-
-		try
-		{
-			_validatedSettings = SceneCompilerSettings.Load( asset );
-			_compilationCurrent = true;
-			return (true, true, null);
-		}
-		catch ( Exception e ) when ( e is IOException or InvalidDataException or UnauthorizedAccessException or JsonException )
-		{
-			Log.Warning( $"Could not read scene compile status: {e.Message}" );
-			return (true, false, e.Message);
-		}
-	}
-
-	/// <summary>
-	/// Validate saved compilation files without hashing or decoding resources on the editor thread.
-	/// </summary>
-	public async Task<(bool HasCompilation, bool IsCurrent, string Error)> ValidateCompilationAsync()
-	{
-		InvalidateCompilation();
-		var revision = _compilationRevision;
-		var scene = Scene;
-		var path = scene?.Source?.ResourcePath;
-		var asset = AssetSystem.FindByPath( scene?.Source?.ResourcePath );
-		if ( asset is null )
-			return (false, true, null);
-
-		var source = asset.GetSourceFile( true );
-		var compiled = asset.GetCompiledFile( true );
-		if ( string.IsNullOrEmpty( compiled ) )
-			compiled = source + "_c";
-		try
-		{
-			var validation = await Task.Run( () => SceneCompileCache.ValidateFiles( source, compiled ) );
-			if ( revision == _compilationRevision && scene == Scene && path == Scene?.Source?.ResourcePath )
-			{
-				_validatedScene = scene;
-				_validatedSettings = validation.HasCompilation && validation.IsCurrent ? SceneCompilerSettings.Load( asset ) : null;
-				_compileDependencyPaths = new( validation.Paths.Select( Path.GetFullPath ), StringComparer.OrdinalIgnoreCase );
-				_compileDependencyAssets = null;
-				_compilationCurrent = validation.HasCompilation && validation.IsCurrent;
-				_compilationValidated = true;
-			}
-			return (validation.HasCompilation, validation.IsCurrent, validation.Error);
-		}
-		catch
-		{
-			if ( revision == _compilationRevision )
-			{
-				_compilationCurrent = false;
-				_compilationValidated = true;
-			}
-			throw;
-		}
-	}
 
 	/// <summary>
 	/// The selected source scene, pinned to the job's scene while compilation is running.
@@ -171,8 +46,6 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	/// The source scene's display name.
 	/// </summary>
 	public string Name { get; private set; } = "No scene";
-
-	internal SceneCompiler.Sources Sources => HasResult ? _resultSources : _sources;
 
 	/// <summary>
 	/// Source information for the latest result, or the current preview before a compile.
@@ -187,6 +60,11 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 
 	public bool HasCompileGeometry => _sources?.HasCompileGeometry == true;
 
+	public bool HasCompilation { get; private set; }
+
+	public bool NeedsCompilation => !HasCompilation || _savedCompilationDirty
+		|| Scene?.Editor is SceneEditorSession { CompilationDirty: true };
+
 	/// <summary>
 	/// A settings, source-scan, or compile error, or null when none has been recorded.
 	/// </summary>
@@ -200,7 +78,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	/// <summary>
 	/// Whether cancellation has been requested and the job has not finished yet.
 	/// </summary>
-	public bool Cancelling { get; private set; }
+	public bool Cancelling => Running && _cancel.IsCancellationRequested;
 
 	/// <summary>
 	/// Whether this session contains a completed, failed, or cancelled result.
@@ -245,15 +123,14 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	public event Action Changed;
 
 	/// <summary>
-	/// Whether the selected saved scene can start a compile with the current draft recipe.
+	/// Whether the selected saved scene can start a compile with the current settings.
 	/// </summary>
-	public bool CanCompile => !Running && HasCompileGeometry
-		&& _compilationValidated && (!_compilationCurrent || HasPendingSettings)
+	public bool CanCompile => !Running && _sources?.Asset is not null
 		&& _settingsError is null && _scanError is null && EligibilityError() is null;
 
 	/// <summary>
 	/// An extra aggregate's cost in fragments. Higher values favor fewer, larger aggregates.
-	/// Changes affect the draft recipe and are saved only when compiling.
+	/// Changes are saved only when compiling.
 	/// </summary>
 	/// <exception cref="InvalidDataException">The value is not finite and positive.</exception>
 	/// <exception cref="InvalidOperationException">A compile is running.</exception>
@@ -265,7 +142,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 
 	/// <summary>
 	/// The maximum geometry chunk size before subdivision.
-	/// Changes affect the draft recipe and are saved only when compiling.
+	/// Changes are saved only when compiling.
 	/// </summary>
 	/// <exception cref="InvalidDataException">The value is not finite and positive.</exception>
 	/// <exception cref="InvalidOperationException">A compile is running.</exception>
@@ -276,28 +153,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	}
 
 	/// <summary>
-	/// Compile after saving the active scene. Disabled by default and saved immediately in scene metadata.
-	/// </summary>
-	public bool CompileOnSave
-	{
-		get => _compileOnSave;
-		set
-		{
-			if ( Running || Game.IsPlaying || !Scene.IsValid() || string.IsNullOrEmpty( _path )
-				|| Scene.Source?.ResourcePath != _path
-				|| SceneEditorSession.Active is not { IsPrefabSession: false } active || active.Scene != Scene )
-				throw new InvalidOperationException( "Open a saved scene outside play mode to change compile on save." );
-
-			SceneCompilerSettings.SaveCompileOnSave( AssetSystem.FindByPath( _path ), value );
-			_compileOnSave = value;
-			if ( !value )
-				ClearQueuedCompile();
-			Notify();
-		}
-	}
-
-	/// <summary>
-	/// Reset the draft recipe to built-in defaults without saving it.
+	/// Reset compile settings to built-in defaults without saving them.
 	/// </summary>
 	/// <exception cref="InvalidOperationException">A compile is running.</exception>
 	public void ResetSettings() => Settings = new();
@@ -308,7 +164,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		set
 		{
 			if ( Running )
-				throw new InvalidOperationException( "Cannot change the recipe while compiling." );
+				throw new InvalidOperationException( "Cannot change settings while compiling." );
 
 			ArgumentNullException.ThrowIfNull( value );
 			value.Validate();
@@ -318,69 +174,18 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		}
 	}
 
-	SceneCompileSession( bool followActiveScene = false )
-	{
-		if ( followActiveScene )
-			EditorEvent.Register( this );
-	}
+	SceneCompileSession() => EditorEvent.Register( this );
 
 	[EditorEvent.Frame]
 	void FollowActiveScene()
 	{
-		var scene = SceneEditorSession.Active?.Scene;
-		if ( _queuedScene is not null && (Game.IsPlaying || !_queuedScene.IsValid()
-			|| scene != _queuedScene || scene.Source?.ResourcePath != _queuedPath) )
-			ClearQueuedCompile();
-
 		if ( Running )
-		{
-			if ( EligibilityError() is not null )
-				CancelCompile();
 			return;
-		}
 
+		var scene = SceneEditorSession.Active?.Scene;
 		if ( scene != Scene || scene?.Source?.ResourcePath != _path
 			|| (scene?.Editor?.HasUnsavedChanges ?? false) != _unsaved || Game.IsPlaying != _playing )
 			Refresh();
-
-		if ( _queuedScene is null )
-			return;
-
-		ClearQueuedCompile();
-		if ( CompileOnSave && EligibilityError() is null )
-			_ = StartAsync();
-	}
-
-	[Event( "scene.saved" )]
-	void OnSceneSaved( Scene scene )
-	{
-		if ( Scene == scene )
-			InvalidateCompilation();
-
-		if ( Running && Scene == scene )
-			CancelCompile();
-
-		if ( Game.IsPlaying || !scene.IsValid() || scene.Editor?.HasUnsavedChanges != false
-			|| SceneEditorSession.Active is not { IsPrefabSession: false } active || active.Scene != scene )
-			return;
-
-		var path = scene.Source?.ResourcePath;
-		Refresh();
-		try
-		{
-			if ( !SceneCompilerSettings.LoadCompileOnSave( AssetSystem.FindByPath( path ) ) )
-				return;
-		}
-		catch ( Exception e ) when ( e is IOException or InvalidDataException or UnauthorizedAccessException or JsonException )
-		{
-			Log.Error( e, "Could not read compile on save setting" );
-			return;
-		}
-
-		_queuedScene = scene;
-		_queuedPath = path;
-		if ( Running && Scene == scene )
-			CancelCompile();
 	}
 
 	internal void OnSceneEdited( Scene scene )
@@ -388,22 +193,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		if ( scene != Scene )
 			return;
 
-		if ( scene.Editor?.HasUnsavedChanges == true )
-			InvalidateCompilation();
-		if ( Running )
-		{
-			if ( EligibilityError() is not null )
-				CancelCompile();
-			return;
-		}
-
 		Refresh();
-	}
-
-	void ClearQueuedCompile()
-	{
-		_queuedScene = null;
-		_queuedPath = null;
 	}
 
 	/// <summary>
@@ -427,10 +217,9 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		Summary = null;
 		Statistics = null;
 		HasResult = false;
-		_resultSources = null;
 		_resultReport = null;
 		Fraction = 0;
-		_lines.Clear();
+		_lines = new();
 		_stages.Clear();
 	}
 
@@ -440,24 +229,17 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		var path = scene?.Source?.ResourcePath;
 		if ( scene != Scene || path != _path )
 		{
-			InvalidateCompilation();
 			Scene = scene;
 			_path = path;
 			_settingsError = null;
-			_validatedScene = null;
-			_validatedSettings = null;
-			_compileDependencyPaths = null;
-			_compileDependencyAssets = null;
+			HasCompilation = false;
 			ClearResult();
 			_settings = new();
-			_compileOnSave = false;
 
 			try
 			{
 				var asset = path is null ? null : AssetSystem.FindByPath( path );
 				_settings = SceneCompilerSettings.Load( asset );
-				if ( scene is not PrefabScene )
-					_compileOnSave = SceneCompilerSettings.LoadCompileOnSave( asset );
 			}
 			catch ( Exception e ) when ( e is IOException or InvalidDataException or UnauthorizedAccessException or JsonException )
 			{
@@ -478,18 +260,9 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		try
 		{
 			_sources = SceneCompiler.Scan( Scene, out _scanError );
-			if ( _sources is not null )
-			{
-				if ( !_sources.HasCompileGeometry )
-				{
-					if ( Scene.Editor?.HasUnsavedChanges == false && _sources.Asset is not null )
-						SceneCompileCache.ClearCompilation( _sources.Asset );
-					ClearResult();
-				}
-
-				_sourceReport = new SceneCompileReport( _sources.Name, _sources.Meshes.Length, _sources.Props.Length,
-					Array.AsReadOnly( _sources.Skipped.Select( skip => new SceneCompileSkip( skip.Component, skip.Label, skip.Reason ) ).ToArray() ) );
-			}
+			HasCompilation = SceneCompileCache.HasCompilation( _sources?.Asset );
+			_savedCompilationDirty = HasCompilation && SceneCompileCache.IsDirty( _sources.Asset );
+			_sourceReport = _sources?.Report;
 		}
 		catch ( Exception e ) when ( e is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or InvalidOperationException )
 		{
@@ -508,6 +281,8 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 			return "Open a scene rather than a prefab to compile.";
 		if ( Scene.Source?.ResourcePath != _path )
 			return "The scene moved. Refresh before compiling it.";
+		if ( requireSaved && string.IsNullOrEmpty( _path ) )
+			return "Save the scene before compiling it.";
 		if ( requireSaved && (Scene.Editor is null || Scene.Editor.HasUnsavedChanges) )
 			return "Save the scene, then use Scene > Compile Scene. Unsaved changes cannot be compiled.";
 
@@ -517,7 +292,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	/// <summary>
 	/// Refresh the source scan and compile the active scene. Errors and cancellation are
 	/// retained in the session; invalid startup input also requests an error report.
-	/// An up-to-date compilation with an unchanged recipe is left untouched.
+	/// Every request rebuilds the saved scene, even when its inputs and settings have not changed.
 	/// </summary>
 	/// <returns>A task that completes after the job and its cleanup finish.</returns>
 	public async Task StartAsync()
@@ -529,9 +304,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		}
 
 		// Lock before notifications or pumping can re-enter through another compile control.
-		ClearQueuedCompile();
 		Running = true;
-		Cancelling = false;
 		_cancel.Dispose();
 		_cancel = new();
 		_elapsed = FastTimer.StartNew();
@@ -539,46 +312,38 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 
 		try
 		{
-			InvalidateCompilation();
 			RefreshSources();
 			var nothingToCompile = _settingsError is null && _scanError is null && _sources is { HasCompileGeometry: false };
-			if ( _settingsError is null && _scanError is null && HasCompileGeometry )
-			{
-				var compilation = await ValidateCompilationAsync();
-				Cancel.ThrowIfCancellationRequested();
-				if ( _compilationValidated && compilation.HasCompilation && compilation.IsCurrent && !HasPendingSettings )
-				{
-					SceneCompileCache.PruneGenerations( _sources.Asset.GetSourceFile( true ) );
-					Running = false;
-					Notify();
-					return;
-				}
-			}
-
 			ClearResult();
 			_status = nothingToCompile ? "Nothing to compile" : "Preparing";
 			Fraction = nothingToCompile ? 0 : -1;
 
+			if ( Error is { } error )
+				throw new InvalidOperationException( error );
+			if ( EligibilityError() is { } eligibilityError )
+				throw new InvalidOperationException( eligibilityError );
+			if ( _sources?.Asset is null )
+				throw new InvalidOperationException( "There is no saved scene to compile." );
+
 			if ( nothingToCompile )
 			{
+				SceneCompileCache.ClearCompilation( _sources.Asset, Scene.Id );
+				HasCompilation = false;
 				_lines.Add( _status );
 				Running = false;
 				Notify();
 				return;
 			}
 
-			if ( Error is { } error )
-				throw new InvalidOperationException( error );
-			if ( _sources is null )
-				throw new InvalidOperationException( "There is no saved scene to compile." );
-
 			_settings.Validate();
-			_lines.Add( $"{_sources.Meshes.Length} meshes, {_sources.Props.Length} props to compile" );
+			_lines.Add( $"{_sourceReport.MeshCount} meshes, {_sourceReport.PropCount} props to compile" );
 			Notify();
 			Cancel.ThrowIfCancellationRequested();
 			enteredCompiler = true;
-			var summary = await SceneCompiler.Compile( _sources, _settings, this );
-			Finish( summary is null ? "Cancelled" : "Done", summary );
+			var result = await SceneCompiler.Compile( _sources, _settings, this );
+			HasCompilation = true;
+			_savedCompilationDirty = SceneCompileCache.IsDirty( _sources.Asset );
+			Finish( "Done", result );
 		}
 		catch ( OperationCanceledException )
 		{
@@ -592,7 +357,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 			Finish( "Failed" );
 
 			if ( !enteredCompiler )
-				EditorEvent.Run( "scene.compile.show-report", CreateReportSnapshot(), "Report" );
+				EditorEvent.Run( "scene.compile.show-report", "Report" );
 		}
 	}
 
@@ -601,23 +366,16 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 	/// </summary>
 	public void RequestCancel()
 	{
-		ClearQueuedCompile();
-		CancelCompile();
+		if ( !Running || Cancelling )
+			return;
+
+		_cancel.Cancel();
+		Notify();
 	}
 
 	[EditorEvent.Hotload]
 	[Event( "app.exit" )]
 	void OnEditorReset() => RequestCancel();
-
-	void CancelCompile()
-	{
-		if ( !Running || Cancelling )
-			return;
-
-		Cancelling = true;
-		_cancel.Cancel();
-		Notify();
-	}
 
 	/// <summary>
 	/// Begin a compiler phase, recording the elapsed time of the previous phase.
@@ -680,10 +438,9 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		Summary = summary;
 		Fraction = 1;
 		HasResult = true;
-		_resultSources = _sources;
 		_resultReport = _sourceReport;
 		var duration = TimeSpan.FromMilliseconds( _elapsed.ElapsedMilliSeconds );
-		if ( title == "Done" && Statistics is not null )
+		if ( summary is not null && Statistics is not null )
 		{
 			Statistics.CompletedAt = DateTimeOffset.Now;
 			Statistics.Duration = duration;
@@ -693,26 +450,10 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 		{
 			Statistics = null;
 		}
-		InvalidateCompilation();
-		if ( title == "Done" )
-		{
-			_validatedScene = Scene;
-			_validatedSettings = Settings;
-			_compilationCurrent = true;
-			_compilationValidated = true;
-		}
 		_lines.Add( $"{title} in {duration.TotalSeconds:n2}s" );
 		Running = false;
-		Cancelling = false;
 
-		if ( title == "Cancelled" && _queuedScene == Scene )
-		{
-			Notify();
-			return;
-		}
-
-		// The callback owns a snapshot: changing the active scene must not redirect an old toast.
-		var report = CreateReportSnapshot();
+		var name = Name;
 		var detail = title switch
 		{
 			"Done" => string.Join( "\n", summary ?? [] ),
@@ -720,39 +461,7 @@ public sealed class SceneCompileSession : AssetSystem.IEventListener
 			_ => "The previous compiled scene is unchanged."
 		};
 		Notify();
-		EditorEvent.Run( "scene.compile.finished", report, detail,
-			(Action)(() => EditorEvent.Run( "scene.compile.show-report", report, title == "Failed" ? "Log" : "Report" )) );
-	}
-
-	/// <summary>
-	/// Copy report state into a detached session that does not follow active-scene changes.
-	/// Component references still identify the original source objects for click-to-reveal.
-	/// </summary>
-	/// <returns>A detached copy for displaying the retained report and log.</returns>
-	public SceneCompileSession CreateReportSnapshot()
-	{
-		var report = new SceneCompileSession
-		{
-			Scene = Scene,
-			Name = Name,
-			_path = _path,
-			_settings = _settings,
-			_compileOnSave = _compileOnSave,
-			_settingsError = _settingsError,
-			_scanError = _scanError,
-			_failure = _failure,
-			_status = _status,
-			_sources = Sources,
-			_resultSources = Sources,
-			_sourceReport = Report,
-			_resultReport = Report,
-			Summary = Summary,
-			Statistics = Statistics,
-			HasResult = HasResult,
-			Fraction = Fraction
-		};
-		report._lines.AddRange( _lines );
-		return report;
+		EditorEvent.Run( "scene.compile.finished", name, title, detail );
 	}
 
 	void Notify()
@@ -787,4 +496,4 @@ public sealed record SceneCompileReport( string Name, int MeshCount, int PropCou
 /// <param name="Component">The original source component, which may later be destroyed.</param>
 /// <param name="Label">The category of source geometry.</param>
 /// <param name="Reason">Why the component was excluded from compilation.</param>
-public sealed record SceneCompileSkip( Component Component, string Label, string Reason );
+public sealed record SceneCompileSkip( Component Component, string Label, SceneCompileSkipReason Reason );

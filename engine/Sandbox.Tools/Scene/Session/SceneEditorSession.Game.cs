@@ -9,21 +9,11 @@ partial class SceneEditorSession
 
 	public virtual bool IsPlaying => GameSession != null;
 
-	public bool IsUncompiledPreview
-	{
-		get => GameSession?.IsUncompiledPreview ?? field;
-		private set;
-	}
-
 	public void SetPlaying( Scene scene )
 	{
 		Assert.IsNull( Playing, "Attempted to create a game session while another is active." );
 
-		GameSession = new GameEditorSession( this, scene )
-		{
-			IsUncompiledPreview = scene.Source is SceneFile { IsCompiled: false }
-				&& SceneCompiler.HasAnythingToCompile( scene )
-		};
+		GameSession = new GameEditorSession( this, scene );
 
 		// carry the selection over to the equivalent runtime objects
 		GameSession.DeserializeSelection( SerializeSelection() );

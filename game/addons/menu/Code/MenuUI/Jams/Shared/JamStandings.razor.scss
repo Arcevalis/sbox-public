@@ -5,7 +5,7 @@ JamPage JamStandings
 	flex-direction: column;
 	flex-shrink: 0;
 	padding-bottom: 20px;
-	border-bottom: 1px solid $front-hairline;
+	border-bottom: $front-border-width solid $front-hairline;
 
 	.heading
 	{
@@ -78,7 +78,7 @@ JamPage JamStandings
 		align-items: center;
 		gap: 10px;
 		padding: 10px 0;
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 		&.clickable
 		{
 			&:hover .name

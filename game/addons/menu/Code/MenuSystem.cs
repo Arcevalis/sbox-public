@@ -58,7 +58,6 @@ public partial class MenuSystem : IMenuSystem
 	Package oldGamePackage;
 
 	GameClosing gameClosingPanel;
-	GameStarting gameStartingPanel;
 	GameClosedToast gameClosedToast;
 
 	public void Tick()
@@ -69,15 +68,11 @@ public partial class MenuSystem : IMenuSystem
 		{
 			oldGamePackage = MenuUtility.GamePackage;
 
+			// Anything left over from the previous game goes away when a new one starts
 			if ( MenuUtility.GamePackage is not null )
 			{
-				// Anything left over from the previous game goes away when a new one starts
-				gameStartingPanel?.Delete( true );
 				gameClosedToast?.Delete( true );
 				gameClosedToast = null;
-
-				gameStartingPanel = new GameStarting();
-				gameStartingPanel.Parent = MenuOverlay.Instance.TopLeft;
 			}
 		}
 
@@ -142,6 +137,15 @@ public partial class MenuSystem : IMenuSystem
 		MenuOverlay.Question( message, icon, yes, no );
 	}
 
+	/// <summary>
+	/// A friend's asked us into their party - it pops up where questions do, with who's asking and
+	/// who's in their party. See <see cref="PartyInviteToast"/>.
+	/// </summary>
+	public void OnPartyInvite( Friend from, Action accept, Action decline )
+	{
+		PartyInviteToast.Show( from, accept, decline );
+	}
+
 	public string Url
 	{
 		get => MainMenu.Instance.Navigator.CurrentUrl;
@@ -202,7 +206,7 @@ public partial class MenuSystem : IMenuSystem
 	{
 		gameClosedToast?.Delete( true );
 		gameClosedToast = new GameClosedToast() { Package = package };
-		MenuOverlay.Instance.BottomRight.Queue( gameClosedToast, duration: 0, clickToDismiss: false );
+		MenuOverlay.Instance.BottomCenter.Queue( gameClosedToast, duration: 0, clickToDismiss: false );
 	}
 
 	/// <summary>Go to a menu url from the console, for driving the menu from a test or tool.</summary>

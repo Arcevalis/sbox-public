@@ -193,8 +193,6 @@ public partial class ProjectPublisher
 
 		await TryWorkshopUpload();
 
-		Manifest.ValidatePublication();
-
 		await PostManifest( Manifest, cancel );
 	}
 
@@ -203,8 +201,6 @@ public partial class ProjectPublisher
 	/// </summary>
 	public async Task PrePublish( CancellationToken cancellationToken = default )
 	{
-		Manifest.ValidatePublication();
-
 		FinishAddingFiles();
 
 		if ( Project.Config.IsStandaloneOnly )
@@ -441,8 +437,6 @@ public partial class ProjectPublisher
 		}
 
 		await Task.WhenAll( tasks.ToArray() );
-
-		Manifest.ValidatePublication();
 	}
 
 
@@ -456,8 +450,6 @@ public partial class ProjectPublisher
 
 		if ( contents is not null )
 		{
-			// Upload the bytes we checked, not a path that can be replaced after validation.
-			Manifest.ValidateUploadContents( file, contents );
 			var r = await Project.Package.UploadFile( contents, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
 			if ( r ) file.Skip = true;
 		}

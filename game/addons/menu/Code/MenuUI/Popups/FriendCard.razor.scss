@@ -17,7 +17,7 @@ FriendCard.popup-panel
 		border-radius: $front-radius $front-radius 0 0;
 		overflow: hidden;
 		background-image: linear-gradient( 180deg, #3a4150, $front-card-deep );
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 
 		// The game they're in, behind their citizen - the party card's look, mirrored: strongest on the
 		// right where they're stood, fading off all the way across to the left. White shows, black hides.
@@ -146,7 +146,7 @@ FriendCard.popup-panel
 	// The shared stats box - it looks after itself, the card just draws the line under it
 	ProfileStats
 	{
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 	}
 
 	.playing
@@ -155,7 +155,7 @@ FriendCard.popup-panel
 		flex-shrink: 0;
 		gap: 10px;
 		padding: 14px 16px;
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 
 		.section-label
 		{
@@ -305,12 +305,20 @@ FriendCard.popup-panel
 		}
 	}
 
+	// The main things to do on top, the less common ones in a row of their own beneath when they
+	// won't all fit on one
 	.actions
 	{
-		flex-direction: row;
+		flex-direction: column;
 		flex-shrink: 0;
 		gap: 8px;
 		padding: 12px 16px 14px 16px;
+
+		.action-row
+		{
+			flex-direction: row;
+			gap: 8px;
+		}
 
 		// Side by side, each as wide as its label and sharing whatever's left over - so the longer
 		// "Invite to party" gets the room it needs. Labels never wrap.
@@ -326,7 +334,7 @@ FriendCard.popup-panel
 			padding: 0 10px;
 			white-space: nowrap;
 			border-radius: 6px;
-			border: 1px solid $front-hairline;
+			border: $front-border-width solid $front-hairline;
 			background-color: rgba( 255, 255, 255, 0.05 );
 			cursor: pointer;
 			transition: all 0.1s ease;
@@ -401,20 +409,6 @@ FriendCard.popup-panel
 				background-color: rgba( $front-danger, 0.12 );
 
 				label, icon { color: $front-danger; }
-			}
-
-			// The less common ones when the row's full - just the glyph, square, not stretching
-			&.icon-only
-			{
-				flex-grow: 0;
-				flex-shrink: 0;
-				width: 34px;
-				padding: 0;
-
-				label
-				{
-					display: none;
-				}
 			}
 		}
 	}

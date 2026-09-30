@@ -112,11 +112,28 @@ public sealed class MixedVirtualList : BaseVirtualPanel
 	{
 		if ( index >= _tops.Count ) return;
 
+		// Each edge snapped to a whole screen pixel, from the same sum its neighbour uses - so one
+		// cell's bottom is exactly the next one's top. Left to the layout, the two round separately at
+		// fractional scales and a hairline of whatever's behind shows through between them.
+		var top = Snap( _rect.Top + _tops[index] );
+		var bottom = Snap( _rect.Top + _tops[index] + _heights[index] );
+
 		panel.Style.Left = _rect.Left;
-		panel.Style.Top = _rect.Top + _tops[index];
+		panel.Style.Top = top;
 		panel.Style.Width = MathF.Max( 1f, _rect.Width );
-		panel.Style.Height = _heights[index];
+		panel.Style.Height = MathF.Max( 1f, bottom - top );
 		panel.Style.Dirty();
+	}
+
+	/// <summary>
+	/// The nearest layout position that lands on a whole screen pixel.
+	/// </summary>
+	float Snap( float units )
+	{
+		var scale = ScaleToScreen;
+		if ( scale <= 0 ) return units;
+
+		return MathF.Round( units * scale ) / scale;
 	}
 
 	protected override float GetTotalHeight( int itemCount )

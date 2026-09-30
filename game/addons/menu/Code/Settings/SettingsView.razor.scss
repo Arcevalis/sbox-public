@@ -35,7 +35,7 @@ SettingsView
 		margin: 0 14px;
 		padding: 8px 12px;
 		border-radius: $front-radius;
-		border: 1px solid $front-hairline;
+		border: $front-border-width solid $front-hairline;
 		background-color: rgba( 0, 0, 0, 0.25 );
 		color: $front-body;
 		pointer-events: all;
@@ -169,7 +169,7 @@ SettingsView
 		flex-shrink: 0;
 		gap: 2px;
 		padding: 22px 28px 18px 28px;
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 
 		.title
 		{
@@ -344,7 +344,7 @@ SettingsView
 		padding: 3px;
 		border-radius: 8px;
 		background-color: rgba( 0, 0, 0, 0.25 );
-		border: 1px solid $front-hairline;
+		border: $front-border-width solid $front-hairline;
 
 		.button
 		{
@@ -384,7 +384,7 @@ SettingsView
 		padding: 0 12px;
 		border-radius: 8px;
 		background-color: rgba( 0, 0, 0, 0.25 );
-		border: 1px solid $front-hairline;
+		border: $front-border-width solid $front-hairline;
 		font-size: 14px;
 		font-weight: 600;
 		color: $front-body;
@@ -430,7 +430,7 @@ SettingsView
 			{
 				border-radius: 6px;
 				background-color: rgba( 0, 0, 0, 0.25 );
-				border: 1px solid $front-hairline;
+				border: $front-border-width solid $front-hairline;
 				font-size: 13.5px;
 				font-weight: 600;
 				color: $front-body;
@@ -450,7 +450,7 @@ SettingsView
 	SettingsPostProcessPreset
 	{
 		background-color: rgba( 255, 255, 255, 0.06 );
-		border: 1px solid $front-border;
+		border: $front-border-width solid $front-border;
 		// A pixel off the padding, so the border doesn't push the label and the rungs out of
 		// line with the rows underneath.
 		padding: 1px 9px;
@@ -549,7 +549,7 @@ SettingsView
 		// the rows below.
 		padding: 16px 10px;
 		border-radius: $front-radius;
-		border: 1px solid $front-border;
+		border: $front-border-width solid $front-border;
 		background-color: rgba( 255, 255, 255, 0.035 );
 
 		.head
@@ -600,7 +600,7 @@ SettingsView
 			gap: 6px;
 			padding: 9px 20px;
 			border-radius: 8px;
-			border: 1px solid $front-hairline;
+			border: $front-border-width solid $front-hairline;
 			background-color: rgba( 0, 0, 0, 0.2 );
 			pointer-events: all;
 			cursor: pointer;
@@ -671,7 +671,7 @@ SettingsView
 		flex-shrink: 0;
 		gap: 10px;
 		padding: 14px 28px;
-		border-top: 1px solid $front-hairline;
+		border-top: $front-border-width solid $front-hairline;
 
 		.unsaved
 		{
@@ -811,7 +811,7 @@ SettingsView
 			flex-shrink: 0;
 			gap: 10px;
 			padding: 14px 28px;
-			border-top: 1px solid $front-hairline;
+			border-top: $front-border-width solid $front-hairline;
 		}
 
 		h2
@@ -873,7 +873,7 @@ SettingsView
 			min-width: 128px;
 			height: 32px;
 			border-radius: 6px;
-			border: 1px solid $front-hairline;
+			border: $front-border-width solid $front-hairline;
 			background-color: rgba( 0, 0, 0, 0.25 );
 			font-size: 13.5px;
 			font-weight: 600;

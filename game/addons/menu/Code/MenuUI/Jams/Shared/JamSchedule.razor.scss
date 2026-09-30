@@ -14,7 +14,7 @@ JamPage JamSchedule
 		flex-shrink: 0;
 		gap: 2px;
 		padding-bottom: 18px;
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 	}
 
 	JamCountdown, .countdown-status

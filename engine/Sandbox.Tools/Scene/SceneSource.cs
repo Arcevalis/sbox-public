@@ -19,17 +19,27 @@ internal static class SceneSource
 		return asset;
 	}
 
+	internal static string ReadJson( string path )
+	{
+		var json = File.ReadAllText( path );
+		if ( !json.StartsWith( '<' ) )
+			return json;
+
+		var kv = NativeEngine.EngineGlue.LoadKeyValues3( json );
+		try
+		{
+			return NativeEngine.EngineGlue.KeyValues3ToJson( kv.FindOrCreateMember( "data" ) );
+		}
+		finally
+		{
+			kv.DeleteThis();
+		}
+	}
+
 	internal static SceneFile LoadForEditing( Asset asset )
 	{
 		var path = asset.GetSourceFile( true );
-		var json = File.ReadAllText( path );
-		if ( json.StartsWith( '<' ) )
-		{
-			var kv = NativeEngine.EngineGlue.LoadKeyValues3( json );
-			json = NativeEngine.EngineGlue.KeyValues3ToJson( kv.FindOrCreateMember( "data" ) );
-			kv.DeleteThis();
-		}
-
+		var json = ReadJson( path );
 		var blobPath = path + "_d";
 		var blobs = File.Exists( blobPath ) ? File.ReadAllBytes( blobPath ) : [];
 		return SceneFile.FromSource( asset.Path, asset.Guid, json, blobs );
@@ -37,19 +47,31 @@ internal static class SceneSource
 
 	internal static SceneFile ResolveRuntime( SceneFile file )
 	{
-		if ( file.IsSourcePreview || string.IsNullOrEmpty( file.ResourcePath ) )
+		if ( string.IsNullOrEmpty( file.ResourcePath ) )
 			return file;
 
 		var asset = FindAsset( file );
-		if ( asset is null || !SceneCompileCache.HasCompilation( asset ) )
+		if ( asset is null )
 			return file;
 
-		var session = SceneEditorSession.All.FirstOrDefault( x => x.Scene is { IsEditor: true, Source: SceneFile source } && FindAsset( source ) == asset );
-		if ( session?.HasUnsavedChanges == true )
-			return PreviewSource( asset, session, "The scene has unsaved changes. Save and use Scene > Compile Scene to update its compiled data." );
+		var editor = SceneEditorSession.Resolve( file );
+		if ( !SceneCompileCache.HasCompilation( asset ) )
+		{
+			if ( !file.IsCompiled || !File.Exists( asset.GetSourceFile( true ) ) )
+				return file;
 
-		if ( !SceneCompileCache.Validate( asset, out var error ) )
-			return PreviewSource( asset, session, error );
+			Log.Warning( $"Scene compilation data for '{asset.Path}' is missing. Using the editable scene." );
+			return editor is not null ? editor.Scene.CreateSceneFile() : LoadForEditing( asset );
+		}
+
+		if ( editor?.CompilationDirty == true || SceneCompileCache.IsDirty( asset ) )
+			return editor is not null ? editor.Scene.CreateSceneFile() : LoadForEditing( asset );
+
+		if ( !SceneCompileCache.ValidateOutput( asset, out var error ) )
+		{
+			Log.Error( error );
+			return null;
+		}
 
 		var compiledPath = asset.GetCompiledFile( true );
 		if ( string.IsNullOrEmpty( compiledPath ) )
@@ -58,29 +80,19 @@ internal static class SceneSource
 		return SceneFile.FromCompiled( asset.Path, asset.Guid, File.ReadAllBytes( compiledPath ) );
 	}
 
-	static SceneFile PreviewSource( Asset asset, SceneEditorSession session, string reason )
-	{
-		if ( session is null && !File.Exists( asset.GetSourceFile( true ) ) )
-		{
-			Log.Error( $"Cannot preview '{asset.Path}': its editable source is missing. {reason}" );
-			return null;
-		}
-
-		var file = session?.Scene.CreateSceneFile() ?? LoadForEditing( asset );
-		file.IsSourcePreview = true;
-		Log.Warning( $"Playing '{asset.Path}' uncompiled. {reason}" );
-		return file;
-	}
-
 	internal static bool PreparePlay( SceneEditorSession session, out SceneLoadOptions options )
 	{
 		options = null;
-		var asset = FindAsset( session.Scene.Source as SceneFile );
+		if ( session.CompilationDirty )
+			return true;
+
+		var file = session.Scene.Source as SceneFile;
+		var asset = FindAsset( file );
 		if ( asset is null || !SceneCompileCache.HasCompilation( asset ) )
 			return true;
 
 		options = new SceneLoadOptions();
-		options.SetScene( session.Scene.Source as SceneFile );
+		options.SetScene( file );
 		return options.PrepareRuntime();
 	}
 }

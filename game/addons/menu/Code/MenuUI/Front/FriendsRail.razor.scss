@@ -17,7 +17,7 @@ FriendsRail
 		flex-direction: row;
 		flex-shrink: 0;
 		align-items: stretch;
-		border-bottom: 1px solid $front-hairline;
+		border-bottom: $front-border-width solid $front-hairline;
 
 		// The search is the band itself, edge to edge between the dividers - no box inside a box.
 		// Magnifier on the left, text in the middle, clear button pinned to the right
@@ -207,17 +207,30 @@ FriendsRail
 		flex-shrink: 0;
 		align-items: center;
 		gap: 10px;
-		height: 92px;
-		margin: 2px 0 6px 0;
-		padding: 10px;
-		border-radius: 6px;
-		border: 1px solid $front-hairline;
+		height: 76px;
+
+		// The parties read as one block, like a run of friend rows - square, with a line under each
+		// to split them (and the last from the friends under it)
+		padding: 10px 12px;
+		border-bottom: $front-border-width solid $front-hairline;
 		background-color: rgba( 255, 255, 255, 0.03 );
+		transition: background-color 0.1s ease;
+
+		// Clicking anywhere on it joins - so it points, and lifts like a friend row does
+		&.joinable
+		{
+			cursor: pointer;
+
+			&:hover
+			{
+				background-color: rgba( 255, 255, 255, 0.06 );
+				sound-in: "ui.button.over";
+			}
+		}
 
 		&.mine
 		{
-			border-color: rgba( $front-primary, 0.35 );
-			background-color: rgba( $front-primary, 0.06 );
+			background-color: rgba( $front-primary, 0.08 );
 		}
 
 		// Whose party and what they're doing over who's in it - with join beside the lot, centred
@@ -239,55 +252,26 @@ FriendsRail
 			gap: 1px;
 		}
 
-		// The name with its count pill right after it, like the section headers
+		// "howie's party · Sandbox · Joinable" - one line. The game gives way first when it's tight,
+		// then the name; the dots and "Joinable" never do
 		.party-title
 		{
 			flex-direction: row;
 			align-items: center;
-			gap: 6px;
-			min-width: 0;
-		}
-
-		// Shrinks to fit rather than sizing off a percentage - inside the list's cells that measured
-		// against nothing and left just the ellipsis
-		.party-name
-		{
-			@include front-row-title;
-			flex-shrink: 1;
-			min-width: 0;
-			max-width: none;
-			font-size: 12.5px;
-		}
-
-		// The same pill as the section counts
-		.party-count
-		{
-			flex-shrink: 0;
-			align-items: center;
-			justify-content: center;
-			min-width: 22px;
+			gap: 5px;
 			height: 18px;
-			padding: 0 7px;
-			border-radius: 999px;
-			background-color: rgba( 255, 255, 255, 0.07 );
-			font-size: 10px;
-			font-weight: 700;
-			color: $front-secondary;
-			text-align: center;
-			white-space: nowrap;
-		}
-
-		// "Sandbox · Joinable"
-		.party-game
-		{
-			flex-direction: row;
-			align-items: center;
-			gap: 4px;
 			min-width: 0;
+
+			.sep
+			{
+				flex-shrink: 0;
+				font-size: 11.5px;
+				color: $front-tertiary;
+			}
 
 			.game
 			{
-				flex-shrink: 1;
+				flex-shrink: 2;
 				min-width: 0;
 				font-size: 11.5px;
 				font-weight: 600;
@@ -300,7 +284,20 @@ FriendsRail
 			.state
 			{
 				@include front-row-meta;
+				white-space: nowrap;
 			}
+		}
+
+		// Shrinks to fit rather than sizing off a percentage - inside the list's cells that measured
+		// against nothing and left just the ellipsis. The stylesheet has no "none" for max-width, so
+		// the mixin's 100% is replaced by a length no name will reach.
+		.party-name
+		{
+			@include front-row-title;
+			flex-shrink: 1;
+			min-width: 0;
+			max-width: 2000px;
+			font-size: 12.5px;
 		}
 
 		.party-avatars
@@ -358,24 +355,10 @@ FriendsRail
 		align-items: center;
 		gap: 10px;
 		height: 42px;
+		// Square, like the party cards - a run of rows with art behind them reads as one block
 		padding: 5px 6px;
-		border-radius: 6px;
 		cursor: pointer;
 		transition: background-color 0.1s ease;
-
-		// Next to another row with art behind it - square off the corners where they meet, so the run
-		// reads as one block instead of a stack of pills
-		&.joined-top
-		{
-			border-top-left-radius: 0;
-			border-top-right-radius: 0;
-		}
-
-		&.joined-bottom
-		{
-			border-bottom-left-radius: 0;
-			border-bottom-right-radius: 0;
-		}
 
 		&:hover
 		{
@@ -464,6 +447,21 @@ FriendsRail
 		}
 	}
 
+	// Pointing anywhere on a joinable row or party lights its join button up as if you were on it -
+	// the whole row is the thing you're looking at. The row makes its own hover sound, so no second one
+	.friend:hover .action.join, .party:hover .action.join
+	{
+		border-color: $front-reward * 2;
+		background-color: $front-reward;
+		box-shadow: 0 0 16px rgba( $front-reward, 0.7 );
+
+		icon
+		{
+			color: #ffffff;
+			text-shadow: none;
+		}
+	}
+
 	// Square "+" - invite straight into your party (making one if you're not in one)
 	// Out of the way until you point at someone - then a green "+" that glows, filling in solid when
 	// it's the thing under the cursor. Colours past 1.0 are HDR, so the glow actually blooms.
@@ -504,15 +502,34 @@ FriendsRail
 		}
 
 		// Just invited - stays up, so you can see it went
-		&.sent
+		// Asked in, waiting on them - always showing, not just on hover, like Dota's. A green frame and
+		// an hourglass, quieter than the invite button so it reads as "done, waiting" not "press me"
+		&.pending
 		{
 			opacity: 1;
+			cursor: default;
+			border-color: rgba( $front-reward, 0.55 );
+			background-color: rgba( $front-reward, 0.1 );
 			box-shadow: none;
 
 			icon
 			{
+				font-size: 14px;
 				color: $front-reward;
 				text-shadow: none;
+			}
+
+			&:hover
+			{
+				border-color: rgba( $front-reward, 0.55 );
+				background-color: rgba( $front-reward, 0.1 );
+				box-shadow: none;
+
+				icon
+				{
+					color: $front-reward;
+					text-shadow: none;
+				}
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 @using System;
 @using System.Linq;
 @using MenuProject;
+@using MenuProject.MenuUI.Front;
 @using MenuProject.MenuUI.Popups;
 @using Sandbox;
 @using Sandbox.UI;
@@ -50,7 +51,8 @@
                 {
                     var party = partyItem.Party;
 
-                    <div class="party @(party.IsMine ? "mine" : "")">
+                    @* A party you can join joins wherever you click it - the faces still open their cards *@
+                    <div class="party @(party.IsMine ? "mine" : "") @(party.Joinable is not null ? "joinable" : "")" onmousedown=@( ( e ) => { if ( party.Joinable is { } leader ) Join( e, leader ); } )>
                         @if ( partyItem.Art is { } partyArt )
                         {
                             <div class="game-art" style="background-image: url( @partyArt );"></div>
@@ -58,15 +60,15 @@
                         <div class="party-main">
                             @* What it is up top - whose, how big, what they're doing - so however many are in it, none of that moves *@
                             <div class="party-info">
+                                @* Whose it is and what they're up to, in one line - "howie's party · Sandbox · Joinable" *@
                                 <div class="party-title">
                                     <label class="party-name">@party.Title</label>
-                                    <label class="party-count">@party.Size</label>
-                                </div>
-                                <div class="party-game">
+                                    <label class="sep">·</label>
                                     <label class="game">@party.Game</label>
                                     @if ( party.Joinable is not null )
                                     {
-                                        <label class="state">· Joinable</label>
+                                        <label class="sep">·</label>
+                                        <label class="state">Joinable</label>
                                     }
                                 </div>
                             </div>
@@ -100,8 +102,7 @@
                 {
                     var row = friendItem.Row;
 
-                    @* Rows with art next to each other join up - only the ends of a run get rounded corners *@
-                    <div class="friend @row.StatusClass @friendItem.Joined" onmousedown=@( ( e ) => ShowPopup( e, row ) )>
+                    <div class="friend @row.StatusClass" onmousedown=@( ( e ) => ShowPopup( e, row ) )>
                         @* The game they're in, faded in behind the row - or a blueprint if they're making one *@
                         @if ( row.InEditor )
                         {
@@ -121,11 +122,17 @@
                         {
                             <div class="action join" tooltip="Join" onmousedown=@( ( e ) => Join( e, row ) )><icon>play_arrow</icon></div>
                         }
+                        else if ( PartyInvites.IsPending( row.Id ) )
+                        {
+                            @* Asked in and not here yet - stays up until they join or it lapses, like Dota *@
+                            <div class="invite pending" tooltip="Invite sent - waiting for them to join" onmousedown=@( ( e ) => e.StopPropagation() )>
+                                <icon>hourglass_top</icon>
+                            </div>
+                        }
                         else if ( row.CanInvite )
                         {
-                            var invited = RecentlyInvited( row.Id );
-                            <div class="invite @(invited ? "sent" : "")" tooltip="@(invited ? "Invite sent" : "Invite to party")" onmousedown=@( ( e ) => Invite( e, row ) )>
-                                <icon>@(invited ? "check" : "add")</icon>
+                            <div class="invite" tooltip="Invite to party" onmousedown=@( ( e ) => Invite( e, row ) )>
+                                <icon>add</icon>
                             </div>
                         }
                     </div>
@@ -192,14 +199,14 @@
 
     record HeadItem( string Id, string Title, int Count, bool Collapsed );
     record PartyItem( PartyGroup Party, string Art );
-    record FriendItem( FriendRow Row, string Art, string Joined );
+    record FriendItem( FriendRow Row, string Art );
 
     /// <summary>
     /// How tall each kind of item is - the list lays out from these, so they're pinned in the
-    /// stylesheet to match (the party card's 92px plus its 2px and 6px margins).
+    /// stylesheet to match.
     /// </summary>
     const float HeadHeight = 36f;
-    const float PartyHeight = 100f;
+    const float PartyHeight = 76f;
     const float FriendHeight = 42f;
 
     static readonly Func<object, float> HeightOf = item => item switch
@@ -218,15 +225,10 @@
     /// </summary>
     static readonly HashSet<string> Collapsed = new();
 
-    /// <summary>
-    /// When we last invited each friend - the button shows a tick for a bit, and won't spam them.
-    /// </summary>
-    readonly Dictionary<ulong, RealTimeSince> Invited = new();
-    const float InviteCooldown = 5f;
-
     const float RefreshInterval = 3f;
     RealTimeSince TimeSinceRefresh = RefreshInterval;
     bool _lastStreamerMode = Preferences.StreamerMode;
+    string _lastMock = RailPresence.Mock;
 
     /// <summary>
     /// Anyone on the list at all, online or not. Assumed until the first refresh says otherwise, so a
@@ -240,16 +242,17 @@
 
         if ( !IsVisible ) return;
 
-        // Streamer mode changes friend names, so refresh straight away
-        if ( Preferences.StreamerMode != _lastStreamerMode )
+        // Streamer mode changes friend names, and friends_mock changes everything - refresh straight away
+        if ( Preferences.StreamerMode != _lastStreamerMode || RailPresence.Mock != _lastMock )
         {
             _lastStreamerMode = Preferences.StreamerMode;
+            _lastMock = RailPresence.Mock;
             Refresh();
         }
 
-        // Cells on screen show some things that aren't in their items - invite ticks, who matched the
-        // search - so re-render them when those change
-        var cellHash = HashCode.Combine( Invited.Count( x => x.Value < InviteCooldown ), Search );
+        // Cells on screen show some things that aren't in their items - who's got an invite pending,
+        // who matched the search - so re-render them when those change
+        var cellHash = HashCode.Combine( PartyInvites.Hash, Search );
         if ( cellHash != _cellHash )
         {
             _cellHash = cellHash;
@@ -295,29 +298,32 @@
     {
         TimeSinceRefresh = 0;
 
-        var friends = MenuUtility.Friends.Where( x => !x.IsMe ).ToList();
+        var friends = RailPresence.Friends.ToList();
         HasFriends = friends.Count > 0;
 
         var sections = new List<Section>();
 
         // Group before filtering - searching for one person still shows the whole party they're in
-        var playing = friends.Where( x => x.IsOnline && x.IsPlayingThisGame ).ToList();
+        var playing = friends.Where( x => RailPresence.IsOnline( x ) && RailPresence.IsPlayingThisGame( x ) ).ToList();
         if ( playing.Count > 0 )
         {
             var (parties, solo) = GroupParties( playing );
             parties = parties.Where( x => x.Members.Any( IsSearchMatch ) ).ToList();
             solo = solo.Where( IsSearchMatch ).ToList();
 
-            var count = parties.Sum( x => x.Members.Count ) + solo.Count;
-            if ( count > 0 )
-                sections.Add( new Section( "playing", "Playing s&box", count, parties, solo ) );
+            // Parties get a section of their own, first - the friends playing on their own come after
+            if ( parties.Count > 0 )
+                sections.Add( new Section( "parties", "Parties", parties.Count, parties, new() ) );
+
+            if ( solo.Count > 0 )
+                sections.Add( new Section( "playing", "Playing s&box", solo.Count, new(), solo ) );
         }
 
-        var online = friends.Where( x => x.IsOnline && !x.IsPlayingThisGame ).OrderBy( x => x.Name ).Select( ToRow ).Where( IsSearchMatch ).ToList();
+        var online = friends.Where( x => RailPresence.IsOnline( x ) && !RailPresence.IsPlayingThisGame( x ) ).OrderBy( x => x.Name ).Select( ToRow ).Where( IsSearchMatch ).ToList();
         if ( online.Count > 0 )
             sections.Add( new Section( "online", "Online", online.Count, new(), online ) );
 
-        var offline = friends.Where( x => !x.IsOnline ).OrderBy( x => x.Name ).Select( ToRow ).Where( IsSearchMatch ).ToList();
+        var offline = friends.Where( x => !RailPresence.IsOnline( x ) ).OrderBy( x => x.Name ).Select( ToRow ).Where( IsSearchMatch ).ToList();
         if ( offline.Count > 0 )
             sections.Add( new Section( "offline", "Offline", offline.Count, new(), offline ) );
 
@@ -342,11 +348,8 @@
             foreach ( var party in section.Parties )
                 items.Add( new PartyItem( party, GameArt( party.Members.FirstOrDefault()?.GameIdent ) ) );
 
-            for ( int i = 0; i < section.Friends.Count; i++ )
-            {
-                var row = section.Friends[i];
-                items.Add( new FriendItem( row, row.InEditor ? null : GameArt( row.GameIdent ), JoinedClasses( section.Friends, i ) ) );
-            }
+            foreach ( var row in section.Friends )
+                items.Add( new FriendItem( row, row.InEditor ? null : GameArt( row.GameIdent ) ) );
         }
 
         return items;
@@ -360,13 +363,29 @@
     {
         var parties = new List<PartyGroup>();
         var solo = new List<FriendRow>();
-        var myParty = PartyRoom.Current?.Id.ToString();
+        var myParty = RailPresence.PartyId;
 
-        foreach ( var group in friends.GroupBy( x => x.GetRichPresence( "party_id" ) ?? "" ) )
+        // Who's really in our party, from the lobby itself. Everyone else's party comes from their
+        // rich presence, which lags behind (a leader could wait a while to see their party come
+        // together) and can go stale after someone leaves - but for our own we don't have to wait
+        var inMyParty = RailPresence.PartyMembers.Select( x => x.Id ).ToHashSet();
+
+        string PartyKey( Friend friend )
+        {
+            if ( inMyParty.Contains( friend.Id ) ) return myParty;
+
+            // Says they're with us, but they're not in the lobby - they've left
+            var key = RailPresence.Get( friend, "party_id" ) ?? "";
+            return key == myParty ? "" : key;
+        }
+
+        foreach ( var group in friends.GroupBy( PartyKey ) )
         {
             var members = group.OrderBy( x => x.Name ).ToList();
             var first = members[0];
-            var size = Math.Max( members.Count, first.GetRichPresence( "party_size" ).ToInt( 0 ) );
+            var size = group.Key == myParty
+                ? RailPresence.PartyMembers.Count
+                : Math.Max( members.Count, RailPresence.Get( first, "party_size" ).ToInt( 0 ) );
 
             if ( string.IsNullOrEmpty( group.Key ) || size < 2 )
             {
@@ -378,10 +397,25 @@
             var isMine = group.Key == myParty;
             var host = rows.FirstOrDefault( x => x.Joinable );
 
+            if ( isMine )
+            {
+                // Our own party - we're in the lobby, so we know everyone in it, friend or not
+                rows = RailPresence.PartyMembers.OrderByDescending( x => x.Id == RailPresence.PartyOwner ).Select( ToRow ).ToList();
+            }
+            else if ( RailPresence.Get( first, "party_owner" ).ToULong( 0 ) is var ownerId and not 0
+                && !members.Any( x => x.Id == ownerId ) && !new Friend( ownerId ).IsMe )
+            {
+                // Someone else's - all rich presence tells us about the rest is who leads it, so put
+                // their face up front even when they're not a friend. Anyone else stays a "+N"
+                rows.Insert( 0, ToRow( new Friend( ownerId ) ) );
+            }
+
+            size = Math.Max( size, rows.Count );
+
             parties.Add( new PartyGroup(
                 Title: isMine ? "Your party" : PartyTitle( first ),
                 Size: size,
-                Max: first.GetRichPresence( "party_max" ).ToInt( PartyDeck.MAX_MEMBERS ),
+                Max: RailPresence.Get( first, "party_max" ).ToInt( PartyDeck.MAX_MEMBERS ),
                 Members: rows,
                 Game: GameTitle( first ),
                 Joinable: isMine ? null : host,
@@ -406,7 +440,7 @@
 
     static string PartyTitle( Friend member )
     {
-        var owner = member.GetRichPresence( "party_owner" ).ToULong( 0 );
+        var owner = RailPresence.Get( member, "party_owner" ).ToULong( 0 );
         if ( owner == 0 ) return $"{member.Name}'s party";
 
         var friend = new Friend( owner );
@@ -417,44 +451,25 @@
         return string.IsNullOrWhiteSpace( name ) || name == "[unknown]" ? $"{member.Name}'s party" : $"{name}'s party";
     }
 
-    static bool InEditor( Friend friend ) => friend.GetRichPresence( "in_editor" ) == "1";
+    static bool InEditor( Friend friend ) => RailPresence.Get( friend, "in_editor" ) == "1";
 
     static string GameTitle( Friend friend )
     {
         if ( InEditor( friend ) ) return "In the editor";
 
-        var game = friend.GetRichPresence( "gametitle" );
+        var game = RailPresence.Get( friend, "gametitle" );
         if ( string.IsNullOrWhiteSpace( game ) || game == "menu" ) return "Main menu";
         return game;
     }
 
     FriendRow ToRow( Friend friend )
     {
-        var joinable = friend.IsPlayingThisGame && MenuHelpers.HasAuthority
-            && !string.IsNullOrWhiteSpace( friend.GetRichPresence( "connect" ) );
+        var joinable = RailPresence.IsPlayingThisGame( friend ) && MenuHelpers.HasAuthority
+            && !string.IsNullOrWhiteSpace( RailPresence.Get( friend, "connect" ) );
 
         return new FriendRow( friend, friend.Id, friend.Name, StatusText( friend ), StatusClass( friend ), joinable,
-            !joinable && MenuUtility.CanInviteToParty( friend ), PlayingIdent( friend ),
-            friend.IsPlayingThisGame && InEditor( friend ) );
-    }
-
-    /// <summary>
-    /// Is anything drawn behind this row - a game's screenshot, or the editor's grid.
-    /// </summary>
-    bool HasArt( FriendRow row ) => row.InEditor || GameArt( row.GameIdent ) is not null;
-
-    /// <summary>
-    /// "joined-top" if the row above has art too, "joined-bottom" if the row below does - so a run of
-    /// them reads as one block, square where they meet, rounded only at its ends.
-    /// </summary>
-    string JoinedClasses( List<FriendRow> rows, int index )
-    {
-        if ( !HasArt( rows[index] ) ) return "";
-
-        var top = index > 0 && HasArt( rows[index - 1] );
-        var bottom = index < rows.Count - 1 && HasArt( rows[index + 1] );
-
-        return $"{(top ? "joined-top" : "")} {(bottom ? "joined-bottom" : "")}";
+            !joinable && RailPresence.CanInvite( friend ), PlayingIdent( friend ),
+            RailPresence.IsPlayingThisGame( friend ) && InEditor( friend ) );
     }
 
     /// <summary>
@@ -462,14 +477,15 @@
     /// </summary>
     static string PlayingIdent( Friend friend )
     {
-        if ( !friend.IsPlayingThisGame || InEditor( friend ) ) return null;
+        if ( !RailPresence.IsPlayingThisGame( friend ) || InEditor( friend ) ) return null;
 
-        var title = friend.GetRichPresence( "gametitle" );
+        var title = RailPresence.Get( friend, "gametitle" );
         if ( string.IsNullOrWhiteSpace( title ) || title == "menu" ) return null;
 
-        var ident = friend.GetRichPresence( "gamename" );
+        var ident = RailPresence.Get( friend, "gamename" );
         return string.IsNullOrWhiteSpace( ident ) ? null : ident;
     }
+
 
     //
     // A screenshot of each game people are in, fetched once per game and shared by every row showing it
@@ -508,53 +524,56 @@
 
         _gameArtLoading.Remove( ident );
 
-        // The art's part of each row's item, and it changes which rows join up - rebuild them
+        // The art's part of each row's item - rebuild them so it shows
         if ( this.IsValid() )
             Refresh();
     }
 
     static string StatusText( Friend friend )
     {
-        if ( friend.IsPlayingThisGame )
+        if ( RailPresence.IsPlayingThisGame( friend ) )
         {
             var game = GameTitle( friend );
             return game is "Main menu" ? "In main menu" : game is "In the editor" ? game : $"Playing {game}";
         }
 
-        if ( !friend.IsOnline ) return "Offline";
-        if ( friend.IsPlayingAGame ) return "Playing another game";
-        if ( friend.IsAway || friend.IsSnoozing ) return "Away";
-        if ( friend.IsBusy ) return "Busy";
+        if ( !RailPresence.IsOnline( friend ) ) return "Offline";
+        if ( RailPresence.IsPlayingAGame( friend ) ) return "Playing another game";
+        if ( RailPresence.IsAway( friend ) ) return "Away";
+        if ( RailPresence.IsBusy( friend ) ) return "Busy";
         return "Online";
     }
 
     static string StatusClass( Friend friend )
     {
-        if ( friend.IsPlayingThisGame ) return "ingame";
-        if ( !friend.IsOnline ) return "offline";
-        if ( friend.IsAway || friend.IsBusy || friend.IsSnoozing ) return "away";
+        if ( RailPresence.IsPlayingThisGame( friend ) ) return "ingame";
+        if ( !RailPresence.IsOnline( friend ) ) return "offline";
+        if ( RailPresence.IsAway( friend ) || RailPresence.IsBusy( friend ) ) return "away";
         return "online";
     }
 
-    bool RecentlyInvited( ulong id ) => Invited.TryGetValue( id, out var t ) && t < InviteCooldown;
-
-    async void Invite( PanelEvent e, FriendRow row )
+    void Invite( PanelEvent e, FriendRow row )
     {
         e.StopPropagation();
-        if ( RecentlyInvited( row.Id ) ) return;
+        if ( PartyInvites.IsPending( row.Id ) ) return;
 
         Sound.Play( "ui.button.press" );
-        Invited[row.Id] = 0;
-        StateHasChanged();
 
-        await PartyDeck.EnsureLobbyExists();
-        MenuUtility.InviteToParty( row.Id );
+        // Makes the party if there isn't one, and doesn't bother anyone real while it's mocked
+        _ = PartyInvites.Invite( row.Id );
     }
 
     void Join( PanelEvent e, FriendRow row )
     {
         e.StopPropagation();
         if ( !MenuHelpers.HasAuthority ) return;
+
+        // They're not really in anything
+        if ( RailPresence.Mocking )
+        {
+            Log.Info( $"friends_mock: would join {row.Name}" );
+            return;
+        }
 
         MenuUtility.JoinFriendGame( row.Friend );
     }

@@ -102,23 +102,12 @@ partial class SceneCompiler
 	}
 
 	/// <summary>
-	/// A model's collision in model space. Reading it crosses into native once per vertex, so we do
-	/// it once per model and transform the result for every instance.
-	/// </summary>
-	internal sealed record ModelCollision( ModelCollisionPart[] Parts );
-
-	/// <summary>
 	/// One aggregate's worth of geometry, grouped and split but not yet turned into a model.
 	/// </summary>
 	internal sealed record AggregatePlan( Material Material, Color Tint, string Tags, Transform Transform, Chunk[] Chunks )
 	{
 		public bool Translucent { get; } = IsTranslucent( Material );
 	}
-
-	/// <summary>
-	/// A compiled model whose draw calls all share a material. Fragment <c>i</c> draws draw call <c>i</c>.
-	/// </summary>
-	internal sealed record AggregateBuild( Model Model, AggregateFragmentInfo[] Fragments );
 
 	/// <summary>
 	/// Everything the compile pulled out of the scene, ready to be turned into resources.
@@ -140,8 +129,6 @@ partial class SceneCompiler
 	internal readonly struct GeometryTransform
 	{
 		readonly Transform _transform;
-		readonly Rotation _rotation;
-		readonly Vector3 _scale;
 		readonly Vector3 _normalScale;
 
 		public readonly bool Mirrored;
@@ -149,37 +136,22 @@ partial class SceneCompiler
 		public GeometryTransform( in Transform transform )
 		{
 			_transform = transform;
-			_rotation = transform.Rotation;
-			_scale = transform.Scale;
-			_normalScale = new Vector3( Reciprocal( _scale.x ), Reciprocal( _scale.y ), Reciprocal( _scale.z ) );
+			var scale = transform.Scale;
+			_normalScale = new Vector3( Reciprocal( scale.x ), Reciprocal( scale.y ), Reciprocal( scale.z ) );
 
-			Mirrored = _scale.x * _scale.y * _scale.z < 0.0f;
+			Mirrored = scale.x * scale.y * scale.z < 0.0f;
 
 			static float Reciprocal( float value ) => value == 0.0f ? 0.0f : 1.0f / value;
 		}
 
 		public Vector3 Position( in Vector3 position ) => _transform.PointToWorld( position );
 
-		public Vector3 Normal( in Vector3 normal ) => (_rotation * (normal * _normalScale)).Normal;
+		public Vector3 Normal( in Vector3 normal ) => (_transform.Rotation * (normal * _normalScale)).Normal;
 
 		public Vector4 Tangent( in Vector4 tangent )
 		{
-			var world = (_rotation * (new Vector3( tangent.x, tangent.y, tangent.z ) * _scale)).Normal;
+			var world = (_transform.Rotation * (new Vector3( tangent.x, tangent.y, tangent.z ) * _transform.Scale)).Normal;
 			return new Vector4( world, Mirrored ? -tangent.w : tangent.w );
-		}
-
-		/// <summary>
-		/// Put the winding back the way round the transform left it.
-		/// </summary>
-		public void Flip( int[] indices )
-		{
-			if ( !Mirrored )
-				return;
-
-			for ( int i = 0; i + 2 < indices.Length; i += 3 )
-			{
-				(indices[i + 1], indices[i + 2]) = (indices[i + 2], indices[i + 1]);
-			}
 		}
 
 		/// <summary>
@@ -234,19 +206,18 @@ partial class SceneCompiler
 	/// Triangulate every mesh and static prop into world space and work out which aggregate each
 	/// piece belongs in. Awaits <paramref name="onProgress"/> as it goes so the editor stays alive.
 	/// </summary>
-	static async Task<CompilePlan> Plan( MeshComponent[] meshes, ModelRenderer[] props, HashSet<Guid> processed, Func<int, int, Task> onProgress, CancellationToken cancel )
+	static async Task<CompilePlan> Plan( MeshComponent[] meshes, ModelRenderer[] props, HashSet<Guid> processed, SceneCompilerSettings settings, Func<int, int, Task> onProgress, CancellationToken cancel )
 	{
 		var groups = new Dictionary<GroupKey, List<Chunk>>();
 		var collision = new List<CollisionChunk>();
 		var shapes = new List<CollisionShape>();
-		var physics = new Dictionary<Model, ModelCollision>();
+		var physics = new Dictionary<Model, ModelCollisionPart[]>();
 		var total = meshes.Length + props.Length;
 		var done = 0;
 
 		foreach ( var source in meshes )
 		{
-			if ( cancel.IsCancellationRequested )
-				return null;
+			cancel.ThrowIfCancellationRequested();
 
 			source.Mesh.SetSmoothingAngle( source.SmoothingAngle );
 			var submeshes = source.Mesh.Triangulate();
@@ -258,7 +229,7 @@ partial class SceneCompiler
 
 			var transform = new GeometryTransform( source.WorldTransform );
 			var tags = TagKey( source.GameObject );
-			var visible = Visible( source );
+			var visible = !source.HideInGame;
 
 			if ( source.Collision == MeshComponent.CollisionType.Hull )
 			{
@@ -275,13 +246,6 @@ partial class SceneCompiler
 
 			foreach ( var submesh in submeshes )
 			{
-				var indices = submesh.Indices;
-				if ( collides && transform.Mirrored )
-				{
-					indices = [.. indices];
-					transform.Flip( indices );
-				}
-
 				// A mesh that doesn't draw never builds render vertices - it's compiled for its
 				// collision alone, which is how you'd build something like a player clip.
 				if ( visible )
@@ -297,6 +261,7 @@ partial class SceneCompiler
 
 				if ( collides )
 				{
+					var indices = transform.Mirrored ? Flipped( submesh.Indices ) : submesh.Indices;
 					collision.Add( new CollisionChunk( transform.Positions( submesh.Vertices ), indices, source.Surface ?? submesh.Material?.Surface, tags ) );
 				}
 			}
@@ -310,8 +275,7 @@ partial class SceneCompiler
 
 		foreach ( var renderer in props )
 		{
-			if ( cancel.IsCancellationRequested )
-				return null;
+			cancel.ThrowIfCancellationRequested();
 
 			if ( TryCompileProp( renderer, cache, groups ) )
 			{
@@ -320,7 +284,7 @@ partial class SceneCompiler
 				processed.Add( renderer.Id );
 
 				// The prop would only build itself another renderer, so it goes too.
-				if ( Owner( renderer ) is { } owner )
+				if ( go.Components.Get<Prop>( FindMode.EverythingInSelf ) is { } owner )
 				{
 					processed.Add( owner.Id );
 				}
@@ -358,12 +322,12 @@ partial class SceneCompiler
 				}
 				else
 				{
-					await Split( chunks, sources[i], StepGeometry );
+					await Split( chunks, sources[i], settings.MaxChunkSize, StepGeometry );
 				}
 				sources[i] = default;
 			}
 
-			foreach ( var cluster in await Cluster( [.. chunks], MaxFragments( key.Material ), StepGeometry ) )
+			foreach ( var cluster in await Cluster( [.. chunks], MaxFragments( key.Material ), settings.AggregateCost, StepGeometry ) )
 			{
 				plans.Add( new AggregatePlan( key.Material, key.Tint, key.Tags, key.Transform, cluster ) );
 			}
@@ -378,30 +342,18 @@ partial class SceneCompiler
 	{
 		var key = new GroupKey( material, tint, tags, IsTranslucent( material ) ? transform : Transform.Zero );
 
-		if ( !groups.TryGetValue( key, out var chunks ) )
-		{
-			chunks = [];
-			groups[key] = chunks;
-		}
-
-		chunks.Add( new Chunk( vertices, indices, bounds.Transform( transform ), streams ) { Transform = transform, LocalBounds = bounds } );
+		groups.GetOrCreate( key ).Add( new Chunk( vertices, indices, bounds.Transform( transform ), streams ) { Transform = transform, LocalBounds = bounds } );
 	}
-
-	/// <summary>
-	/// How big a piece of geometry may get before it's worth splitting up. The map compiler cuts its
-	/// render clusters at the same size.
-	/// </summary>
-	static float MaxChunkSize => Settings.MaxChunkSize;
 
 	/// <summary>
 	/// Split whole triangles into cullable chunks, bounded by the renderer's fragment capacity.
 	/// </summary>
-	static async Task Split( List<Chunk> chunks, Chunk source, Func<Task> step )
+	static async Task Split( List<Chunk> chunks, Chunk source, float maxChunkSize, Func<Task> step )
 	{
 		await step();
 		var (vertices, indices, whole, streams) = source;
 
-		if ( Longest( whole ) <= MaxChunkSize )
+		if ( Longest( whole ) <= maxChunkSize )
 		{
 			chunks.Add( source );
 			return;
@@ -435,7 +387,7 @@ partial class SceneCompiler
 			var span = triangles.AsSpan( range );
 			var bounds = Bounds( vertices, indices, span );
 
-			if ( length < 2 || node.Budget == 1 || Longest( bounds ) <= MaxChunkSize )
+			if ( length < 2 || node.Budget == 1 || Longest( bounds ) <= maxChunkSize )
 			{
 				AddLeaf();
 				continue;
@@ -467,7 +419,7 @@ partial class SceneCompiler
 
 			void AddLeaf()
 			{
-				if ( Longest( bounds ) > MaxChunkSize )
+				if ( Longest( bounds ) > maxChunkSize )
 					oversized++;
 
 				if ( length == count )
@@ -487,7 +439,7 @@ partial class SceneCompiler
 		}
 
 		if ( oversized > 0 )
-			Log.Warning( $"Compile Scene: kept {oversized} chunks larger than MaxChunkSize {MaxChunkSize} at {whole} to avoid excessive splitting." );
+			Log.Warning( $"Compile Scene: kept {oversized} chunks larger than MaxChunkSize {maxChunkSize} at {whole} to avoid excessive splitting." );
 	}
 
 	/// <summary>
@@ -546,16 +498,10 @@ partial class SceneCompiler
 	}
 
 	/// <summary>
-	/// What one more aggregate costs, measured in fragments. An aggregate that survives culling
-	/// walks its fragments on the CPU once per view, but each one costs a scene object and a draw.
-	/// </summary>
-	static float AggregateCost => Settings.AggregateCost;
-
-	/// <summary>
 	/// Split chunks into the aggregates that draw them, subdividing while the culling that buys is
 	/// worth more than the extra draw, and always far enough to fit the fragment limit.
 	/// </summary>
-	static async Task<List<Chunk[]>> Cluster( Chunk[] chunks, int maxFragments, Func<Task> step )
+	static async Task<List<Chunk[]>> Cluster( Chunk[] chunks, int maxFragments, float aggregateCost, Func<Task> step )
 	{
 		var aggregates = new List<Chunk[]>();
 		var pending = new Stack<(Range Range, int Depth)>();
@@ -585,7 +531,7 @@ partial class SceneCompiler
 
 			keys.AsSpan( 0, length ).Sort( span );
 
-			var at = FindSplit( span, bounds, maxFragments, suffix.AsSpan( 0, length ) );
+			var at = FindSplit( span, bounds, maxFragments, aggregateCost, suffix.AsSpan( 0, length ) );
 
 			if ( at == 0 )
 			{
@@ -609,7 +555,7 @@ partial class SceneCompiler
 	/// it is. Equal-cost splits prefer balanced children; no-split still wins ties when legal.
 	/// Falls back to halving if nothing wins but we're still over the fragment limit.
 	/// </summary>
-	static int FindSplit( ReadOnlySpan<Chunk> chunks, BBox bounds, int maxFragments, Span<float> suffix )
+	static int FindSplit( ReadOnlySpan<Chunk> chunks, BBox bounds, int maxFragments, float aggregateCost, Span<float> suffix )
 	{
 		if ( chunks.Length < 2 )
 			return 0;
@@ -625,7 +571,7 @@ partial class SceneCompiler
 		var area = Area( bounds );
 		var best = 0;
 		var bestCost = chunks.Length <= maxFragments ? area * chunks.Length : float.MaxValue;
-		var parentCost = area * AggregateCost;
+		var parentCost = area * aggregateCost;
 
 		box = chunks[0].Bounds;
 
@@ -715,22 +661,26 @@ partial class SceneCompiler
 	/// Concatenate a plan's chunks into the single mesh an aggregate draws from, giving each chunk
 	/// its own draw call so it can be culled and drawn as a fragment.
 	/// </summary>
-	static AggregateBuild Build( AggregatePlan plan )
+	static (Model Model, List<AggregateFragmentInfo> Fragments) Build( AggregatePlan plan, SceneCompileStatistics statistics )
 	{
 		var material = plan.Material;
 		var chunks = plan.Chunks;
 
 		var vertexTotal = 0;
 		var indexTotal = 0;
+		var streams = CompiledStreams.None;
 
 		foreach ( var chunk in chunks )
 		{
 			vertexTotal += chunk.Vertices.Length;
 			indexTotal += chunk.Indices.Length;
+			streams |= chunk.Streams;
+			statistics.VertexCount += chunk.Vertices.Length;
+			statistics.TriangleCount += chunk.Indices.Length / 3;
 		}
 
 		var indices = new int[indexTotal];
-		var fragments = new AggregateFragmentInfo[chunks.Length];
+		var fragments = new List<AggregateFragmentInfo>( chunks.Length );
 		var bounds = chunks[0].Bounds;
 		var localBounds = chunks[0].LocalBounds;
 
@@ -741,7 +691,7 @@ partial class SceneCompiler
 			chunks[i].Indices.CopyTo( indices, indexCount );
 			indexCount += chunks[i].Indices.Length;
 
-			fragments[i] = new AggregateFragmentInfo( chunks[i].LocalBounds ) { LocalTransform = chunks[i].Transform };
+			fragments.Add( new AggregateFragmentInfo( chunks[i].LocalBounds ) { LocalTransform = chunks[i].Transform } );
 			bounds = bounds.AddBBox( chunks[i].Bounds );
 			localBounds = localBounds.AddBBox( chunks[i].LocalBounds );
 		}
@@ -750,13 +700,6 @@ partial class SceneCompiler
 
 		// A stream nothing needs is left out - the renderer feeds a missing semantic the same
 		// default the source had, and the vertex drops from 68 bytes to as few as 48.
-		var streams = CompiledStreams.None;
-
-		foreach ( var chunk in chunks )
-		{
-			streams |= chunk.Streams;
-		}
-
 		switch ( streams )
 		{
 			case CompiledStreams.None:
@@ -830,7 +773,10 @@ partial class SceneCompiler
 		// After the sub meshes, because this writes every draw call the mesh has.
 		mesh.UvDensity = UvDensity( chunks, indexTotal );
 
-		return new AggregateBuild( Model.Builder.AddMesh( mesh ).Create(), fragments );
+		if ( !plan.Translucent )
+			statistics.FragmentCount += fragments.Count;
+
+		return (Model.Builder.AddMesh( mesh ).Create(), fragments);
 	}
 
 	/// <summary>

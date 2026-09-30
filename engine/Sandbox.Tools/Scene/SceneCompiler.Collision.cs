@@ -19,45 +19,40 @@ partial class SceneCompiler
 	/// tags from their parents and compiled geometry leaves that hierarchy behind, so shapes can only
 	/// share a resource with shapes tagged the same.
 	/// </summary>
-	static async Task<List<(string Tags, byte[] Data)>> BuildCollision( CollisionChunk[] chunks, CollisionShape[] shapes, Func<int, int, Task> step )
+	static async Task<List<(string Tags, PhysicsGroupDescription Physics)>> BuildCollision( CollisionChunk[] chunks, CollisionShape[] shapes,
+		SceneFolder folder, string outputFolder, Func<int, int, Task> step )
 	{
 		var groups = new Dictionary<string, CollisionGroup>();
 
 		foreach ( var chunk in chunks )
 		{
-			Group( groups, chunk.Tags ).Add( chunk );
+			groups.GetOrCreate( chunk.Tags ).Add( chunk );
 		}
 
 		foreach ( var shape in shapes )
 		{
-			Group( groups, shape.Tags ).Add( shape );
+			groups.GetOrCreate( shape.Tags ).Add( shape );
 		}
 
-		var result = new List<(string, byte[])>( groups.Count );
+		var result = new List<(string, PhysicsGroupDescription)>( groups.Count );
 		var built = 0;
 
 		foreach ( var (tags, group) in groups )
 		{
 			if ( group.Build() is { } data )
 			{
-				result.Add( (tags, data) );
+				var index = result.Count;
+				var physics = PhysicsGroupDescription.Load( Write( folder, $"{outputFolder}/collision_{index}.vphys_c", data ) );
+				if ( physics is null )
+					throw new InvalidOperationException( $"Could not load compiled collision resource {index}." );
+
+				result.Add( (tags, physics) );
 			}
 
 			await step( ++built, groups.Count );
 		}
 
 		return result;
-	}
-
-	static CollisionGroup Group( Dictionary<string, CollisionGroup> groups, string tags )
-	{
-		if ( !groups.TryGetValue( tags, out var group ) )
-		{
-			group = new CollisionGroup();
-			groups[tags] = group;
-		}
-
-		return group;
 	}
 
 	/// <summary>
@@ -143,10 +138,8 @@ partial class SceneCompiler
 	/// <summary>
 	/// Weld a model's collision into the world, keeping the surface each shape was built with unless
 	/// the component overrides it. Triangle meshes join the welded soup, everything else stays convex.
-	/// A mesh built for hull collision carries both shapes and picks the hulls at runtime, so
-	/// <paramref name="convexOnly"/> leaves its triangles behind the same way.
 	/// </summary>
-	static void AddModelCollision( List<CollisionChunk> chunks, List<CollisionShape> shapes, Dictionary<Model, ModelCollision> cache, Model model, in Transform world, Surface surface, string tags, bool convexOnly = false )
+	static void AddModelCollision( List<CollisionChunk> chunks, List<CollisionShape> shapes, Dictionary<Model, ModelCollisionPart[]> cache, Model model, in Transform world, Surface surface, string tags )
 	{
 		if ( !model.IsValid() )
 			return;
@@ -157,23 +150,17 @@ partial class SceneCompiler
 			cache[model] = local;
 		}
 
-		if ( local is null )
-			return;
-
-		foreach ( var part in local.Parts )
+		foreach ( var part in local )
 		{
 			var transform = world.ToWorld( part.Transform );
 			var mirrored = transform.Scale.x * transform.Scale.y * transform.Scale.z < 0.0f;
 
-			if ( !convexOnly )
+			foreach ( var chunk in part.Chunks )
 			{
-				foreach ( var chunk in part.Chunks )
-				{
-					var indices = mirrored ? Flipped( chunk.Indices ) : chunk.Indices;
+				var indices = mirrored ? Flipped( chunk.Indices ) : chunk.Indices;
 
-					// A component surface overrides the whole model, per triangle assignments included
-					chunks.Add( new CollisionChunk( Transformed( chunk.Positions, transform ), indices, surface ?? chunk.Surface, tags, surface is null ? chunk.TriangleSurfaces : null ) );
-				}
+				// A component surface overrides the whole model, per triangle assignments included
+				chunks.Add( new CollisionChunk( Transformed( chunk.Positions, transform ), indices, surface ?? chunk.Surface, tags, surface is null ? chunk.TriangleSurfaces : null ) );
 			}
 
 			foreach ( var shape in part.Shapes )
@@ -187,14 +174,14 @@ partial class SceneCompiler
 	/// Keep geometry in physics-part space so instances compose their scale and rotation with
 	/// the part transform before transforming vertices, just like ModelCollider.
 	/// </summary>
-	static ModelCollision ReadCollision( Model model )
+	static ModelCollisionPart[] ReadCollision( Model model )
 	{
-		if ( model.Physics is null )
-			return null;
+		if ( model.Physics is not { } physics )
+			return [];
 
 		var parts = new List<ModelCollisionPart>();
 
-		foreach ( var part in model.Physics.Parts )
+		foreach ( var part in physics.Parts )
 		{
 			var chunks = new List<CollisionChunk>();
 			var shapes = new List<CollisionShape>();
@@ -230,7 +217,7 @@ partial class SceneCompiler
 				parts.Add( new ModelCollisionPart( part.Transform, [.. chunks], [.. shapes] ) );
 		}
 
-		return parts.Count == 0 ? null : new ModelCollision( [.. parts] );
+		return [.. parts];
 	}
 
 	/// <summary>
@@ -248,18 +235,6 @@ partial class SceneCompiler
 		}
 
 		return flipped;
-	}
-
-	static Vector3[] Transformed( IEnumerable<Vector3> points, in Transform transform )
-	{
-		var world = new List<Vector3>();
-
-		foreach ( var point in points )
-		{
-			world.Add( transform.PointToWorld( point ) );
-		}
-
-		return [.. world];
 	}
 
 	static Vector3[] Transformed( Vector3[] points, in Transform transform )

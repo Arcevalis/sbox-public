@@ -16,9 +16,6 @@ public partial class SceneFile
 	internal bool IsSourceSnapshot { get; private set; }
 
 	[JsonIgnore]
-	internal bool IsSourcePreview { get; set; }
-
-	[JsonIgnore]
 	internal byte[] SceneBinaryData { get; private set; }
 
 	internal static Func<SceneFile, SceneFile> ResolveRuntimeScene { get; set; }
@@ -27,7 +24,6 @@ public partial class SceneFile
 	{
 		IsCompiled = false;
 		CompileError = null;
-		IsSourcePreview = false;
 		SceneBinaryData = null;
 	}
 

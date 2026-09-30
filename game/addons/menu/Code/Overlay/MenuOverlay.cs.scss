@@ -43,6 +43,19 @@ MenuOverlay
 	gap: 8px;
 }
 
+// The post-game card - bottom middle, clear of the party deck in the corner
+.popup_canvas_bottomcenter
+{
+	position: absolute;
+	left: 0px;
+	right: 0px;
+	bottom: 40px;
+	z-index: 5101;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+}
+
 .popup_canvas_bottomright
 {
 	flex-direction: column;

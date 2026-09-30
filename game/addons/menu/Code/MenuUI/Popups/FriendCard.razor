@@ -109,43 +109,52 @@
 	}
 
 
+	@{ var extras = Extras(); }
+
 	<div class="actions">
-		@if ( CanJoin )
-		{
-			<div class="button primary" onmousedown=@Join><icon>sports_esports</icon><label>Join game</label></div>
-		}
-		else if ( IsMe )
-		{
-			@* Nothing to do to yourself but look *@
-		}
-		else if ( InMyParty )
-		{
-			<div class="button done"><icon>check</icon><label>In your party</label></div>
-		}
-		else if ( Invited )
-		{
-			<div class="button done"><icon>check</icon><label>Invite sent</label></div>
-		}
-		else if ( MenuUtility.CanInviteToParty( Friend ) )
-		{
-			<div class="button primary" onmousedown=@Invite><icon>group_add</icon><label>Invite to party</label></div>
-		}
+		<div class="action-row">
+			@if ( CanJoin )
+			{
+				<div class="button primary" onmousedown=@Join><icon>sports_esports</icon><label>Join game</label></div>
+			}
+			else if ( IsMe )
+			{
+				@* Nothing to do to yourself but look *@
+			}
+			else if ( InMyParty )
+			{
+				<div class="button done"><icon>check</icon><label>In your party</label></div>
+			}
+			else if ( Invited )
+			{
+				<div class="button done"><icon>check</icon><label>Invite sent</label></div>
+			}
+			else if ( MenuUtility.CanInviteToParty( Friend ) )
+			{
+				<div class="button primary" onmousedown=@Invite><icon>group_add</icon><label>Invite to party</label></div>
+			}
 
-		<div class="button" onmousedown=@ViewProfile><label>View profile</label><icon>open_in_new</icon></div>
+			<div class="button" onmousedown=@ViewProfile><label>View profile</label><icon>open_in_new</icon></div>
 
-		@* The less common stuff, in the same row - labelled if there's room, just the glyph if not *@
-		@if ( !IsMe && !Friend.IsFriend )
+			@* Sharing the row when it's got room for them *@
+			@if ( !SplitRows )
+			{
+				@foreach ( var extra in extras )
+				{
+					<div class="button @(extra.Danger ? "danger" : "")" onmousedown=@extra.Click><icon>@extra.Icon</icon><label>@extra.Label</label></div>
+				}
+			}
+		</div>
+
+		@* The less common stuff underneath, when there's too much for one row *@
+		@if ( SplitRows )
 		{
-			<div class="button @ExtraClass" onmousedown=@AddFriend tooltip="Add friend"><icon>person_add</icon><label>Add friend</label></div>
-		}
-		@if ( CanManage )
-		{
-			<div class="button @ExtraClass" onmousedown=@MakeLeader tooltip="Make leader"><icon>shield</icon><label>Make leader</label></div>
-			<div class="button danger @ExtraClass" onmousedown=@Kick tooltip="Kick"><icon>person_remove</icon><label>Kick</label></div>
-		}
-		@if ( IsMe && PartyRoom.Current is not null )
-		{
-			<div class="button danger @ExtraClass" onmousedown=@LeaveParty tooltip="Leave party"><icon>logout</icon><label>Leave party</label></div>
+			<div class="action-row">
+				@foreach ( var extra in extras )
+				{
+					<div class="button @(extra.Danger ? "danger" : "")" onmousedown=@extra.Click><icon>@extra.Icon</icon><label>@extra.Label</label></div>
+				}
+			</div>
 		}
 	</div>
 </root>
@@ -342,22 +351,42 @@
 
 	bool CanJoin => !IsMe && PlayingNow && Joinable && MenuHelpers.HasAuthority;
 
-	bool InMyParty => PartyRoom.Current is { } party && party.Members.Any( x => x.Id == Friend.Id );
+	// Through PartyView, so the party mocks look the same here as on the deck and the friends list
+	bool InMyParty => PartyView.Exists && PartyView.Members.Any( x => x.Id == Friend.Id );
 
 	/// <summary>
 	/// We lead the party they're in, so we can hand it over or kick them.
 	/// </summary>
-	bool CanManage => !IsMe && InMyParty && PartyRoom.Current.Owner.IsMe;
+	bool CanManage => !IsMe && InMyParty && PartyView.OwnerIsMe;
+
+	record ExtraAction( string Icon, string Label, Action Click, bool Danger = false );
 
 	/// <summary>
-	/// The less common buttons - add friend, make leader, kick, leave. They share the row with the main
-	/// ones, and only get their labels when the row's got room for them (two buttons at most).
+	/// The less common buttons - add friend, make leader, kick, leave.
 	/// </summary>
-	int ExtraCount => (!IsMe && !Friend.IsFriend ? 1 : 0) + (CanManage ? 2 : 0) + (IsMe && PartyRoom.Current is not null ? 1 : 0);
+	List<ExtraAction> Extras()
+	{
+		var extras = new List<ExtraAction>();
+
+		if ( !IsMe && !Friend.IsFriend ) extras.Add( new( "person_add", "Add friend", AddFriend ) );
+
+		if ( CanManage )
+		{
+			extras.Add( new( "shield", "Make leader", MakeLeader ) );
+			extras.Add( new( "person_remove", "Kick", Kick, true ) );
+		}
+
+		if ( IsMe && PartyView.Exists ) extras.Add( new( "logout", "Leave party", LeaveParty, true ) );
+
+		return extras;
+	}
 
 	int MainCount => 1 + (CanJoin || (!IsMe && (InMyParty || Invited || MenuUtility.CanInviteToParty( Friend ))) ? 1 : 0);
 
-	string ExtraClass => MainCount + ExtraCount > 2 ? "icon-only" : "";
+	/// <summary>
+	/// Two buttons fit a row with their labels - past that, the extras get a row of their own.
+	/// </summary>
+	bool SplitRows => MainCount + Extras().Count > 2;
 
 	string StateText
 	{
@@ -459,8 +488,8 @@
 	// What you can do about it
 	//
 
-	RealTimeSince? _timeSinceInvited;
-	bool Invited => _timeSinceInvited is { } t && t < 5;
+	// Waiting on an invite we sent them - the same as the deck and the friends list show
+	bool Invited => PartyInvites.IsPending( Friend.Id );
 
 	void Join()
 	{
@@ -472,11 +501,9 @@
 
 	async Task Invite()
 	{
-		_timeSinceInvited = 0;
+		// Makes the party if there isn't one, and doesn't send anything real while it's mocked
+		await PartyInvites.Invite( Friend.Id );
 		StateHasChanged();
-
-		await PartyDeck.EnsureLobbyExists();
-		MenuUtility.InviteToParty( Friend.Id );
 	}
 
 	void ViewProfile()
@@ -493,19 +520,23 @@
 
 	void MakeLeader()
 	{
-		PartyRoom.Current?.SetOwner( Friend.Id );
+		if ( PartyView.IsMocking ) Log.Info( $"party mock: would make {Friend.Name} leader" );
+		else PartyRoom.Current?.SetOwner( Friend.Id );
+
 		Delete();
 	}
 
 	void Kick()
 	{
-		PartyRoom.Current?.Kick( Friend.Id );
+		if ( PartyView.IsMocking ) Log.Info( $"party mock: would kick {Friend.Name}" );
+		else PartyRoom.Current?.Kick( Friend.Id );
+
 		Delete();
 	}
 
 	void LeaveParty()
 	{
-		PartyRoom.Current?.Leave();
+		PartyView.Leave();
 		Delete();
 	}
 

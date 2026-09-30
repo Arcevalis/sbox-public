@@ -12,7 +12,7 @@ JamHeader, JamSchedule, .jam-empty
 	flex-shrink: 0;
 	overflow: hidden;
 	border-radius: $front-radius;
-	border: 1px solid $front-border;
+	border: $front-border-width solid $front-border;
 }
 
 .columns, JamPhaseLayout
@@ -68,7 +68,7 @@ JamPreviewHelper .actions .button, JamEliminationGallery .button
 	gap: 5px;
 	padding: 4px 11px;
 	border-radius: 999px;
-	border: 1px solid $front-hairline;
+	border: $front-border-width solid $front-hairline;
 	background-color: rgba( 255, 255, 255, 0.05 );
 	transition: all 0.1s ease;
 

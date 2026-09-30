@@ -236,6 +236,8 @@ internal static partial class Api
 				foreach ( var (k, v) in data ) e.SetValue( k, v );
 				e.Submit();
 
+				Log.Info( $"game.load {outcome} {Ident} {data["ms"]}ms [{string.Join( ", ", _stages.Select( x => $"{x.Key}={x.Value}" ) )}]" );
+
 				if ( outcome == "success" )
 					LoadCompleted( this, data );
 				else

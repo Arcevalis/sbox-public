@@ -60,9 +60,9 @@
 
                 @if ( Package.Usage.UsersNow > 0 )
                 {
-                    <div class="package-stat live">
+                    <div class="package-stat live" tooltip="Playing now">
                         <div class="live-dot" />
-                        <label class="eyebrow">@Compact( Package.Usage.UsersNow ) playing</label>
+                        <label class="eyebrow">@Compact( Package.Usage.UsersNow )</label>
                     </div>
                 }
                 else

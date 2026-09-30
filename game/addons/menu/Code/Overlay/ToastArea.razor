@@ -12,6 +12,11 @@
     readonly List<Entry> ShownPanels = new();
 
     /// <summary>
+    /// How many are waiting behind what's showing - so it can show there's more to come.
+    /// </summary>
+    public int QueuedCount => PendingQueue.Count( x => x.Content.IsValid() );
+
+    /// <summary>
     /// Queues a simple toast with a title, message, and icon.
     /// </summary>
     /// <param name="title">The notification's primary message.</param>
@@ -147,5 +152,15 @@
 
         ShownPanels.RemoveAll(e => e.Content == panel);
         panel.Delete();
+    }
+
+    /// <summary>
+    /// Let the next one show now, without deleting this - for a panel that plays its own way out
+    /// and deletes itself when it's done.
+    /// </summary>
+    public void Release(Panel panel)
+    {
+        ShownPanels.RemoveAll(e => e.Content == panel);
+        ShowNext();
     }
 }

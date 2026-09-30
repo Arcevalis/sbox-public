@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Sandbox;
 
 namespace Editor;
@@ -10,31 +9,21 @@ partial class SceneCompiler
 	/// <summary>
 	/// Turn the meshes we couldn't weld into the world into models of their own.
 	/// </summary>
-	static async Task<int> ConvertMeshes( Scene compiled, HashSet<Guid> meshes, SceneFolder folder, SceneCompileStatistics statistics, Func<int, int, Task> step )
+	static async Task<int> ConvertMeshes( Scene compiled, MeshComponent[] meshes, SceneFolder folder, string outputFolder, SceneCompileStatistics statistics, Func<int, int, Task> step )
 	{
-		var pending = new List<MeshComponent>();
-
-		foreach ( var mesh in compiled.Components.GetAll<MeshComponent>( FindMode.EverythingInSelfAndDescendants ) )
-		{
-			if ( meshes.Contains( mesh.Id ) )
-			{
-				pending.Add( mesh );
-			}
-		}
-
 		var converted = 0;
 
-		for ( int i = 0; i < pending.Count; i++ )
+		for ( int i = 0; i < meshes.Length; i++ )
 		{
 			// Only the conversion itself wants the compiled scene current. Stepping pumps the
 			// editor, which has no business drawing a frame with someone else's scene pushed.
 			using ( compiled.Push() )
 			{
-				if ( Convert( pending[i], folder, $"{OutputFolder}/mesh_{converted}.vmdl_c", statistics ) )
+				if ( Convert( meshes[i], folder, $"{outputFolder}/mesh_{converted}.vmdl_c", statistics ) )
 					converted++;
 			}
 
-			await step( i + 1, pending.Count );
+			await step( i + 1, meshes.Length );
 		}
 
 		return converted;

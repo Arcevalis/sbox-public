@@ -5,13 +5,12 @@ using Sandbox;
 namespace Editor;
 
 /// <summary>
-/// Edits the shared draft recipe and the scene's compile-on-save preference.
+/// Edits scene compile settings.
 /// </summary>
 internal sealed class SceneCompileSettingsWidget : Widget
 {
 	readonly SceneCompileSession _session = SceneCompileSession.Current;
 	readonly List<Action> _refreshNumbers = new();
-	readonly Checkbox _compileOnSave;
 	Scene _scene;
 	string _path;
 	(float AggregateCost, float MaxChunkSize) _displayedSettings;
@@ -58,23 +57,6 @@ internal sealed class SceneCompileSettingsWidget : Widget
 		} );
 		footer.AddStretchCell();
 
-		Layout.AddSpacingCell( 8 );
-		_compileOnSave = Layout.Add( new Checkbox( "Compile on save", this )
-		{
-			ToolTip = "Automatically compile this scene when you save it.",
-			Clicked = () =>
-			{
-				try
-				{
-					if ( CanEdit )
-						_session.CompileOnSave = _compileOnSave.Value;
-				}
-				finally
-				{
-					RefreshControls();
-				}
-			}
-		} );
 		Layout.AddStretchCell();
 
 		_session.Changed += RefreshControls;
@@ -89,7 +71,7 @@ internal sealed class SceneCompileSettingsWidget : Widget
 
 	LineEdit Number( Func<float> get, Action<float> set, string tip )
 	{
-		var edit = new RecipeNumber( $"{get():G9}", this ) { ToolTip = tip, MaximumWidth = 120 };
+		var edit = new SettingsNumber( $"{get():G9}", this ) { ToolTip = tip, MaximumWidth = 120 };
 		edit.EditingFinished += () =>
 		{
 			if ( _refreshing )
@@ -134,8 +116,6 @@ internal sealed class SceneCompileSettingsWidget : Widget
 		}
 
 		Enabled = CanEdit;
-		_compileOnSave.Value = _session.CompileOnSave;
-		_compileOnSave.Enabled = CanEdit && !string.IsNullOrEmpty( _path );
 	}
 
 	public override void OnDestroyed()
@@ -144,7 +124,7 @@ internal sealed class SceneCompileSettingsWidget : Widget
 		base.OnDestroyed();
 	}
 
-	sealed class RecipeNumber( string text, Widget parent ) : LineEdit( text, parent )
+	sealed class SettingsNumber( string text, Widget parent ) : LineEdit( text, parent )
 	{
 		protected override void OnMouseReleased( MouseEvent e )
 		{
