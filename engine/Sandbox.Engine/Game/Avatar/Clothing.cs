@@ -212,6 +212,13 @@ public sealed partial class Clothing : GameResource
 	[Category( "Clothing Setup" )]
 	public BodyGroups HideBody { get; set; }
 
+	/// <summary>
+	/// Move with the avatar's body deforms without being reshaped by them. For hard items like earrings or a sword, which a
+	/// thin neck or a big head would otherwise bend. Each part moves as the bone it's weighted to does.
+	/// </summary>
+	[Category( "Clothing Setup" )]
+	public bool RigidDeformation { get; set; }
+
 	[Category( "User Customization" )]
 	public bool AllowTintSelect { get; set; }
 

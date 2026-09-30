@@ -15,6 +15,11 @@ native class CSceneAnimatableObject as NativeEngine.CSceneAnimatableObject : CSc
 		self->SetDeformationVolumes( count, static_cast<const SceneDeformationVolumeData_t *>( volumes ) );
 	}
 
+	inline void SetDeformationAnchors( int count, void* anchors )
+	{
+		self->SetDeformationAnchors( count, static_cast<const Vector4D *>( anchors ) );
+	}
+
 	[nogc]
 	void SetWorldSpaceRenderBoneTransform( int nBoneIndex, Transform pRenderWorldTransform );
 	[nogc]

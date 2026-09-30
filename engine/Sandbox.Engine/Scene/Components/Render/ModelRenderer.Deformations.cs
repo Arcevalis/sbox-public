@@ -8,6 +8,12 @@ partial class ModelRenderer
 	private readonly List<SceneDeformationVolumeData> _effectiveVolumes = new();
 	private readonly List<ModelDeformer> _orderedDeformers = new();
 	internal virtual ModelRenderer DeformationSource => null;
+
+	/// <summary>
+	/// A model-space point per model bone that deformations move each bone's part of the model by, without reshaping it -
+	/// or none, to deform it as usual.
+	/// </summary>
+	internal virtual ReadOnlySpan<Vector4> DeformationAnchors => [];
 	private readonly HashSet<ModelRenderer> _deformationSources = new();
 	private bool _hasActiveDeformations;
 
@@ -47,7 +53,7 @@ partial class ModelRenderer
 		_orderedDeformers.Sort( static ( a, b ) => a.Priority.CompareTo( b.Priority ) );
 		foreach ( var component in _orderedDeformers )
 		{
-			_effectiveVolumes.Add( component.Data );
+			_effectiveVolumes.Add( VolumeFor( component ) );
 		}
 
 		_hasActiveDeformations = _effectiveVolumes.Count > 0;
@@ -59,6 +65,7 @@ partial class ModelRenderer
 		if ( _sceneObject is SceneModel model )
 		{
 			model.SetDeformationVolumes( CollectionsMarshal.AsSpan( _effectiveVolumes ) );
+			model.SetDeformationAnchors( _hasActiveDeformations ? DeformationAnchors : [] );
 			_sceneObject.Flags.IsStatic = GameObject.IsStatic && !_hasActiveDeformations;
 			if ( this is not SkinnedModelRenderer )
 			{
@@ -66,6 +73,46 @@ partial class ModelRenderer
 				model.UpdateToBindPose();
 			}
 		}
+	}
+
+	/// <summary>
+	/// A deformer's volume in this model's space. One on the model this is bone merged to is in that model's, which is this
+	/// one's too unless this was made turned or moved from it - exported facing another way - when it's taken across.
+	/// </summary>
+	private SceneDeformationVolumeData VolumeFor( ModelDeformer deformer )
+	{
+		var owner = deformer.Owner;
+		if ( owner == this || !owner.IsValid() || owner.Model is null || Model is null )
+			return deformer.Data;
+
+		if ( _restOffsetModels != (Model, owner.Model) )
+		{
+			_restOffset = RestOffset( Model, owner.Model );
+			_restOffsetModels = (Model, owner.Model);
+		}
+
+		return _restOffset is { } o ? deformer.Pack( o.ToLocal( deformer.Placement ) ) : deformer.Data;
+	}
+
+	private Transform? _restOffset;
+	private (Model Model, Model Target) _restOffsetModels;
+
+	/// <summary>
+	/// Where a model's rest pose sits in another's, through the first bone they share, or null when it's the same - as a
+	/// bone merged model's usually is.
+	/// </summary>
+	private static Transform? RestOffset( Model model, Model target )
+	{
+		foreach ( var bone in model.Bones.AllBones )
+		{
+			if ( target.Bones.GetBone( bone.Name ) is not { } shared )
+				continue;
+
+			var offset = shared.LocalTransform.ToWorld( bone.LocalTransform.ToLocal( global::Transform.Zero ) );
+			return offset.Position.Length < 0.01f && offset.Rotation.Distance( Rotation.Identity ) < 0.01f ? null : offset;
+		}
+
+		return null;
 	}
 
 	/// <summary>
@@ -93,4 +140,48 @@ partial class ModelRenderer
 partial class SkinnedModelRenderer
 {
 	internal override ModelRenderer DeformationSource => _boneMergeTarget;
+
+	/// <summary>
+	/// Move with model deformers without being reshaped by them - for hard items like earrings or a sword. Each part of the
+	/// model moves as the deformation moves the bone it hangs from: its own, or when bone merged, the nearest up its chain
+	/// that the model it's merged to has, so jiggle bones move as one piece with it.
+	/// </summary>
+	[Property, Group( "Deformation" )]
+	public bool RigidDeformation { get; set; }
+
+	private Vector4[] _anchors = [];
+	private (Model Model, Model Target) _anchorModels;
+
+	/// <summary>
+	/// Each bone's anchor in model space: the rest position of the bone it hangs from.
+	/// </summary>
+	internal override ReadOnlySpan<Vector4> DeformationAnchors
+	{
+		get
+		{
+			if ( !RigidDeformation || Model is null ) return [];
+
+			var target = _boneMergeTarget?.Model;
+			if ( _anchorModels != (Model, target) )
+			{
+				_anchors = Model.Bones.AllBones.Select( x => new Vector4( HangsFrom( x, target ).LocalTransform.Position, 0 ) ).ToArray();
+				_anchorModels = (Model, target);
+			}
+
+			return _anchors;
+		}
+	}
+
+	/// <summary>
+	/// The nearest bone up a bone's chain that the target has, or the bone itself when none does or there's no target.
+	/// </summary>
+	private static BoneCollection.Bone HangsFrom( BoneCollection.Bone bone, Model target )
+	{
+		for ( var b = bone; b is not null && target is not null; b = b.Parent )
+		{
+			if ( target.Bones.HasBone( b.Name ) ) return b;
+		}
+
+		return bone;
+	}
 }
