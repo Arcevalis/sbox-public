@@ -271,6 +271,11 @@ internal static partial class InputRouter
 	/// </summary>
 	static bool AllowMouseCapture( bool wantsCapture )
 	{
+		// The watchdog below exists to keep the editor usable when a capture goes silent
+		// (the Stop button must stay clickable). In a standalone game client there is no
+		// editor to protect, so never release the game's capture there.
+		if ( !Application.IsEditor ) return wantsCapture;
+
 		if ( !OperatingSystem.IsLinux() ) return wantsCapture;
 
 		// The request dropped - forget everything, so a later capture gets a fresh chance.
