@@ -113,7 +113,7 @@ internal static partial class Api
 					origin = request;
 					waited = requestAge;
 				}
-				else if ( abandoned is not null && abandonedAge < 10 && SameGame( abandoned.Ident, ident ) )
+				else if ( remote && abandoned is { Remote: true } && abandonedAge < 10 && SameGame( abandoned.Ident, ident ) )
 				{
 					// Same attempt: the server restarted the handshake (lobby owner left, host migrated)
 					origin = abandoned.Origin;

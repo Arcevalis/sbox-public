@@ -44,6 +44,15 @@ public class ActivityLoadingTest
 	}
 
 	[TestMethod]
+	public void RestartedJoinKeepsItsOrigin()
+	{
+		Api.Activity.GameRequested( new( "friend" ) );
+		Api.Activity.LoadBegin( "org.game", true ).End( "cancel" );
+
+		Assert.AreEqual( "friend", Api.Activity.LoadBegin( "org.game", true ).Origin?.Kind );
+	}
+
+	[TestMethod]
 	public void SuccessfulLoadGoesOnTheNextHeartbeatForThatGameOnly()
 	{
 		Api.Activity.GameRequested( new( "menu", "org.game", "search" ) );
