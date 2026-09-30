@@ -37,43 +37,39 @@ internal class NativeAsset : Asset
 		// which read AbsolutePath. On the first update AbsolutePath is still
 		// null until the assignments above run (and it goes null again for
 		// deleted assets) - touching MetaData any earlier NREs every asset.
-		// The guid adoption, user tags and the @published auto tag all read the meta file - parse it once
-		using ( MetaData.CacheReads( MetaData ) )
+		if ( MetaData is { } meta && meta.TryGet<Guid>( "guid", out var persistentGuid ) && persistentGuid != System.Guid.Empty )
 		{
-			if ( MetaData is { } meta && meta.TryGet<Guid>( "guid", out var persistentGuid ) && persistentGuid != System.Guid.Empty )
-			{
-				// Persistent identity wins. The native guid is not stable across boots, so
-				// mirroring it here rewrites every .meta on every scan, invalidating all native
-				// fingerprints ("file checksum changed") and queueing a mass recompile. When the
-				// tree is healthy this behaves exactly like the old mirror-always code.
-				Guid = persistentGuid;
-			}
-			else
-			{
-				// First registration (or missing/unreadable .meta): adopt the native guid and
-				// persist it. One write, then stable forever.
-				Guid = nativeGuid;
-				MetaData?.Set( "guid", nativeGuid );
-			}
-
-			if ( AssetSystem.CloudDirectory is not null )
-			{
-				Package = AssetSystem.CloudDirectory.FindPackage( AbsolutePath, RelativePath );
-			}
-
-			// If we need a dependency update at this point, then this has taken a weird path through AssetSystem.AssetChanged
-			// And will be resolved on the very next tick
-			// The weird path it's taking was calling these below methods which resolving unresolved references before those assets had a chance to register...
-			// I don't have a better solution that doesn't involve ripping it all up
-			if ( native.NeedAnyDependencyUpdate_Virtual() )
-				return;
-
-			IsTrivialChild = native.IsTrivialChildAsset();
-
-			// Reload all tags.
-			LoadUserTags();
-			UpdateAutoTags();
+			// Persistent identity wins. The native guid is not stable across boots, so
+			// mirroring it here rewrites every .meta on every scan, invalidating all native
+			// fingerprints ("file checksum changed") and queueing a mass recompile. When the
+			// tree is healthy this behaves exactly like the old mirror-always code.
+			Guid = persistentGuid;
 		}
+		else
+		{
+			// First registration (or missing/unreadable .meta): adopt the native guid and
+			// persist it. One write, then stable forever.
+			Guid = nativeGuid;
+			MetaData?.Set( "guid", nativeGuid );
+		}
+
+		if ( AssetSystem.CloudDirectory is not null )
+		{
+			Package = AssetSystem.CloudDirectory.FindPackage( AbsolutePath, RelativePath );
+		}
+
+		// If we need a dependency update at this point, then this has taken a weird path through AssetSystem.AssetChanged
+		// And will be resolved on the very next tick
+		// The weird path it's taking was calling these below methods which resolving unresolved references before those assets had a chance to register...
+		// I don't have a better solution that doesn't involve ripping it all up
+		if ( native.NeedAnyDependencyUpdate_Virtual() )
+			return;
+
+		IsTrivialChild = native.IsTrivialChildAsset();
+
+		// Reload all tags.
+		LoadUserTags();
+		UpdateAutoTags();
 
 		if ( compileImmediately && !IsCompiled && AssetType.IsGameResource )
 		{
