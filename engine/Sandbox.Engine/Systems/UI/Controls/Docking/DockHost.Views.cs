@@ -103,30 +103,10 @@ public partial class DockHost
 			_host.EndDrag( e.ScreenPosition );
 		}
 
-		protected override void OnEscape( PanelEvent e )
+		protected override void OnDragCancel( DragEvent e )
 		{
 			e.StopPropagation();
 			_host.CancelDrag();
-		}
-
-		/// <summary>
-		/// Cancel tab dragging when Escape is pressed.
-		/// </summary>
-		public override void OnButtonTyped( ButtonEvent e )
-		{
-			if ( e.Button == "escape" )
-			{
-				e.StopPropagation = true;
-				_host.CancelDrag();
-				return;
-			}
-			base.OnButtonTyped( e );
-		}
-
-		protected override void OnBlur( PanelEvent e )
-		{
-			_host.CancelDrag();
-			base.OnBlur( e );
 		}
 	}
 
