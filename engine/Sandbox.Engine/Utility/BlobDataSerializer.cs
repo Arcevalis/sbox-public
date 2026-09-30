@@ -12,6 +12,13 @@ internal static class BlobDataSerializer
 {
 	public const string CompiledBlobName = "DBLOB";
 
+	/// <summary>
+	/// Blob data is only ever read through a <c>"$blob"</c> reference, so JSON without one has no blob
+	/// data to look for. Plain ordinal search on JSON that's already in memory; a false positive, like a
+	/// string value that happens to contain "$blob", just takes the slow path.
+	/// </summary>
+	internal static bool ReferencesBlobs( string json ) => json.Contains( "$blob", StringComparison.Ordinal );
+
 	private const int DefaultStreamSize = 4096;
 	private const int HeaderSize = 8;
 	private const int TocEntrySize = 32;

@@ -391,10 +391,12 @@ public abstract partial class GameResource : Resource, ISourceLineProvider
 		if ( newHash == _jsonHash )
 			return false;
 
-		// Load binary data from compiled resource binary blobs if present. Without a compiled block the
-		// only other source is a "_d" sidecar - searching for the compiled file again would re-read this data.
+		// Load binary data from compiled resource binary blobs if present. Without a compiled block, loading
+		// searches every filesystem for a "_d" sidecar. Blob data is only ever read through a "$blob" reference,
+		// so without one there's nothing to look for: an empty table skips that search. Unlike ResolveBlobData
+		// this never looks at the compiled file - searching for it again would re-read the data above.
 		BinaryData = Game.Resources.ReadCompiledResourceBlock( BlobDataSerializer.CompiledBlobName, data )
-			?? BlobDataSerializer.ReadSidecar( ResourcePath )
+			?? (BlobDataSerializer.ReferencesBlobs( json ) ? BlobDataSerializer.ReadSidecar( ResourcePath ) : null)
 			?? [];
 
 		LoadFromJson( json );
