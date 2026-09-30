@@ -168,7 +168,7 @@ class LauncherWindow : Panel
 	}
 
 	/// <summary>
-	/// The brand lockup: the marque, the wordmark, what this app is underneath.
+	/// The brand mark shown above the launcher navigation.
 	/// </summary>
 	void BuildLockup( Panel sidebar )
 	{
@@ -182,9 +182,6 @@ class LauncherWindow : Panel
 		marque.AddClass( "marque" );
 		marque.Add.Label( "s&" );
 
-		brand.Add.Label( "box", "wordmark" );
-
-		lockup.Add.Label( "EDITOR", "tagline" );
 	}
 
 	Panel NavItem( Panel sidebar, string title, string icon, Action onClick )
@@ -208,7 +205,7 @@ class LauncherWindow : Panel
 		item.Add.Icon( icon, "icon" );
 		item.Add.Label( title, "label" );
 		item.Add.Panel( "grow" );
-		item.Add.Icon( "north_east", "icon external" );
+		item.Add.Icon( "open_in_new", "icon external" );
 	}
 
 	void SetPage( Page newPage )
@@ -253,15 +250,13 @@ class LauncherWindow : Panel
 	}
 
 	//
-	// Title bar - just the fps and the window buttons, the sidebar owns the brand
+	// Title bar - window controls only
 	//
 
 	void BuildTitleBar( Panel main )
 	{
 		var bar = main.AddChild<Panel>();
 		bar.AddClass( "titlebar window-drag" );
-
-		fpsLabel = bar.Add.Label( "", "fps" );
 
 		themeButton = WindowButton( bar, LauncherPreferences.LightTheme ? "dark_mode" : "light_mode", null, ToggleTheme );
 
@@ -274,17 +269,11 @@ class LauncherWindow : Panel
 			WindowButton( bar, "close", "close", Window.RequestClose );
 	}
 
-	Sandbox.UI.Label fpsLabel;
-	int frameCount;
-	readonly Stopwatch fpsTimer = Stopwatch.StartNew();
-
 	/// <summary>
-	/// Tick runs once per presented frame, so counting them is the fps.
+	/// Keep the search box ready for keyboard input.
 	/// </summary>
 	public override void Tick()
 	{
-		frameCount++;
-
 		// The box is ready to type into the moment the window is up. Focusing can't happen in
 		// the constructor - the panels aren't attached to the window's UI system yet
 		if ( !searchFocused && searchBox.IsValid() )
@@ -292,12 +281,6 @@ class LauncherWindow : Panel
 			searchFocused = true;
 			searchBox.Focus();
 		}
-
-		if ( fpsTimer.ElapsedMilliseconds < 500 ) return;
-
-		fpsLabel.Text = $"{frameCount * 1000 / fpsTimer.ElapsedMilliseconds} fps";
-		frameCount = 0;
-		fpsTimer.Restart();
 	}
 
 	Button themeButton;
