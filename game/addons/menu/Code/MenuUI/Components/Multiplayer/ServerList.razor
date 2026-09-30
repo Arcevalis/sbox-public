@@ -127,12 +127,20 @@
         if ( sortBy is null )
             return source.OrderByDescending( x => x.Members );
 
+        // Unknown pings are -1, keep them last in either direction
+        if ( sortBy == "ping" )
+        {
+            var known = source.OrderBy( x => x.Ping < 0 );
+            return sortDescending
+                ? known.ThenByDescending( x => x.Ping )
+                : known.ThenBy( x => x.Ping );
+        }
+
         Func<LobbyInformation, object> key = sortBy switch
         {
             "name" => x => x.Name,
             "map" => x => x.Map,
             "members" => x => x.Members,
-            "ping" => x => x.Ping,
             _ => x => x.Members
         };
 
