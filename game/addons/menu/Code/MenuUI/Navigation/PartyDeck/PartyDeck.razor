@@ -289,7 +289,10 @@
 		return System.HashCode.Combine( PartyView.Exists, MemberCount, PartyView.Owner, VoiceClass, Lifted, Status, members.ToHashCode(), HashCode.Combine( GameThumb, GameArt, PartyInvites.Hash ) );
 	}
 
-	public async static Task EnsureLobbyExists()
+	/// <summary>
+	/// Create a private party if one is needed before inviting friends.
+	/// </summary>
+	public async static Task EnsurePartyExists()
 	{
 		if ( PartyRoom.Current is not null )
 			return;

@@ -1,0 +1,75 @@
+@import "/styles/_front.scss";
+
+PartyPanel
+{
+	@include front-card;
+	flex-direction: column;
+	width: 320px;
+	flex-shrink: 0;
+	min-height: 0;
+	color: $front-body;
+
+	.workspace-heading
+	{
+		padding: 16px 16px 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: $front-heading;
+	}
+
+	.choose-game
+	{
+		@include front-button;
+		margin: 0 16px 16px;
+		padding: 12px;
+		flex-shrink: 0;
+		gap: 8px;
+	}
+
+	.selected-game
+	{
+		margin: 0 16px 12px;
+		gap: 10px;
+		align-items: center;
+		flex-shrink: 0;
+
+		> img
+		{
+			width: 88px;
+			height: 50px;
+			border-radius: 4px;
+			flex-shrink: 0;
+		}
+
+		.game-details
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			min-width: 0;
+			gap: 6px;
+
+			.game-title
+			{
+				color: $front-heading;
+				font-size: 14px;
+				font-weight: 600;
+			}
+
+			.change-game
+			{
+				@include front-button;
+				align-self: flex-start;
+				padding: 4px 8px;
+				gap: 4px;
+				font-size: 11px;
+			}
+		}
+	}
+
+	.follow-note
+	{
+		padding: 16px;
+		font-size: 12px;
+		color: $front-secondary;
+	}
+}

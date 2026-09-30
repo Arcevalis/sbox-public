@@ -1,181 +1,255 @@
+@import "/styles/_front.scss";
+
 ServerList
 {
 	flex-direction: column;
-	overflow: scroll;
+	min-height: 0;
+	overflow: hidden;
 
 	VirtualList
 	{
 		flex-grow: 1;
-
-		.row
-		{			
-			flex-grow: 1;
-		}
-	}
-}
-
-.notice
-{
-	justify-content: center;
-	padding: 50px;
-	font-size: 1rem;
-}
-
-.loading
-{
-	justify-content: center;
-	align-items: center;
-	height: 100%;
-}
-
-h2
-{
-	color: #c6d4ee;
-	text-transform: uppercase;
-	letter-spacing: 1px;
-	flex-shrink: 0;
-	font-weight: 600;
-
-	i
-	{
-		color: #3777ee;
-		text-transform: none;
-		font-size: 22px;
-	}
-}
-
-.cell
-{
-	background-color: rgba( 0, 0, 0, 0.1 );
-
-	&:nth-child( even )
-	{
-		background-color: rgba( 0, 0, 0, 0.05 );
-	}
-}
-
-.row
-{
-	flex-shrink: 0;
-	border-radius: 2px;
-	padding: 0px 48px;
-	cursor: pointer;
-
-	> *
-	{
-		padding: 8px;
-		font-size: 15px;
-		white-space: nowrap;
-		align-items: center;
+		min-height: 0;
+		// Keep an 8px gap between the rows and the 8px scrollbar track.
+		padding-right: 16px;
+		scrollbar-width: thin;
+		scrollbar-color: $front-secondary transparent;
+		scrollbar-gutter: stable;
+		gap: 4px;
 	}
 
-	.game, .map
+	.game-groups GameGroupRow
 	{
-		width: 30%;
+		width: 100%;
+		min-width: 0;
 	}
 
-	.title
+	> .toolbar
 	{
-		flex-grow: 1;
+		margin-bottom: 10px;
 	}
 
-	.members
+	.notice
 	{
-		width: 100px;
-		flex-shrink: 0;
-		justify-content: flex-end;
+		justify-content: center;
+		padding: 32px 16px;
+		font-size: 13px;
+		color: $front-secondary;
+		text-align: center;
 	}
 
-	.ping-icon
+	.loading
 	{
-		width: 24px;
-		flex-shrink: 0;
-		margin-left: 16px;
 		justify-content: center;
 		align-items: center;
-
-		&.good { color: #4ade80; }
-		&.okay { color: #facc15; }
-		&.bad { color: #f87171; }
+		height: 100%;
 	}
 
-	.ping-value
+	.row
 	{
-		width: 56px;
 		flex-shrink: 0;
+		align-items: center;
+		padding: 0 10px;
+		border-radius: 5px;
+		cursor: pointer;
 
-		&.good { color: #4ade80; }
-		&.okay { color: #facc15; }
-		&.bad { color: #f87171; }
-		&.unknown { opacity: 0.3; }
-	}
-
-	&:not(.header)
-	{
-		.game, .map
+		> *
 		{
-			opacity: 0.3;
+			font-size: 13px;
+			white-space: nowrap;
+			align-items: center;
+		}
+
+		.title
+		{
+			flex-grow: 1;
+			min-width: 0;
+			width: 0;
+		}
+
+		.map
+		{
+			width: 26%;
+			min-width: 0;
 			gap: 8px;
+			padding-left: 12px;
+			color: $front-secondary;
+
+			label
+			{
+				min-width: 0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
 
 			i
 			{
-				font-size: 24px;
+				font-size: 20px;
 			}
 
 			img
 			{
 				width: 24px;
 				height: 24px;
-			}
-
-			&:hover
-			{
-				opacity: 1;
+				flex-shrink: 0;
+				border-radius: 4px;
 			}
 		}
 
-		.title
+		.members
 		{
-			font-weight: bold;
-		}
+			width: 86px;
+			flex-shrink: 0;
+			justify-content: flex-end;
+			gap: 3px;
 
-		.game, .map
-		{
-			cursor: pointer;
-		}
-
-		&:hover
-		{
-			background-color: #467de422;
-			color: #fff;
-		}
-
-		&.full
-		{
-			background-color: rgba( 180, 40, 30, 0.10 );
-
-			&:hover
+			.current
 			{
-				background-color: rgba( 180, 40, 30, 0.20 );
+				font-weight: 600;
+				color: $front-heading;
+			}
+
+			.sep, .maxmembers
+			{
+				color: $front-secondary;
 			}
 		}
 
-		&.empty
+		.ping-icon
 		{
-			opacity: 0.25;
+			width: 32px;
+			flex-shrink: 0;
+			justify-content: flex-end;
 
-			&:hover
+			i
 			{
-				opacity: .75;
-				background-color: #467de422;
+				font-size: 16px;
+			}
+		}
+
+		.ping-value
+		{
+			width: 56px;
+			flex-shrink: 0;
+			justify-content: flex-end;
+		}
+
+		.ping-icon, .ping-value
+		{
+			&.good
+			{
+				color: #8fc7a3;
+			}
+
+			&.okay
+			{
+				color: #d4bc80;
+			}
+
+			&.bad
+			{
+				color: #e99696;
+			}
+
+			&.unknown
+			{
+				color: $front-tertiary;
+			}
+		}
+
+		&.header
+		{
+			flex-grow: 0;
+			padding: 8px 26px 8px 10px;
+			margin-bottom: 4px;
+			border-bottom: 1px solid $front-border;
+
+			h2
+			{
+				font-size: 10px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				color: $front-secondary;
+
+				&:hover
+				{
+					color: $front-heading;
+				}
 			}
 		}
 	}
 
-	&.header
+	ServerRow
 	{
-		background-color: #101219dd;
-		padding: 8px 48px;
-		flex-grow: 0;
+		flex-grow: 1;
+		background-color: rgba( 255, 255, 255, 0.025 );
+
+		.title
+		{
+			flex-direction: column;
+			align-items: flex-start;
+			justify-content: center;
+			gap: 3px;
+			padding-right: 12px;
+		}
+
+		.server-name, .server-map
+		{
+			max-width: 100%;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.server-name
+		{
+			font-weight: 600;
+			color: $front-heading;
+		}
+
+		.server-map
+		{
+			display: none;
+			font-size: 11px;
+			color: $front-secondary;
+			font-weight: 400;
+		}
+
+		&:hover
+		{
+			background-color: rgba( $front-primary, 0.1 );
+		}
+
+		&.full .members .current
+		{
+			color: #d4bc80;
+		}
+	}
+
+	// Maps belong under the server name when docked in a narrow column.
+	&.compact
+	{
+		.row
+		{
+			.map, .ping-icon
+			{
+				display: none;
+			}
+
+			.members
+			{
+				width: 64px;
+			}
+
+			.ping-value
+			{
+				width: 46px;
+			}
+		}
+
+		ServerRow .server-map
+		{
+			display: flex;
+		}
 	}
 }

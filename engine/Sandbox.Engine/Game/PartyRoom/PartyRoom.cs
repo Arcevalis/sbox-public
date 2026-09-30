@@ -14,12 +14,15 @@ namespace Sandbox;
 /// </summary>
 public partial class PartyRoom : ILobby
 {
+	/// <summary>
+	/// The party we currently belong to, if any.
+	/// </summary>
 	public static PartyRoom Current { get; private set; }
 
 	Steamworks.Data.Lobby steamLobby;
 
 	/// <summary>
-	/// The unique identifier of this lobby
+	/// The unique identifier of this party.
 	/// </summary>
 	public SteamId Id => steamLobby.Id.Value;
 
@@ -29,7 +32,7 @@ public partial class PartyRoom : ILobby
 	internal string GameAddress => steamLobby.GetData( "gameaddress" );
 
 	/// <summary>
-	/// The name of this lobby.
+	/// The name of this party.
 	/// </summary>
 	public string Name
 	{
@@ -38,7 +41,7 @@ public partial class PartyRoom : ILobby
 	}
 
 	/// <summary>
-	/// The maximum number of members allowed in this lobby.
+	/// The maximum number of members allowed in this party.
 	/// </summary>
 	public int MaxMembers
 	{
@@ -47,7 +50,7 @@ public partial class PartyRoom : ILobby
 	}
 
 	/// <summary>
-	/// The current number of members in this lobby.
+	/// The current number of members in this party.
 	/// </summary>
 	public int MemberCount => steamLobby.MemberCount;
 
@@ -72,6 +75,9 @@ public partial class PartyRoom : ILobby
 		VoiceManager.OnCompressedVoiceData += OnVoiceRecorded;
 	}
 
+	/// <summary>
+	/// Leave this party and stop following its leader.
+	/// </summary>
 	public void Leave()
 	{
 		_join?.Dispose();
@@ -110,11 +116,11 @@ public partial class PartyRoom : ILobby
 	{
 		if ( steamLobby.InviteFriend( steamid.ValueUnsigned ) )
 		{
-			Log.Info( $"Lobby invite to {steamid} sent" );
+			Log.Info( $"Party invite to {steamid} sent" );
 		}
 		else
 		{
-			Log.Warning( $"Lobby invite to {steamid} was not sent" );
+			Log.Warning( $"Party invite to {steamid} was not sent" );
 		}
 	}
 
@@ -131,6 +137,10 @@ public partial class PartyRoom : ILobby
 	RealTimeSince timeSinceUpdate = 0;
 
 	bool _voiceRecording;
+
+	/// <summary>
+	/// Whether we are recording voice for the party.
+	/// </summary>
 	public bool VoiceRecording
 	{
 		get => _voiceRecording;
@@ -295,29 +305,64 @@ public partial class PartyRoom : ILobby
 		}
 	}
 
+	/// <summary>
+	/// Create an open party with the local player as its leader.
+	/// </summary>
 	[Obsolete]
 	public static Task<PartyRoom> Create( int maxMembers )
 	{
 		return Create( maxMembers, $"{Utility.Steam.PersonaName}'s Party", true );
 	}
 
+	/// <summary>
+	/// Create a party, optionally making it discoverable and joinable by everyone.
+	/// </summary>
 	public static async Task<PartyRoom> Create( int maxMembers, string name, bool ispublic )
 	{
 		var lobby = await Steamworks.SteamMatchmaking.CreateLobbyAsync( ispublic ? LobbyType.Public : LobbyType.Private, maxMembers );
 
 		if ( !lobby.HasValue )
 		{
-			Log.Warning( "Failed to create lobby for party" );
+			Log.Warning( "Failed to create party" );
 			return null;
 		}
 
 		lobby.Value.SetData( "name", name );
 
-		var room = new PartyRoom( lobby.Value );
+		var party = new PartyRoom( lobby.Value );
 
-		Current = room;
+		Current = party;
 
-		return room;
+		return party;
+	}
+
+	/// <summary>
+	/// Make this party discoverable and joinable by everyone. Only the leader can do this.
+	/// </summary>
+	public void MakePublic()
+	{
+		if ( Current != this || !Owner.IsMe )
+		{
+			throw new InvalidOperationException( "Only the party leader can open the party." );
+		}
+
+		if ( !steamLobby.SetPublic() )
+		{
+			throw new InvalidOperationException( "Could not open the party. Please try again." );
+		}
+	}
+
+	/// <summary>
+	/// Join a party by its identifier, checking that it still exists and is a party.
+	/// </summary>
+	public static async Task<bool> Join( ulong id )
+	{
+		if ( Current?.Id.ValueUnsigned == id ) return true;
+
+		var party = new Lobby( id );
+		if ( !await party.Refresh() || !party.IsParty ) return false;
+
+		return await Join( party );
 	}
 
 	internal static async Task<bool> Join( Lobby lobby )
@@ -343,7 +388,7 @@ public partial class PartyRoom : ILobby
 					break;
 			}
 
-			Log.Warning( $"Failed to join lobby for party ({result})" );
+			Log.Warning( $"Failed to join party ({result})" );
 			return false;
 		}
 
@@ -360,17 +405,22 @@ public partial class PartyRoom : ILobby
 
 
 	/// <summary>
-	/// A list of members in this room
+	/// A list of members in this party.
 	/// </summary>
 	public IEnumerable<Friend> Members => steamLobby.Members.Select( x => new Friend( x ) );
 
+	/// <summary>
+	/// The current party leader.
+	/// </summary>
 	public Friend Owner { get; private set; }
 
 
 
+	/// <summary>
+	/// Find open parties with space for another member.
+	/// </summary>
 	public static async Task<Entry[]> Find()
 	{
-		// todo - filter by lobby_type = party
 		var found = await Steamworks.SteamMatchmaking.LobbyList
 														.WithKeyValue( "lobby_type", "party" )
 														.WithSlotsAvailable( 1 )
@@ -437,16 +487,51 @@ public partial class PartyRoom : ILobby
 		timeSinceWantVoiceSend = 0;
 	}
 
+	/// <summary>
+	/// A discoverable party with its current membership and game details.
+	/// </summary>
 	public struct Entry
 	{
 		private Lobby x;
 
+		/// <summary>
+		/// The unique identifier of this party.
+		/// </summary>
+		public readonly ulong Id => x.Id;
+
+		/// <summary>
+		/// The party name.
+		/// </summary>
 		public readonly string Name => x.GetData( "name" );
+
+		/// <summary>
+		/// The number of members currently in the party.
+		/// </summary>
 		public readonly int Members => x.MemberCount;
+
+		/// <summary>
+		/// Whether the party has no space for another member.
+		/// </summary>
 		public readonly bool IsFull => x.MemberCount >= x.MaxMembers;
+
+		/// <summary>
+		/// The Steam identifier of the party leader.
+		/// </summary>
 		public readonly long OwnerId => x.GetData( "_ownerid" ).ToLong( 0 );
+
+		/// <summary>
+		/// Whether the party leader has a game server to follow.
+		/// </summary>
 		public readonly bool IsPlaying => !string.IsNullOrWhiteSpace( x.GetData( "gameaddress" ) );
+
+		/// <summary>
+		/// The package the party leader is playing.
+		/// </summary>
 		public readonly string Package => x.GetData( "package" );
+
+		/// <summary>
+		/// The title of the game the party leader is playing.
+		/// </summary>
 		public readonly string GameTitle => x.GetData( "packagetitle" );
 
 		internal Entry( Lobby x )
@@ -454,6 +539,9 @@ public partial class PartyRoom : ILobby
 			this.x = x;
 		}
 
+		/// <summary>
+		/// Join this party.
+		/// </summary>
 		public async Task Join()
 		{
 			await PartyRoom.Join( x );

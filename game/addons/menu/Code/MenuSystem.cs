@@ -43,6 +43,7 @@ public partial class MenuSystem : IMenuSystem
 
 	public void Shutdown()
 	{
+		MenuProject.Multiplayer.GlobalChatService.Close();
 		gameClosingPanel?.Delete();
 		gameClosingPanel = null;
 
@@ -62,6 +63,7 @@ public partial class MenuSystem : IMenuSystem
 
 	public void Tick()
 	{
+		MenuProject.Multiplayer.GlobalChatService.Tick();
 		if ( Application.IsEditor ) return;
 
 		if ( oldGamePackage != MenuUtility.GamePackage )
@@ -226,7 +228,7 @@ public partial class MenuSystem : IMenuSystem
 			return;
 		}
 
-		await PartyDeck.EnsureLobbyExists();
+		await PartyDeck.EnsurePartyExists();
 	}
 
 	[MenuConCmd( "menu_packageclosed" )]

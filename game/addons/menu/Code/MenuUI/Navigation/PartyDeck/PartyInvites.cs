@@ -35,7 +35,7 @@ public static class PartyInvites
 		{
 			if ( !PartyView.IsMocking )
 			{
-				await PartyDeck.EnsureLobbyExists();
+				await PartyDeck.EnsurePartyExists();
 				MenuUtility.InviteToParty( steamId );
 			}
 

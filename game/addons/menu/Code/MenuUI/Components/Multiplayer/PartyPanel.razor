@@ -1,0 +1,99 @@
+@using Sandbox;
+@inherits Panel
+
+<root>
+	<div class="workspace-heading">Your party</div>
+	<MenuProject.PartyDeck Lifted=@true />
+	@if ( PartyRoom.Current is { Owner.IsMe: true } )
+	{
+		@if ( SelectedGame is { } game )
+		{
+			<div class="selected-game">
+				<img src="@game.Thumb" />
+				<div class="game-details">
+					<label class="game-title">@game.Title</label>
+					<Button class="change-game" Icon="swap_horiz" disabled=@starting onclick=@ChooseGame>Change game</Button>
+				</div>
+			</div>
+			<Button class="choose-game" Icon="play_arrow" disabled=@starting onclick=@StartGame>@(starting ? "Preparing game…" : "Start game together")</Button>
+		}
+		else
+		{
+			<Button class="choose-game" Icon="sports_esports" onclick=@ChooseGame>Choose a game to play</Button>
+		}
+		@if ( error is not null )
+		{
+			<label class="follow-note">@error</label>
+		}
+	}
+	else if ( PartyRoom.Current is { } party )
+	{
+		<label class="follow-note">@party.Owner.Name chooses the game. You'll follow automatically.</label>
+	}
+	@if ( Preferences.ChatEnabled )
+	{
+		<PartyChat />
+	}
+	else
+	{
+		<label class="follow-note">Party chat is turned off in your settings.</label>
+	}
+</root>
+
+@code
+{
+	// Keep the owner's choice when navigating away from this page, scoped to this party.
+	static PartyRoom selectedParty;
+	static Package selectedGame;
+	Package SelectedGame => selectedParty == PartyRoom.Current && PartyRoom.Current is { Owner.IsMe: true } ? selectedGame : null;
+	bool starting;
+	string error;
+
+	void ChooseGame()
+	{
+		if ( PartyRoom.Current is not { Owner.IsMe: true } party || starting ) return;
+
+		Game.Overlay.ShowPackageSelector( "type:game +multiplayer sort:trending", package =>
+		{
+			if ( PartyRoom.Current != party || !party.Owner.IsMe ) return;
+
+			selectedParty = party;
+			selectedGame = package;
+			error = null;
+		} );
+	}
+
+	async Task StartGame()
+	{
+		if ( SelectedGame is not { } selection || starting ) return;
+
+		var party = PartyRoom.Current;
+		starting = true;
+		error = null;
+
+		try
+		{
+			// Search results contain partial metadata. Fetch launch settings before using the normal play flow.
+			var package = await Package.FetchAsync( selection.FullIdent, false );
+			if ( !IsValid || IsDeleting || PartyRoom.Current != party || !party.Owner.IsMe || SelectedGame != selection ) return;
+
+			if ( package is null )
+			{
+				error = "Couldn't load this game. Try again.";
+				return;
+			}
+
+			MenuHelpers.PlayGame( package );
+		}
+		catch ( Exception )
+		{
+			error = "Couldn't load this game. Try again.";
+		}
+		finally
+		{
+			starting = false;
+		}
+	}
+
+	protected override int BuildHash() => HashCode.Combine( PartyRoom.Current?.Id, PartyRoom.Current?.Owner.Id, Preferences.ChatEnabled, SelectedGame, starting, error );
+}

@@ -4,25 +4,25 @@ GamePackageSortOrder
     flex-direction: row;
     flex-shrink: 0;
     justify-content: space-around;
-}
 
+    button
+    {
+        color: #c6d4eeaa;
+        font-size: 24px;
+        // Keep all eight options within the filter sidebar.
+        padding: 8px 6px;
 
-GamePackageSortOrder button
-{
-    color: #c6d4eeaa;
-    font-size: 24px;
-    padding: 8px;
-}
+        &:hover
+        {
+            background-color: #467de455;
+            border-radius: 100px;
+        }
 
-GamePackageSortOrder button:hover
-{
-    background-color: #467de455;
-    border-radius: 100px;
-}
-
-GamePackageSortOrder button.active
-{
-    color: white;
-    background-color: #467de4;
-    border-radius: 100px;
+        &.active
+        {
+            color: white;
+            background-color: #467de4;
+            border-radius: 100px;
+        }
+    }
 }

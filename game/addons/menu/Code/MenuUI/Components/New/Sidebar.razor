@@ -15,8 +15,7 @@
     <div class="nav">
         <Button Href="/home" Icon="home">#menu.home</Button>
         <Button Href="/games/all?Sort=trending&Filter=" Icon="sports_esports">Games</Button>
-        <Button Href="/maps/all" Icon="map">#menu.maps</Button>
-        <Button Href="@FavouritesUrl" Icon="favorite">Favourites</Button>
+        <Button Href="/multiplayer" Icon="forum">Multiplayer</Button>
         <Button Href="/mounts" Icon="extension">Mounts</Button>
         <Button Href="/itemstore" Icon="shopping_cart">#menu.store</Button>
 
@@ -46,8 +45,6 @@
 </root>
 
 @code {
-    const string FavouritesUrl = "/games/group?Query=type:game sort:favourite&title=Favourite Games&subtitle=The games you love, all in one place";
-
     const string InboxUrl = "/notifications";
 
     // Both counts come off the backend, so they're polled rather than watched. The pages

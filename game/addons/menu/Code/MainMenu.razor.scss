@@ -3,6 +3,10 @@
 // Dresses the shared PackageCard in the front page's tile look. Imported once, here,
 // because it emits rules rather than tokens.
 @import '/styles/_packagecard.scss';
+@import '/styles/_dock.scss';
+@import '/styles/_toolbar.scss';
+@import '/styles/_statusbar.scss';
+@import '/styles/_multiplayer-list-row.scss';
 
 .mainmenu {
 	position: relative;

@@ -1,0 +1,70 @@
+@using Sandbox;
+@using Chat = MenuProject.Multiplayer.PartyChatService;
+@inherits Panel
+
+<root>
+	<div class="conversation-label"><icon>chat_bubble_outline</icon><label>Party chat</label><span>Only your party</span></div>
+	<div class="messages" @ref="messageList">
+		@if ( Chat.Messages.Count == 0 )
+		{
+			<div class="empty-chat"><icon>forum</icon><label>This is your space.</label><span>Say hello, pick a game, make a plan.</span></div>
+		}
+		@foreach ( var message in Chat.Messages )
+		{
+			<div class="message">
+				<img src="avatar:@message.Sender.Id" />
+				<div><label class="sender">@message.Sender.Name</label><label class="message-text">@message.Text</label></div>
+			</div>
+		}
+	</div>
+	@if ( Chat.Error is not null )
+	{
+		<label class="error">@Chat.Error</label>
+	}
+	<div class="composer">
+		<TextEntry @ref="input" Value:bind=@Chat.Draft MaxLength=@(400) Placeholder="Message your party…" onsubmit=@Submit />
+		<Button Icon="send" onclick=@Submit tooltip="Send to your party" />
+	</div>
+</root>
+
+@code
+{
+	TextEntry input;
+	Panel messageList;
+	int lastRevision = -1;
+	bool scrollAfterRender;
+
+	void Submit()
+	{
+		if ( Chat.Send( input.Text ) )
+		{
+			Chat.Draft = "";
+			input.Text = "";
+			scrollAfterRender = true;
+			StateHasChanged();
+		}
+		input.Focus();
+	}
+
+	/// <summary>
+	/// Only mark messages read while the conversation is visible and scrolled to its newest message.
+	/// </summary>
+	public override void Tick()
+	{
+		base.Tick();
+		if ( !IsVisible ) return;
+		if ( messageList?.IsScrollAtBottom == true ) Chat.MarkRead();
+		if ( lastRevision == Chat.Revision ) return;
+		lastRevision = Chat.Revision;
+		scrollAfterRender |= messageList?.IsScrollAtBottom != false;
+	}
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		base.OnAfterTreeRender( firstTime );
+		if ( firstTime || scrollAfterRender ) messageList?.TryScrollToBottom();
+		scrollAfterRender = false;
+	}
+
+	protected override int BuildHash() => HashCode.Combine( Chat.Revision, Chat.Error );
+}
