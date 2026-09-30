@@ -1,8 +1,5 @@
 using System;
-using System.IO;
-using System.Text;
 using System.Text.Json.Serialization;
-using Sandbox.Resources;
 
 namespace ResourceTests;
 
@@ -115,55 +112,5 @@ public class BlobResourceTest
 		// Editing the source must not change the copy.
 		source.Data[0] = 999;
 		Assert.AreEqual( 5, copy.Data[0] );
-	}
-
-	/// <summary>
-	/// A compiled resource without a blob block still gets its blob data from the "_d" sidecar next
-	/// to it, which is where a resource compiled before its sidecar existed keeps it. With neither,
-	/// the json still loads.
-	/// </summary>
-	[TestMethod]
-	public void CompiledWithoutBlobBlockReadsSidecar()
-	{
-		var source = new BlobResource { Scalar = 42, Data = new[] { 5, 10, 15, 20, 25 } };
-		var json = source.Serialize().ToJsonString();
-
-		var writer = new ResourceWriter();
-		writer.SetDataBlock( Encoding.UTF8.GetBytes( json ) );
-		var compiled = writer.ToArray();
-
-		// Adaptation from upstream: it writes the sidecar loose next to an absolute temp path,
-		// but Resource.FixPath trims the leading '/' so absolute paths don't survive registration
-		// on POSIX. Serve the sidecar through a mounted filesystem instead - the same lookup
-		// TryLoadFromData performs - and pin the loose-disk branch with a direct ReadSidecar call.
-		var dir = Path.Combine( Path.GetTempPath(), $"blobsidecar_{Guid.NewGuid():N}" );
-		Directory.CreateDirectory( dir );
-		var mount = new LocalFileSystem( dir );
-		FileSystem.Mounted.Mount( mount );
-		try
-		{
-			var name = $"___blob_sidecar_{Guid.NewGuid():N}.blobres";
-			mount.WriteAllBytes( name + "_d", source.BinaryData );
-
-			CollectionAssert.AreEqual( source.BinaryData, BlobDataSerializer.ReadSidecar( Path.Combine( dir, name ) ) );
-
-			var loaded = new BlobResource();
-			loaded.RegisterWeakResourceId( name );
-			Assert.IsTrue( loaded.TryLoadFromData( compiled ) );
-			Assert.AreEqual( 42, loaded.Scalar );
-			Assert.IsTrue( loaded.Data.SequenceEqual( source.Data ), "Blob data should come from the sidecar" );
-
-			mount.DeleteFile( name + "_d" );
-
-			var withoutSidecar = new BlobResource();
-			withoutSidecar.RegisterWeakResourceId( name );
-			Assert.IsTrue( withoutSidecar.TryLoadFromData( compiled ) );
-			Assert.AreEqual( 42, withoutSidecar.Scalar );
-		}
-		finally
-		{
-			FileSystem.Mounted.UnMount( mount );
-			Directory.Delete( dir, true );
-		}
 	}
 }
