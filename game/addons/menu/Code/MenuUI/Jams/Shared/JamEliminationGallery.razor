@@ -52,8 +52,8 @@
 						<label class="position">@PositionText( finalist )</label>
 					</div>
 				</div>
-				<div class="card-actions" tooltip=@EligibilityText( ident, selected )>
-					<Button class="vote-action" IconTexture=@(selected ? Avatar : null) Text=@VoteText( ident, selected ) tooltip=@EligibilityText( ident, selected ) Disabled=@(Busy || CooldownSeconds > 0 || selected || !VotingOpen || !CanVote( ident )) onclick=@(() => Vote?.Invoke( ident )) />
+				<div class="card-actions">
+					<Button class="vote-action" IconTexture=@(selected ? Avatar : null) Text=@VoteText( selected ) Disabled=@(Submitting || CooldownSeconds > 0 || selected || !VotingOpen || ident is null) onclick=@(() => Vote?.Invoke( ident )) />
 				</div>
 			</div>
 		}
@@ -86,14 +86,9 @@
 	[Parameter] public IReadOnlyDictionary<string, Package> Packages { get; set; }
 
 	/// <summary>
-	/// Fresh play eligibility for this category, keyed by package ident.
+	/// Whether a vote is awaiting a response, preventing duplicate submissions.
 	/// </summary>
-	[Parameter] public IReadOnlyDictionary<string, JamEntryStatus?> Eligibility { get; set; }
-
-	/// <summary>
-	/// Prevents duplicate submissions and voting during snapshot reconciliation.
-	/// </summary>
-	[Parameter] public bool Busy { get; set; }
+	[Parameter] public bool Submitting { get; set; }
 
 	/// <summary>
 	/// Seconds remaining before this category's vote can be changed again.
@@ -200,8 +195,6 @@
 	int Rank( JamFinalist finalist ) => 1 + Standing.Count( x => Count( x ) > Count( finalist ) );
 	bool IsLowest( JamFinalist finalist ) => VotingOpen && Category.TotalVotes > 0 && Count( finalist ) == Minimum;
 	string Share( JamFinalist finalist ) => (Category.TotalVotes > 0 ? 100.0 * Count( finalist ) / Category.TotalVotes : 0).ToString( "0.0" ) + "%";
-	JamEntryStatus? Status( string ident ) => ident is null ? null : Eligibility?.GetValueOrDefault( ident );
-	bool CanVote( string ident ) => PackageFor( ident ) is not null && Status( ident )?.CanNominate == true;
 
 	string SelectionText
 	{
@@ -239,26 +232,14 @@
 		return $"Rank {Rank( finalist )}";
 	}
 
-	string VoteText( string ident, bool selected )
+	string VoteText( bool selected )
 	{
 		if ( selected ) return "You Voted";
 		if ( !VotingOpen ) return "Voting closed";
+		if ( Submitting ) return "Submitting vote…";
+		if ( CooldownSeconds > 0 ) return $"Vote in {CooldownSeconds}s";
 
-		return CanVote( ident ) ? "Vote" : "Vote locked";
-	}
-
-	string EligibilityText( string ident, bool selected )
-	{
-		if ( !VotingOpen ) return "Each round starts fresh";
-		if ( CooldownSeconds > 0 ) return $"Change your vote in {CooldownSeconds}s";
-		if ( selected ) return "Your vote. Choose another game to move it.";
-
-		if ( Status( ident ) is not JamEntryStatus status )
-		{
-			return Busy ? "Checking voting eligibility…" : "Couldn't check eligibility. Retry above.";
-		}
-
-		return status.CanNominate ? "Ready to vote" : status.Reason ?? "Play this game to unlock voting";
+		return "Vote";
 	}
 
 	void Play( Package package )
@@ -266,6 +247,6 @@
 		if ( package is not null ) ContentBlocks.OnLaunch( package );
 	}
 
-	protected override int BuildHash() => HashCode.Combine( Category, Version, Busy, Packages.Count, Eligibility?.Count, VotingOpen, CooldownSeconds,
+	protected override int BuildHash() => HashCode.Combine( Category, Version, Submitting, Packages.Count, VotingOpen, CooldownSeconds,
 		HashCode.Combine( WinnerIdent, LeadNoticeUntil > 0, Urgent, Urgent ? SecondsLeft : 0 ) );
 }

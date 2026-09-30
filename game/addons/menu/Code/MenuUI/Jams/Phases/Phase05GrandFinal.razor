@@ -36,7 +36,7 @@
 								}
 								@if ( Category is not null )
 								{
-									<JamEliminationGallery Jam=@Jam Category=@Category Packages=@Packages Eligibility=@Eligibility Busy=@(Submitting || Loading) CooldownSeconds=@VoteCooldownSeconds Version=@Voting.Version Vote=@SubmitVote WinnerIdent=@RevealedWinner />
+									<JamEliminationGallery Jam=@Jam Category=@Category Packages=@Packages Submitting=@Submitting CooldownSeconds=@VoteCooldownSeconds Version=@Voting.Version Vote=@SubmitVote WinnerIdent=@RevealedWinner />
 								}
 								else if ( Loading )
 								{

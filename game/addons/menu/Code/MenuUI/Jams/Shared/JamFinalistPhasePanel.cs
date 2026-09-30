@@ -20,8 +20,7 @@ public abstract class JamFinalistPhasePanel : JamPhasePanel
 	protected int CategoryId;
 	protected bool Loading => Voting?.IsLoadingFinalists == true;
 	protected bool Submitting => Voting?.IsSubmittingFinalistVote == true;
-	protected string Error => Voting?.FinalistsError ?? Voting?.FinalistVoteError;
-	protected IReadOnlyDictionary<string, JamEntryStatus?> Eligibility => Category is null ? null : Voting?.GetFinalistEligibility( Category.Id );
+	protected string Error => Voting?.FinalistVoteError ?? Voting?.FinalistsError;
 	protected bool VotingOpen => Category?.IsVotingAt( Jam.Now ) == true;
 	protected int VoteCooldownSeconds => Category is null ? 0 : Voting.GetFinalistVoteCooldown( Category.Id );
 	protected readonly Dictionary<string, Package> Packages = new( StringComparer.OrdinalIgnoreCase );
@@ -39,7 +38,6 @@ public abstract class JamFinalistPhasePanel : JamPhasePanel
 		CategoryId = 0;
 		Packages.Clear();
 		loadedCategories = null;
-		RequestRefresh();
 	}
 
 	/// <summary>
@@ -56,12 +54,6 @@ public abstract class JamFinalistPhasePanel : JamPhasePanel
 		var idents = Categories.SelectMany( x => x.Nominees ).Select( x => x.PackageIdent )
 			.Where( x => !string.IsNullOrEmpty( x ) && !Packages.ContainsKey( x ) ).Distinct( StringComparer.OrdinalIgnoreCase );
 		foreach ( var ident in idents ) _ = LoadPackage( Jam, ident );
-	}
-
-	protected override void OnVisibilityChanged()
-	{
-		base.OnVisibilityChanged();
-		if ( IsVisible ) RequestRefresh();
 	}
 
 	protected void RequestRefresh() => Voting?.RefreshFinalists();

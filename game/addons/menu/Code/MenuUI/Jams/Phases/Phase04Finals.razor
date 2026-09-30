@@ -59,7 +59,7 @@
 								{
 									@if ( ShowGallery )
 									{
-										<JamEliminationGallery Jam=@Jam Category=@Category Packages=@Packages Eligibility=@Eligibility Busy=@(Submitting || Loading) CooldownSeconds=@VoteCooldownSeconds Version=@Voting.Version Vote=@SubmitVote />
+										<JamEliminationGallery Jam=@Jam Category=@Category Packages=@Packages Submitting=@Submitting CooldownSeconds=@VoteCooldownSeconds Version=@Voting.Version Vote=@SubmitVote />
 									}
 									else if ( Category.Nominees.Count == 0 )
 									{

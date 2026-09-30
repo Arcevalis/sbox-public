@@ -47,7 +47,7 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 	bool loading;
 	bool refreshRequested = true;
 	int previewDays = Jam.PreviewDays;
-	RealTimeUntil nextRefresh;
+	DateTimeOffset? nextRefresh;
 
 	bool NominationsOpen => ActiveJam is { CommunityVoting: true, HasStarted: true }
 		&& ActiveJam.Now < ActiveJam.NominationsEnd;
@@ -81,6 +81,7 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 		{
 			previewDays = Jam.PreviewDays;
 			ActiveJam = null;
+			nextRefresh = null;
 			Nominations = null;
 			ResetFinalists();
 			Error = null;
@@ -94,7 +95,13 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 			Version++;
 		}
 
-		if ( !loading && (refreshRequested || nextRefresh <= 0) )
+		if ( ActiveJam is not null && nextRefresh <= ActiveJam.Now )
+		{
+			nextRefresh = null;
+			Refresh();
+		}
+
+		if ( !loading && refreshRequested )
 		{
 			_ = RefreshAsync();
 		}
@@ -119,6 +126,7 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 				ResetFinalists();
 			}
 			ActiveJam = jam;
+			nextRefresh = jam?.NextStep?.At;
 
 			var nominations = NominationsOpen ? await jam.GetNominationSummaryAsync() : null;
 			if ( !Scene.IsValid() || days != Jam.PreviewDays ) return;
@@ -136,7 +144,6 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 		finally
 		{
 			loading = false;
-			nextRefresh = 60;
 		}
 	}
 
