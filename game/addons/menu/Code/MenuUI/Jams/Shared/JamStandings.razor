@@ -190,6 +190,7 @@
 	{
 		if ( ident is null ) return;
 
+		Discovery.Clicked( new DiscoveryContext { Surface = "jams" }, ident );
 		Game.Overlay.ShowGameModal( ident );
 	}
 

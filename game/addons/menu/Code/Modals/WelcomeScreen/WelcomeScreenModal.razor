@@ -180,11 +180,13 @@
 
 	void OpenSandbox()
 	{
+		Discovery.Clicked( new DiscoveryContext { Surface = "welcome" }, "facepunch.sandbox" );
 		Game.Overlay.ShowGameModal( "facepunch.sandbox" );
 	}
 
 	void OpenSausageSurvivors()
 	{
+		Discovery.Clicked( new DiscoveryContext { Surface = "welcome" }, "facepunch.ss2" );
 		Game.Overlay.ShowGameModal( "facepunch.ss2" );
 	}
 

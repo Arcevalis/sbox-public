@@ -254,6 +254,15 @@ public static partial class MenuUtility
 	}
 
 	/// <summary>
+	/// Try to join one lobby, e.g. an open session on a map.
+	/// </summary>
+	public static Task<bool> TryJoinLobby( ulong lobbyId )
+	{
+		Api.Activity.GameRequested( new( "quickplay" ), replace: false );
+		return Networking.TryConnectSteamId( lobbyId );
+	}
+
+	/// <summary>
 	/// Close every open modal
 	/// </summary>
 	public static void CloseAllModals()

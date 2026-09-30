@@ -244,6 +244,7 @@
 
 	void OpenPackage( Package package )
 	{
+		Discovery.Clicked( new DiscoveryContext { Surface = "friendcard" }, package );
 		package?.OpenModal();
 		Delete();
 	}
@@ -547,6 +548,7 @@
 		if ( !Package.TryGetCached( GameIdent, out var package ) )
 			package = await Package.Fetch( GameIdent, false );
 
+		Discovery.Clicked( new DiscoveryContext { Surface = "friendcard" }, package );
 		package?.OpenModal();
 		Delete();
 	}

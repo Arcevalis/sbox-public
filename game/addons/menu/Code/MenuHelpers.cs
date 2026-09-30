@@ -209,7 +209,11 @@ public static class MenuHelpers
 	{
 		var menu = MenuPanel.Open( source );
 
-		menu.AddOption( "play_arrow", "Open Game", () => LaunchGame( package.FullIdent ) );
+		menu.AddOption( "play_arrow", "Open Game", () =>
+		{
+			Discovery.Clicked( source, package );
+			LaunchGame( package.FullIdent );
+		} );
 
 		if ( package.Tags.Contains( "maplaunch" ) )
 		{
@@ -294,7 +298,7 @@ public static class MenuHelpers
 			{
 				if ( lobby.IsFull ) continue;
 
-				if ( await Networking.TryConnectSteamId( lobby.LobbyId ) )
+				if ( await MenuUtility.TryJoinLobby( lobby.LobbyId ) )
 					return;
 			}
 
@@ -340,7 +344,7 @@ public static class MenuHelpers
 		{
 			if ( lobby.IsFull ) continue;
 
-			if ( await Networking.TryConnectSteamId( lobby.LobbyId ) )
+			if ( await MenuUtility.TryJoinLobby( lobby.LobbyId ) )
 				return;
 		}
 

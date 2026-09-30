@@ -29,6 +29,8 @@ internal static class NetworkConsoleCommands
 			return;
 		}
 
+		Api.Activity.GameRequested( new( "console" ), replace: false );
+
 		var q = Steamworks.SteamMatchmaking.LobbyList
 			.FilterDistanceWorldwide()
 			.WithKeyValue( "lobby_type", "scene" )
@@ -61,9 +63,11 @@ internal static class NetworkConsoleCommands
 		if ( Networking.IsActive )
 		{
 			Log.Warning( "You are already connected to a server." );
+			Api.Activity.RequestDropped();
 			return;
 		}
 
+		Api.Activity.GameRequested( new( "console" ), replace: false );
 		Networking.Connect( target );
 	}
 
@@ -203,6 +207,7 @@ internal static class NetworkConsoleCommands
 			return;
 		}
 
+		Api.Activity.GameRequested( new( "console" ), replace: false );
 		Networking.Connect( Networking.LastConnectionString );
 	}
 }

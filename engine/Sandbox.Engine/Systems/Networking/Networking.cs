@@ -1023,6 +1023,9 @@ public static partial class Networking
 	/// </summary>
 	internal static async Task<bool> ClientReconnect( ReconnectMsg data )
 	{
+		var sameGame = data.Game is null || string.Equals( Game.Ident?.Split( '#' )[0], data.Game.Split( '#' )[0], StringComparison.OrdinalIgnoreCase );
+		Api.Activity.GameRequested( new( sameGame ? "reload" : "game", data.Game ) );
+
 		IGameInstanceDll.Current?.CloseGame();
 
 		string address = LastConnectionString;

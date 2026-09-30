@@ -13,7 +13,7 @@
 
         @if (icon != null )
         {
-            <div class="thumb clicky" style="background-image: url( @icon )" @onclick=@(() => Package.OpenModal())>
+            <div class="thumb clicky" style="background-image: url( @icon )" @onclick=@OpenModal>
                <div class="light-border"></div>
             </div>
         }
@@ -22,7 +22,7 @@
     <div class="contents">
 
         <div class="title-org">
-            <div class="title clicky" onmousedown="@( ()=> Package.OpenModal() )">@Package.Title</div>
+            <div class="title clicky" onmousedown=@OpenModal>@Package.Title</div>
             <div class="org clicky" onmousedown="@( ()=> Game.Overlay.ShowOrganizationModal( Package.Org ) )">by @Package.Org?.Title</div>
         </div>
 
@@ -85,6 +85,12 @@
     public Package Package { get; set; }
 
     AchievementCollection ach;
+
+    void OpenModal()
+    {
+        Discovery.Clicked( new DiscoveryContext { Surface = "pause" }, Package );
+        Package.OpenModal();
+    }
 
     protected override async Task OnParametersSetAsync()
     {

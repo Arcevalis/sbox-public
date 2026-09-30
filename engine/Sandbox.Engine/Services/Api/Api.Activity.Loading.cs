@@ -12,7 +12,8 @@ internal static partial class Api
 	{
 		/// <summary>
 		/// What asked for the game. <see cref="Kind"/> is the broad route (menu, friend, invite, party,
-		/// quickplay, server, web, console); the rest is filled in when the menu knows which tile was used.
+		/// quickplay, server, web, console, reload, game, benchmark, local); the rest is filled in
+		/// when the menu knows which tile was used.
 		/// </summary>
 		public sealed record Origin( string Kind, string Ident = null, string Surface = null, string Shelf = null, int Position = -1, string List = null, string Via = null )
 		{
@@ -30,14 +31,18 @@ internal static partial class Api
 		}
 
 		/// <summary>
-		/// A request older than this is from something the player gave up on.
+		/// A request older than this is from something the player gave up on. Joining a lobby can retry
+		/// for a couple of minutes.
 		/// </summary>
-		const float RequestLifetime = 120;
+		const float RequestLifetime = 300;
 
 		static readonly Lock loadLock = new();
 
 		static Origin request;
 		static RealTimeSince requestAge;
+
+		static Load abandoned;
+		static RealTimeSince abandonedAge;
 
 		static Dictionary<string, object> completedLoad;
 		static Origin completedOrigin;
@@ -46,18 +51,26 @@ internal static partial class Api
 
 		/// <summary>
 		/// The player asked for a game. With <paramref name="replace"/> off, a generic route (a console
-		/// command) doesn't overwrite what the menu already said.
+		/// command) doesn't overwrite what the menu already said about the same game.
 		/// </summary>
 		public static void GameRequested( Origin origin, bool replace = true )
 		{
 			lock ( loadLock )
 			{
-				if ( !replace && request is not null && requestAge < RequestLifetime )
+				if ( !replace && request is not null && requestAge < RequestLifetime && (request.Ident is null || (origin.Ident is not null && SameGame( request.Ident, origin.Ident ))) )
 					return;
 
 				request = origin;
 				requestAge = 0;
 			}
+		}
+
+		/// <summary>
+		/// What was asked for isn't going to load, e.g. a connect while already connected.
+		/// </summary>
+		public static void RequestDropped()
+		{
+			lock ( loadLock ) request = null;
 		}
 
 		/// <summary>
@@ -72,11 +85,18 @@ internal static partial class Api
 				var waited = 0f;
 				Origin origin = null;
 
-				if ( request is not null && requestAge < RequestLifetime )
+				if ( request is not null && requestAge < RequestLifetime && (request.Ident is null || SameGame( request.Ident, ident )) )
 				{
 					origin = request;
 					waited = requestAge;
 				}
+				else if ( abandoned is not null && abandonedAge < 10 && SameGame( abandoned.Ident, ident ) )
+				{
+					// Same attempt: the server restarted the handshake (lobby owner left, host migrated)
+					origin = abandoned.Origin;
+				}
+
+				abandoned = null;
 
 				request = null;
 
@@ -142,6 +162,9 @@ internal static partial class Api
 		{
 			lock ( loadLock )
 			{
+				abandoned = load;
+				abandonedAge = 0;
+
 				if ( ReferenceEquals( CurrentLoad, load ) )
 					CurrentLoad = null;
 			}
