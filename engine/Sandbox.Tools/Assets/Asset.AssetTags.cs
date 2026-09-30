@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Editor;
 
@@ -94,6 +94,9 @@ public partial class Asset
 			return;
 
 		suppressTagSaving = true;
+
+		// Tags are refreshed when the asset changes, so read the publish settings again for @published
+		_publishSettingsAbsent = false;
 
 		foreach ( var tag in AssetTagSystem.All.Where( x => x.AutoTag ) )
 		{
