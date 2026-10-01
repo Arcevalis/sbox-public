@@ -45,8 +45,28 @@
         </div>
 
         <div class="right">
-            <Button Icon="play_arrow" class="play" Text="Start Game" Disabled=@(!MenuHelpers.HasAuthority) onclick=@( () => Modal.StartSetup() ) />
+            @if ( Modal.PartySetup )
+            {
+                <Button Text="Cancel" onclick=@Modal.CancelSetup />
+                @if ( !Modal.SetupReadOnly )
+                {
+                    <Button Icon="@(Modal.EditingPartyDraft ? "arrow_forward" : "save")" class="play" Text=@Modal.SaveSetupText Disabled=@(!Modal.CanApplySetup) onclick=@Modal.SavePartySetup />
+                }
+            }
+            else if ( Modal.CanCreateParty )
+            {
+                <Button Icon="group_add" Text="Create party…" Disabled=@(!Modal.CanApplySetup) onclick=@Modal.CreatePartyFromSetup />
+            }
+            @if ( !Modal.PartySetup )
+            {
+                <Button Icon="play_arrow" class="play" Text=@Modal.StartSetupText Disabled=@(!Modal.CanStartSetup) onclick=@Modal.StartSetup />
+            }
         </div>
+    }
+    else if ( Modal?.IsSettingUp == true )
+    {
+        <div class="left"></div>
+        <div class="right"><Button Text="Cancel" onclick=@Modal.CancelSetup /></div>
     }
     else
     {
@@ -134,9 +154,13 @@
     Panel MapArt;
     Texture _mapArt;
 
-    static void PickMap( GameSetup setup )
+    void PickMap( GameSetup setup )
     {
-        Game.Overlay.ShowMapSelector( map => setup.Map = map, setup.Map );
+        if ( Modal.SetupReadOnly ) return;
+        Game.Overlay.ShowMapSelector( map =>
+        {
+            if ( IsValid && Modal.Setup == setup && !Modal.SetupReadOnly ) setup.Map = map;
+        }, setup.Map );
     }
 
     public override void Tick()
@@ -151,7 +175,7 @@
         MapArt.Style.SetBackgroundImage( art );
     }
 
-    protected override int BuildHash() => System.HashCode.Combine(Package, Modal?.HasFullPackage, IsVrOnly, IsMultiplayerGame, LobbyCount, MenuHelpers.HasAuthority, System.HashCode.Combine( Streamer.IsActive, Streamer.ViewerCount, Modal?.Setup, System.HashCode.Combine( Modal?.Setup?.MapTitle, Modal?.Setup?.MapThumb, Modal?.Setup?.Privacy, Modal?.Setup?.MaxPlayers ) ));
+    protected override int BuildHash() => System.HashCode.Combine(Package, Modal?.HasFullPackage, IsVrOnly, IsMultiplayerGame, LobbyCount, MenuHelpers.HasAuthority, System.HashCode.Combine( Streamer.IsActive, Streamer.ViewerCount, Modal?.Setup, System.HashCode.Combine( Modal?.Setup?.MapTitle, Modal?.Setup?.MapThumb, Modal?.Setup?.Privacy, Modal?.Setup?.MaxPlayers ) ), HashCode.Combine( Modal?.SetupReadOnly, Modal?.CanApplySetup, Modal?.StartSetupText, Modal?.IsSettingUp ));
 
     bool IsVrOnly => Package.Info.IsVrOnly;
     bool IsMultiplayerGame => Package.Tags.Contains("multiplayer") || LobbyCount > 0 || Package.Info.MaxPlayers > 1;

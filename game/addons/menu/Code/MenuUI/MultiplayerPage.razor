@@ -6,23 +6,8 @@
 @implements Sandbox.UI.Navigation.INavigatorPage
 
 <root>
-	<div class="multiplayer-heading">
-		<div class="heading-copy"><h1>Multiplayer</h1></div>
-		@if ( PartyRoom.Current is null )
-		{
-			<Button class="create-party" Icon="add" disabled=@PartyService.Busy onclick=@PartyService.Create>Create a party</Button>
-		}
-	</div>
-	@if ( PartyService.Error is not null )
-	{
-		<div class="multiplayer-error">@PartyService.Error</div>
-	}
 	<div class="multiplayer-body">
 		<DockHost @ref="dock" />
-		@if ( PartyRoom.Current is not null )
-		{
-			<PartyPanel />
-		}
 	</div>
 </root>
 
@@ -136,7 +121,6 @@
 	{
 		pageOpen = false;
 		GlobalChatService.Close();
-		PartyChatService.Detach();
 	}
 
 	/// <summary>
@@ -146,7 +130,6 @@
 	{
 		base.Tick();
 		UpdateChat();
-		if ( pageOpen && IsVisible ) PartyChatService.Tick();
 	}
 
 	/// <summary>
@@ -155,9 +138,6 @@
 	public override void OnDeleted()
 	{
 		GlobalChatService.Close();
-		PartyChatService.Detach();
 		base.OnDeleted();
 	}
-
-	protected override int BuildHash() => HashCode.Combine( PartyService.Error, PartyService.Busy, PartyRoom.Current?.Id );
 }

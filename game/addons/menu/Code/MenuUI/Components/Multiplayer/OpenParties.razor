@@ -24,29 +24,21 @@
 			{
 				<Button class="clear-search" onclick=@(() => search = "")>Clear search</Button>
 			}
-			else if ( PartyRoom.Current is null && !loading )
-			{
-				<Button class="primary" Icon="add" disabled=@PartyService.Busy onclick=@PartyService.Create>Create a party</Button>
-			}
 		</div>
 	}
 	else
 	{
 		<VirtualList class="party-list" Items=@(VisibleParties.Cast<object>()) ItemHeight=@MultiplayerListRow.Height>
 			<Item Context="item">
-				@if ( item is PartyRoom.Entry party )
+				@if ( item is PartyRow party )
 				{
-					var host = new Friend( party.OwnerId ).Name;
-
-					var isCurrentParty = party.Id == PartyRoom.Current?.Id.ValueUnsigned;
-
-					<MultiplayerListRow Title=@($"{host}'s party") Image=@($"avatar:{party.OwnerId}")
+					<MultiplayerListRow Title=@party.Name Image=@($"avatar:{party.OwnerId}")
 						Subtitle=@(string.IsNullOrWhiteSpace( party.GameTitle ) ? "Deciding together" : party.GameTitle)
-						PlayerCount=@party.Members CountCaption=@(isCurrentParty ? "Your party" : null)>
+						PlayerCount=@party.Members CountCaption=@(party.IsCurrentParty ? "Your party" : null)>
 						<Actions>
-							@if ( !isCurrentParty )
+							@if ( !party.IsCurrentParty )
 							{
-								<Button disabled=@(PartyService.Busy || PartyRoom.Current is not null) onclick=@(() => PartyService.Join( party )) tooltip="@(PartyRoom.Current is null ? "Join this party" : "Leave your current party before joining another")">Join</Button>
+								<Button disabled=@party.JoinDisabled onclick=@(() => PartyService.Join( party.Id )) tooltip="@(PartyRoom.Current is null ? "Join this party" : "Leave your current party before joining another")">Join</Button>
 							}
 						</Actions>
 					</MultiplayerListRow>
@@ -54,14 +46,22 @@
 			</Item>
 		</VirtualList>
 	}
-	<Sandbox.UI.StatusBar @ref="statusBar" />
+	@if ( PartyRoom.Current is null )
+	{
+		<Button class="create-party" Icon="add" disabled=@PartyService.Busy onclick=@PartyService.Create>Create a party</Button>
+	}
 </root>
 
 @code
 {
 	PartyRoom.Entry[] parties = [];
 	PartyRoom lastParty;
-	Sandbox.UI.StatusBar statusBar;
+
+	/// <summary>
+	/// Snapshot every displayed value, including join availability. Steam entries compare by lobby ID,
+	/// so passing them directly to VirtualList leaves existing rows unchanged after a refresh.
+	/// </summary>
+	record PartyRow( ulong Id, long OwnerId, string Name, string GameTitle, int Members, bool IsCurrentParty, bool JoinDisabled );
 
 	bool loading;
 	bool loaded;
@@ -69,20 +69,10 @@
 	string search = "";
 	double nextRefresh;
 
-	protected override void OnAfterTreeRender( bool firstTime )
-	{
-		base.OnAfterTreeRender( firstTime );
-
-		if ( !statusBar.Left.Children.Any() )
-		{
-			statusBar.AddLeft( new Label( "Public parties · Everyone welcome" ), stretch: 1 );
-		}
-	}
-
-	// Discovery is for groups still forming; active sessions belong in Active Games.
-	PartyRoom.Entry[] VisibleParties => parties
-		.Where( x => !x.IsPlaying )
+	PartyRow[] VisibleParties => parties
 		.Where( MatchesSearch )
+		.Select( x => new PartyRow( x.Id, x.OwnerId, x.Name, x.GameTitle, x.Members,
+			x.Id == PartyRoom.Current?.Id.ValueUnsigned, PartyService.Busy || PartyRoom.Current is not null ) )
 		.ToArray();
 
 	/// <summary>
@@ -93,6 +83,7 @@
 		var query = search.Trim();
 
 		return query.Length == 0
+			|| party.Name.Contains( query, StringComparison.OrdinalIgnoreCase )
 			|| new Friend( party.OwnerId ).Name?.Contains( query, StringComparison.OrdinalIgnoreCase ) == true
 			|| party.GameTitle?.Contains( query, StringComparison.OrdinalIgnoreCase ) == true;
 	}
@@ -126,7 +117,7 @@
 			var found = await PartyRoom.Find();
 			if ( !IsValid || IsDeleting ) return;
 
-			parties = found.Where( x => !x.IsFull && x.OwnerId != 0 && !new Friend( x.OwnerId ).IsBlocked )
+			parties = found.Where( x => !x.IsPlaying && !x.IsFull && x.OwnerId != 0 && !new Friend( x.OwnerId ).IsBlocked )
 				.OrderByDescending( x => x.Members ).ToArray();
 			loaded = true;
 			error = null;
@@ -142,5 +133,6 @@
 		}
 	}
 
-	protected override int BuildHash() => HashCode.Combine( parties, loading, error, search, PartyService.Error, PartyService.Busy, PartyRoom.Current?.Id );
+	protected override int BuildHash() => HashCode.Combine( parties, loading, error, search, PartyService.Error, PartyService.Busy,
+		HashCode.Combine( PartyRoom.Current?.Id, PartyRoom.Current?.SelectedGameTitle ) );
 }

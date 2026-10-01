@@ -14,8 +14,7 @@ internal static class PartyService
 	{
 		if ( PartyRoom.Current is not null ) return;
 
-		var party = await PartyRoom.Create( PartyDeck.MAX_MEMBERS, $"{Sandbox.Utility.Steam.PersonaName}'s party", true );
-		if ( party is null ) throw new InvalidOperationException( "Could not create the party." );
+		await PartyDeck.EnsurePartyExists( true );
 	} );
 
 	internal static Task Join( PartyRoom.Entry party ) => Join( party.Id );
@@ -29,10 +28,7 @@ internal static class PartyService
 			throw new InvalidOperationException( "Leave your current party before joining another." );
 		}
 
-		if ( !await PartyRoom.Join( id ) )
-		{
-			throw new InvalidOperationException( "Could not join that party. It may be full or no longer available." );
-		}
+		await PartyRoom.Join( id );
 	} );
 
 	static async Task Run( Func<Task> action )

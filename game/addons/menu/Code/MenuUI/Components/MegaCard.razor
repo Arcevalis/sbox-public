@@ -76,6 +76,6 @@
         base.Tick();
 
         // Centred, unless the party deck's up in the bottom right - then lifted clear of it
-        SetClass( "clear-deck", !Fill && Sandbox.UI.Footer.Current is not null );
+        SetClass( "clear-deck", !Fill && MenuProject.PartyDeck.Current is not null );
     }
 }

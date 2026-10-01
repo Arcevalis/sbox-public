@@ -12,18 +12,40 @@
 		}
 	</div>
 	<div class="row-info">
-		<label class="row-title">@Title</label>
-		<label class="row-subtitle">@Subtitle</label>
+		<div class="row-heading">
+			<label class="row-title">@Title</label>
+			@if ( !ServerCount.HasValue )
+			{
+				<label class="row-count">@PlayerCount.ToString( "N0" ) @(PlayerCount == 1 ? "player" : "players")</label>
+			}
+		</div>
+		@if ( !string.IsNullOrEmpty( Subtitle ) || !string.IsNullOrEmpty( CountCaption ) || Actions is not null )
+		{
+			<div class="row-details">
+				<label class="row-subtitle">@Subtitle</label>
+				@if ( !string.IsNullOrEmpty( CountCaption ) )
+				{
+					<label class="row-caption">@CountCaption</label>
+				}
+				@if ( Actions is not null )
+				{
+					<div class="row-actions">@Actions</div>
+				}
+			</div>
+		}
 	</div>
-	<div class="row-activity">
-		<label class="row-count">@PlayerCount.ToString( "N0" )</label>
-		<label class="row-caption">@(CountCaption ?? (PlayerCount == 1 ? "player" : "players"))</label>
-	</div>
-	@if ( Actions is not null )
+	@if ( ServerCount is { } serverCount )
 	{
-		<div class="row-actions">@Actions</div>
+		<div class="row-stat" tooltip="@(PlayerCount == 1 ? "1 player online" : $"{PlayerCount:N0} players online")">
+			<icon>group</icon>
+			<label>@PlayerCount.ToString( "N0" )</label>
+		</div>
+		<div class="row-stat servers" tooltip="@(serverCount == 1 ? "1 server" : $"{serverCount:N0} servers")">
+			<icon>dns</icon>
+			<label>@serverCount.ToString( "N0" )</label>
+		</div>
 	}
-	else if ( OnActivate is not null )
+	@if ( OnActivate is not null )
 	{
 		<icon class="row-chevron">chevron_right</icon>
 	}
@@ -57,7 +79,12 @@
 	[Parameter] public int PlayerCount { get; set; }
 
 	/// <summary>
-	/// Optional status beneath the player count; defaults to player or players.
+	/// When supplied, show player and server totals in separate icon columns beside the game title.
+	/// </summary>
+	[Parameter] public int? ServerCount { get; set; }
+
+	/// <summary>
+	/// Optional status beside the secondary details, such as Your party or In game.
 	/// </summary>
 	[Parameter] public string CountCaption { get; set; }
 

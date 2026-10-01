@@ -174,7 +174,7 @@
 
         var lift = 0f;
 
-        if ( Sandbox.UI.Footer.Current is not null && Sandbox.UI.Footer.Anchor is { } deck && deck.IsValid() )
+        if ( MenuProject.PartyDeck.Current?.Window is { } deck && deck.IsValid() )
         {
             // From the column's resting foot (its box's, less what it's lifted by now) up to a gap over the deck
             var restingBottom = Extras.Box.Rect.Bottom + (_extrasLift > 0 ? _extrasLift * Extras.ScaleToScreen : 0);
@@ -183,7 +183,7 @@
         }
 
         // The deck's width, so their edges line up - its own otherwise
-        float? width = Sandbox.UI.Footer.Current is not null && Sandbox.UI.Footer.Anchor is { } of && of.IsValid() && of.Box.Rect.Width > 0
+        float? width = MenuProject.PartyDeck.Current?.Window is { } of && of.IsValid() && of.Box.Rect.Width > 0
             ? of.Box.Rect.Width * Extras.ScaleFromScreen
             : null;
 

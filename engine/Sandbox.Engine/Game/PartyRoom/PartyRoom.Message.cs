@@ -54,6 +54,8 @@ partial class PartyRoom
 		if ( ident == MessageIdentity.ChatMessage )
 		{
 			var contents = stream.Read<string>();
+			contents = Utility.Steam.FilterChat( contents, friend.Id );
+
 			Log.Info( $"[Party] {friend}: {contents}" );
 
 			OnChatMessage?.Invoke( friend, contents );

@@ -1,5 +1,5 @@
-@using Sandbox;
 @using MenuProject.Multiplayer;
+@using MenuProject.MenuUI.Components.Multiplayer;
 @using Chat = MenuProject.Multiplayer.GlobalChatService;
 @inherits Panel
 
@@ -25,79 +25,34 @@
 			}
 			@foreach ( var message in Chat.Messages )
 			{
-				<div class="chat-message">
-					<div class="chat-avatar" style="background-image: url(avatar:@message.Sender.Id)"></div>
-					<div class="chat-message-body"><label class="chat-name">@message.Sender.Name</label><label>@message.Text</label>
-						@if ( message.PartyId != 0 )
-						{
-							<Button class="primary" disabled=@(PartyService.Busy || PartyRoom.Current is not null) onclick=@(() => PartyService.Join( message.PartyId ))>Join party</Button>
-						}
-					</div>
-				</div>
+				<ChatMessage Sender=@message.Sender Text=@message.Text PartyId=@message.PartyId />
 			}
 		</div>
-		<div class="chat-composer"><TextEntry @ref="input" Value:bind=@Chat.Draft MaxLength=@(400) Placeholder="Say hello…" onsubmit=@Submit /><Button Icon="send" disabled=@(Chat.Channel is null) onclick=@Submit tooltip="Send message" /></div>
-		<div class="chat-actions">
-			@if ( PartyRoom.Current is not null )
-			{
-				<label>@PartyRoom.Current.MemberCount in your party</label>
-				@if ( PartyRoom.Current.Owner.IsMe )
-				{
-					<Button Icon="campaign" disabled=@(Chat.Channel is null) onclick=@Chat.InviteParty tooltip="Post an invitation so anyone in global chat can join">Make public and share</Button>
-				}
-			}
-		</div>
+		<ChatComposer OnMessageSent=@OnMessageSent />
 	</div>
-	<div class="global-sidebar">
-		<div class="people-heading"><label>In chat</label><label>@(Chat.Channel?.MemberCount ?? 0)</label></div>
-		<VirtualList class="chat-people" Items=@Members ItemHeight=@(44)>
-			<Item Context="item">
-				@if ( item is Friend member )
-				{
-					<button class="chat-person" onclick=@(() => member.OpenInOverlay())><div class="chat-avatar" style="background-image: url(avatar:@member.Id)"></div><label>@member.Name</label></button>
-				}
-			</Item>
-		</VirtualList>
-	</div>
+	<ChatMemberList />
 </root>
 
 @code
 {
-	TextEntry input;
 	Panel messageList;
-	int lastRevision;
 	bool scrollAfterRender;
-	IEnumerable<object> Members => (Chat.Channel?.Members ?? Enumerable.Empty<Friend>())
-		.OrderBy( x => x.Name, StringComparer.OrdinalIgnoreCase ).Cast<object>();
 
-	void Submit()
+	void OnMessageSent()
 	{
-		if ( Chat.Send( input.Text ) )
-		{
-			Chat.Draft = "";
-			input.Text = "";
-			scrollAfterRender = true;
-		}
-		input.Focus();
-	}
-
-	/// <summary>
-	/// Follow new messages while at the bottom, preserving the position when reading older messages.
-	/// </summary>
-	public override void Tick()
-	{
-		base.Tick();
-		if ( lastRevision == Chat.Revision ) return;
-		lastRevision = Chat.Revision;
-		scrollAfterRender |= messageList?.IsScrollAtBottom != false;
+		scrollAfterRender = true;
+		StateHasChanged();
 	}
 
 	protected override void OnAfterTreeRender( bool firstTime )
 	{
 		base.OnAfterTreeRender( firstTime );
-		if ( firstTime || scrollAfterRender ) messageList?.TryScrollToBottom();
+
+		// Pin after layout changes the scroll height, unless the user has scrolled up.
+		messageList.PreferScrollToBottom = true;
+		if ( firstTime || scrollAfterRender ) messageList.TryScrollToBottom();
 		scrollAfterRender = false;
 	}
 
-	protected override int BuildHash() => HashCode.Combine( Chat.Revision, Chat.Connecting, PartyService.Busy, HashCode.Combine( Chat.Error, PartyService.Error ), PartyRoom.Current?.Id, PartyRoom.Current?.MemberCount, PartyRoom.Current?.Owner.Id );
+	protected override int BuildHash() => HashCode.Combine( Chat.Revision, Chat.Connecting, Chat.Error, PartyService.Error, Chat.Channel?.MemberCount );
 }

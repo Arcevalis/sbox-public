@@ -2,6 +2,9 @@ using Sandbox.Modals;
 
 namespace Sandbox;
 
+/// <summary>
+/// Console commands for the built-in menu.
+/// </summary>
 public static class MenuCommands
 {
 	/// <summary>
@@ -10,7 +13,7 @@ public static class MenuCommands
 	/// the key bindings people already have keep working.
 	/// </summary>
 	[MenuConCmd( "gameinfo", ConVarFlags.Protected )]
-	public static void OpenCurrentGameDescription()
+	public static void OpenPauseMenu()
 	{
 		if ( string.IsNullOrEmpty( Application.GameIdent ) )
 		{

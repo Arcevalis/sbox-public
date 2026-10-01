@@ -18,7 +18,7 @@
         </Metrics>
         <Tabs>
             @* Setting up a new game - a trail back to the game's page in the tabs' place *@
-            @if ( Setup is not null )
+            @if ( IsSettingUp )
             {
                 <div class="setup-trail">
                     <div class="back" onclick=@CloseSetup>
@@ -26,7 +26,7 @@
                         <label>@Package?.Title</label>
                     </div>
                     <label class="sep">/</label>
-                    <label class="here">New game</label>
+                    <label class="here">@(PartySetup ? "Party game" : "New game")</label>
                 </div>
             }
 
@@ -49,7 +49,13 @@
 
             @if ( Setup is not null )
             {
-                <GameSetupView Setup=@Setup />
+                <GameSetupView Setup=@Setup ReadOnly=@SetupReadOnly Notice=@SetupNotice Error=@SetupError />
+            }
+            else if ( IsSettingUp )
+            {
+                <div class="setup-loading">
+                    <label>@(SetupError ?? "Loading game settings…")</label>
+                </div>
             }
         </Content>
 
@@ -81,15 +87,43 @@
     /// </summary>
     public GameSetup Setup { get; private set; }
 
+    internal bool IsSettingUp { get; private set; }
+    int setupRequest;
+
     /// <summary>
-    /// Set up a new game of it, rather than the page - where, who can join, its settings - then start
-    /// it from the footer. With <paramref name="onComplete"/> it's handed what was picked instead of
-    /// launching it.
+    /// Load the full package before creating its game setup, including its map and custom settings.
+    /// The optional callback receives the completed setup instead of launching a game.
     /// </summary>
-    public void OpenSetup( Package package, Action<CreateGameResults> onComplete, string via = null, Panel source = null )
+    public async Task OpenSetup( Package package, Action<CreateGameResults> onComplete, string via = null, Panel source = null, CreateGameResults? initialSettings = null, bool partyActions = false, PartyDraft draft = null, string initialMap = null )
     {
-        Setup = new GameSetup( package ?? Package, onComplete ) { Via = via, Source = source };
+        var request = ++setupRequest;
+        var ident = (package ?? Package).FullIdent;
+        var maxMembers = draft?.MaxMembers ?? (partyActions && PartyView.Exists ? PartyView.MaxMembers : 0);
+        Setup = null;
+        IsSettingUp = true;
+        InitializePartySetup( partyActions, draft );
         SetClass( "setting-up", true );
+        StateHasChanged();
+
+        try
+        {
+            var full = await Package.FetchAsync( ident, false );
+
+            // The player may have closed this setup or opened another while it was loading.
+            if ( !IsValid || request != setupRequest ) return;
+            if ( full is null ) throw new InvalidOperationException( "Couldn't load game settings. Cancel and try again." );
+
+            // Picker results omit game settings and player limits. Defaults need the full package too.
+            var settings = initialSettings ?? GameSetup.GetInitialSettings( full, maxMembers );
+            if ( initialMap is not null ) settings.Map = initialMap;
+            Setup = new GameSetup( full, onComplete, settings ) { Via = via, Source = source };
+        }
+        catch ( Exception e )
+        {
+            if ( !IsValid || request != setupRequest ) return;
+            SetupError = e.Message;
+        }
+
         StateHasChanged();
     }
 
@@ -98,37 +132,62 @@
     /// </summary>
     public void CloseSetup()
     {
+        setupRequest++;
+        IsSettingUp = false;
         Setup = null;
         SetClass( "setting-up", false );
         StateHasChanged();
     }
 
     /// <summary>
-    /// Escape while setting up goes back to the page rather than closing it.
+    /// Return to the party when configuring its game, or back to the game page otherwise.
     /// </summary>
     public override bool Back()
     {
-        if ( Setup is null ) return false;
+        if ( !IsSettingUp ) return false;
 
-        CloseSetup();
+        CancelSetup();
         return true;
     }
 
     /// <summary>
-    /// Start the game as it's set up - gone first, then whoever asked for it has what was picked.
+    /// Start a standalone game with the chosen setup, or return it to the original caller.
     /// </summary>
-    public void StartSetup()
+    public async Task StartSetup()
     {
-        if ( Setup is not { } setup ) return;
+        if ( Setup is not { } setup || !CanStartSetup ) return;
 
-        var results = setup.Finish();
+        SetupBusy = true;
+        SetupError = null;
+        try
+        {
+            var results = setup.Finish();
 
-        // Set up and started - the play counts now, credited to the button and tile that got it here
-        if ( setup.Via is not null )
-            Discovery.Launching( setup.Package, setup.Via, setup.Source.IsValid() ? setup.Source : null );
+            if ( setup.Via is not null )
+                Discovery.Launching( setup.Package, setup.Via, setup.Source.IsValid() ? setup.Source : null );
 
-        CloseModal( true );
-        setup.OnComplete?.Invoke( results );
+            if ( partyActions )
+            {
+                if ( PartyView.IsMocking ) return;
+                await MenuHelpers.StartConfiguredGame( setup.Package, results, PartyRoom.Current );
+            }
+            else
+            {
+                CloseModal( true );
+                setup.OnComplete?.Invoke( results );
+            }
+        }
+        catch ( Exception e )
+        {
+            LoadingScreen.IsVisible = false;
+            if ( IsValid ) SetupError = e.Message;
+            ModalSystem.Instance?.Notice( "Couldn't start game", e.Message, "error" );
+        }
+        finally
+        {
+            SetupBusy = false;
+            if ( IsValid ) StateHasChanged();
+        }
     }
 
     async Task RefreshLobbies()
@@ -181,5 +240,5 @@
         Discovery.PreviewClosed( "page", PackageIdent );
     }
 
-    protected override int BuildHash() => System.HashCode.Combine(Package, HasFullPackage, FetchFailed, Setup);
+    protected override int BuildHash() => System.HashCode.Combine(Package, HasFullPackage, FetchFailed, Setup, SetupReadOnly, SetupNotice, SetupError, IsSettingUp);
 }

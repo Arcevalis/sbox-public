@@ -3,6 +3,14 @@
 
 GameModal
 {
+	.setup-loading
+	{
+		padding: 32px;
+		color: $front-secondary;
+		font-family: $front-font;
+		font-size: 14px;
+	}
+
 	// The page and its tabs, while a new game's being set up in their place - kept, not shown
 	&.setting-up
 	{

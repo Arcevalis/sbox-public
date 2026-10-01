@@ -1,8 +1,9 @@
-﻿using Sandbox;
+using Sandbox;
 using Sandbox.DataModel;
 using Sandbox.Diagnostics;
 using Sandbox.Modals;
 using MenuProject.MenuUI.Front;
+using MenuProject.Modals.GameModalComponents;
 using MenuPanel = MenuProject.UI.MenuPanel;
 
 public static class MenuHelpers
@@ -86,6 +87,13 @@ public static class MenuHelpers
 		if ( package.Info.IsVrOnly && !Application.IsVR )
 			return;
 
+		var party = PartyRoom.Current;
+		if ( !package.Info.IsDedicatedServerOnly && party?.IsGameSelected( package ) == true && party.SelectedGameSettings is not null )
+		{
+			ModalSystem.Instance?.OpenGameSetup( package, via, source );
+			return;
+		}
+
 		// QuickPlay: try to join an existing lobby first
 		if ( package.Info.IsQuickPlay )
 		{
@@ -111,23 +119,7 @@ public static class MenuHelpers
 		// Something to set up first - on its game page, then started from there, the play reported then
 		if ( NeedsSetup( package ) )
 		{
-			ModalSystem.Instance?.CreateGame( new CreateGameOptions( package, async x =>
-			{
-				if ( x.MaxPlayers > 0 ) LaunchArguments.MaxPlayers = x.MaxPlayers;
-
-				if ( !string.IsNullOrEmpty( x.ServerName ) )
-					LaunchArguments.ServerName = x.ServerName;
-
-				LaunchArguments.Privacy = x.Privacy;
-
-				// The game page's closing now - let it go before the load holds things up
-				await PrepareForLoad();
-
-				if ( !string.IsNullOrEmpty( x.Map ) )
-					MenuUtility.OpenGameWithMap( package.FullIdent, x.Map, x.GameSettings );
-				else
-					MenuUtility.OpenGame( package.FullIdent, true, x.GameSettings );
-			} ), via, source );
+			ModalSystem.Instance?.OpenGameSetup( package, via, source, initialMap: mapPackage?.FullIdent );
 			return;
 		}
 
@@ -147,6 +139,8 @@ public static class MenuHelpers
 			}
 		}
 
+		if ( PartyRoom.Current is { } currentParty ) LaunchArguments.ServerName = currentParty.Name;
+
 		if ( mapPackage is not null )
 		{
 			MenuUtility.OpenGameWithMap( package.FullIdent, mapPackage.FullIdent );
@@ -154,6 +148,51 @@ public static class MenuHelpers
 		else
 		{
 			MenuUtility.OpenGame( package.FullIdent, true );
+		}
+	}
+
+	internal static async Task StartConfiguredGame( Package package, CreateGameResults settings, PartyRoom party = null )
+	{
+		if ( !HasAuthority ) return;
+		var startingParty = PartyRoom.Current;
+
+		await PrepareForLoad();
+
+		// Party membership or settings may change while the loading screen settles.
+		var serverSlots = GameSetup.ClampServerSlots( package, settings.MaxPlayers );
+		if ( PartyRoom.Current != startingParty )
+		{
+			LoadingScreen.IsVisible = false;
+			throw new InvalidOperationException( "Your party has changed. Check the game setup and try again." );
+		}
+
+		if ( party is not null && (PartyRoom.Current != party || !party.Owner.IsMe || !party.IsGameSelected( package )
+			|| party.SelectedGameSettings is not { } currentSettings || !GameSetup.SettingsEqual( settings, currentSettings )
+			|| serverSlots < party.MemberCount) )
+		{
+			LoadingScreen.IsVisible = false;
+			throw new InvalidOperationException( "The party or game setup changed. Check the game settings and try again." );
+		}
+
+		if ( !HasAuthority )
+		{
+			LoadingScreen.IsVisible = false;
+			return;
+		}
+
+		LaunchArguments.MaxPlayers = serverSlots;
+
+		if ( !string.IsNullOrEmpty( settings.ServerName ) ) LaunchArguments.ServerName = settings.ServerName;
+		LaunchArguments.Privacy = settings.Privacy;
+		LaunchArguments.Map = null;
+
+		if ( !string.IsNullOrEmpty( settings.Map ) )
+		{
+			MenuUtility.OpenGameWithMap( package.FullIdent, settings.Map, settings.GameSettings ?? new() );
+		}
+		else
+		{
+			MenuUtility.OpenGame( package.FullIdent, true, settings.GameSettings ?? new() );
 		}
 	}
 
@@ -215,6 +254,9 @@ public static class MenuHelpers
 
 	static bool NeedsSetup( Package package )
 	{
+		if ( package.Tags.Contains( "multiplayer" ) || package.Info.MaxPlayers > 1 )
+			return true;
+
 		if ( package.Info.UsesCreateGameModal )
 			return true;
 
@@ -450,31 +492,6 @@ public static class MenuHelpers
 		menu.AddOption( "star", "Rate Map", () => Game.Overlay.ShowReviewModal( package ) );
 	}
 
-	public static async void LoadMap( Package package )
-	{
-		Assert.True( HasAuthority, "You do not have authority to start a game, only the party owner can do that." );
-
-		LaunchArguments.Map = null;
-
-		var filters = new Dictionary<string, string>
-		{
-			{ "game", SANDBOX_IDENT },
-			{ "map", package.FullIdent },
-		};
-
-		var lobbies = await Networking.QueryLobbies( filters );
-
-		foreach ( var lobby in lobbies ) // TODO - order by most attractive
-		{
-			if ( lobby.IsFull ) continue;
-
-			if ( await MenuUtility.TryJoinLobby( lobby.LobbyId ) )
-				return;
-		}
-
-		CreateGameWithMap( SANDBOX_IDENT, package );
-	}
-
 	public static void CreateGameWithMap( string gameIdent, Package mapPackage )
 	{
 		Assert.True( HasAuthority, "You do not have authority to start a game, only the party owner can do that." );
@@ -483,7 +500,10 @@ public static class MenuHelpers
 		MenuUtility.OpenGame( gameIdent, false );
 	}
 
-	public static void LaunchGame( string gameIdent, bool allowLaunchOverride = true )
+	/// <summary>
+	/// Opens a game's menu page, or launches it directly in VR.
+	/// </summary>
+	public static void LaunchGame( string gameIdent )
 	{
 		// alex: in VR we don't show modals properly (this needs some thought as to how we're going to do it)
 		// so for the purposes of being able to play tech jam games, we'll just launch games directly

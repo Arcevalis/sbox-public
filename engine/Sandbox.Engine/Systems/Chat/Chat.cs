@@ -79,9 +79,9 @@ public static class Chat
 			var friend = new Friend( sender.SteamId );
 			if ( friend.IsBlocked )
 				return;
-		}
 
-		message = Utility.Steam.FilterChat( message, sender?.SteamId );
+			message = Utility.Steam.FilterChat( message, sender.SteamId );
+		}
 
 		var e = new ChatMessageEvent
 		{
@@ -257,6 +257,11 @@ public static class Chat
 		if ( Application.IsDedicatedServer )
 		{
 			Log.Info( $"{source?.Name ?? "Server"}: {e.Message}" );
+		}
+		else if ( source is not null )
+		{
+			// Filter the host's local copy after sending, so clients use their own preferences.
+			e.Message = Utility.Steam.FilterChat( e.Message, source.SteamId );
 		}
 
 		OnMessage?.Invoke( e );

@@ -45,6 +45,7 @@
                                  Clicked=@(() => OnSelected?.Invoke(package))
                                  Rotation=@Rotation
                                  ShowNominations=@ShowNominations
+                                 HoverPreview=@HoverPreview
                                  Package=@package></MenuProject.UI.PackageCard>
 					}
                 }
@@ -59,6 +60,11 @@
     [Parameter] public string Query { get; set; }
     [Parameter] public int Take { get; set; } = 100;
     [Parameter] public bool ShowFilters { get; set; } = false;
+
+    /// <summary>
+    /// Shows a package preview popup when hovering over a card.
+    /// </summary>
+    [Parameter] public bool HoverPreview { get; set; } = true;
 
     /// <summary>
     /// The filters' own search box - off where the list's in something with a search of its own,

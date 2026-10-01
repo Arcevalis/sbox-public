@@ -23,6 +23,7 @@
     string Channel = "say";
     bool WasInGame;
     RealTimeSince TimeSinceOpened;
+    PartyRoom HintedParty;
 
     /// <summary>
     /// Does our game / menu context want to show the chat UI?
@@ -100,8 +101,13 @@
         Panel?.AddSystemMessage( "🥀", $"{friend.Name} left the party" );
     }
 
+    /// <summary>
+    /// Handle chat input and show the chat key when entering a party.
+    /// </summary>
     public override void Tick()
     {
+        if ( !InParty ) HintedParty = null;
+
         if ( !ChatAvailable )
         {
             if ( IsOpen ) Close();
@@ -109,6 +115,18 @@
         }
 
         SetClass( "in-game", InGame );
+
+        // Wait for the chat panel to exist before adding the party's welcome hint.
+        if ( InParty && HintedParty != PartyRoom.Current && Panel.IsValid() )
+        {
+            HintedParty = PartyRoom.Current;
+            var key = Input.GetButtonOrigin( "chat" );
+            var hint = string.IsNullOrWhiteSpace( key )
+                ? "Set a chat key in Settings to chat with your party."
+                : $"Press {key} to chat to your party";
+
+            Panel.AddSystemMessage( "ℹ", hint );
+        }
 
         // Reset to game chat when joining a game
         if ( InGame && !WasInGame )

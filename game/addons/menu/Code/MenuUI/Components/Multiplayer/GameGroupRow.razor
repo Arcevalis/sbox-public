@@ -6,8 +6,7 @@
 	@if ( OnGroupClick is not null )
 	{
 		<MultiplayerListRow Title=@(GamePackage?.Title ?? GameIdent)
-			Subtitle=@(ServerCount == 1 ? "1 server" : $"{ServerCount:N0} servers")
-			Image=@GamePackage?.Thumb PlayerCount=@TotalPlayers OnActivate=@OnGroupClick />
+			Image=@GamePackage?.Thumb PlayerCount=@TotalPlayers ServerCount=@ServerCount OnActivate=@OnGroupClick />
 	}
 	else
 	{

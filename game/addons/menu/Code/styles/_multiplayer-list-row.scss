@@ -60,11 +60,22 @@ MenuShell MultiplayerListRow
 	{
 		flex-direction: column;
 		flex-grow: 1;
+		width: 0;
 		min-width: 0;
 		gap: 2px;
+	}
 
-		> label
+	.row-heading, .row-details
+	{
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+
+		.row-title, .row-subtitle
 		{
+			flex-grow: 1;
+			width: 0;
+			min-width: 0;
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
@@ -83,22 +94,49 @@ MenuShell MultiplayerListRow
 		color: $front-secondary;
 	}
 
-	.row-activity
+	.row-count, .row-caption
 	{
-		flex-direction: column;
-		align-items: flex-end;
 		flex-shrink: 0;
+		white-space: nowrap;
+		color: $front-secondary;
+	}
 
-		.row-count
+	.row-count
+	{
+		font-size: 12px;
+		font-weight: 500;
+	}
+
+	.row-caption
+	{
+		font-size: 10px;
+	}
+
+	.row-stat
+	{
+		min-width: 40px;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		font-size: 13px;
+		font-weight: 500;
+
+		icon
 		{
-			font-size: 17px;
-			font-weight: 600;
+			flex-shrink: 0;
+			font-size: 16px;
+			color: $front-secondary;
 		}
 
-		.row-caption
+		label
 		{
-			font-size: 10px;
+			flex-shrink: 0;
 			white-space: nowrap;
+		}
+
+		&.servers
+		{
 			color: $front-secondary;
 		}
 	}
@@ -123,7 +161,7 @@ MenuShell MultiplayerListRow
 
 		> .button
 		{
-			padding: 6px;
+			padding: 2px 6px;
 			border-radius: 4px;
 			font-size: 11px;
 			font-weight: 500;

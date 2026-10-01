@@ -13,7 +13,7 @@ namespace MenuProject.Modals.GameModalComponents;
 /// choice is a <see cref="SettingItem"/>, so the setup view draws them with the settings page's own
 /// rows (SettingsRow) - the map's the one it draws itself.
 /// </summary>
-public sealed class GameSetup
+public sealed partial class GameSetup
 {
 	public Package Package { get; }
 
@@ -70,8 +70,15 @@ public sealed class GameSetup
 	public LobbyPrivacy Privacy => PrivacyItem.As<LobbyPrivacy>();
 	public int MaxPlayers => (int)PlayersItem.FloatValue;
 
-	public int MinPlayerCount => Package.Info.MinPlayers;
-	public int MaxPlayerCount => Package.Info.MaxPlayers;
+	/// <summary>
+	/// The smallest supported server size, within the game's valid player range.
+	/// </summary>
+	public int MinPlayerCount => Math.Clamp( Package.Info.MinPlayers, 1, MaxPlayerCount );
+
+	/// <summary>
+	/// The game's maximum server size, with at least one player slot.
+	/// </summary>
+	public int MaxPlayerCount => Math.Max( 1, Package.Info.MaxPlayers );
 
 	public bool IsMultiplayer => Package.Tags.Contains( "multiplayer" ) || Package.Info.MaxPlayers > 1;
 
@@ -93,16 +100,19 @@ public sealed class GameSetup
 
 	static readonly List<Option> OffOn = [new( "Off", false ), new( "On", true )];
 
-	public GameSetup( Package package, Action<CreateGameResults> onComplete = null )
+	/// <summary>
+	/// Start from the supplied setup, or restore the player's previous choices for this game.
+	/// </summary>
+	public GameSetup( Package package, Action<CreateGameResults> onComplete = null, CreateGameResults? initialSettings = null )
 	{
 		Package = package;
 		OnComplete = onComplete;
 
 		// What was picked last time, or the defaults - then made sense of, in case the game's changed since
-		var saved = Game.Cookies.Get<CreateGameResults>( CookieName, new() { MaxPlayers = MinPlayerCount, ServerName = DefaultServerName } );
+		var saved = initialSettings ?? GetInitialSettings( package );
 
 		var serverName = string.IsNullOrEmpty( saved.ServerName ) ? DefaultServerName : saved.ServerName;
-		var players = Math.Clamp( saved.MaxPlayers, MinPlayerCount, Math.Max( MinPlayerCount, MaxPlayerCount ) );
+		var players = Math.Clamp( saved.MaxPlayers, MinPlayerCount, MaxPlayerCount );
 
 		ServerNameItem = Loaded( new SettingItem
 		{
@@ -127,7 +137,7 @@ public sealed class GameSetup
 			Title = "Max Players",
 			Kind = SettingKind.Slider,
 			Min = MinPlayerCount,
-			Max = Math.Max( MinPlayerCount, MaxPlayerCount ),
+			Max = MaxPlayerCount,
 			Step = 1,
 			NumberFormat = "0",
 			Read = () => (float)players

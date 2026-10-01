@@ -230,7 +230,9 @@ public partial class MenuSystem : IMenuSystem
 		MainMenu.Instance?.Navigator?.Navigate( url );
 	}
 
-	/// <summary>Start a party with just you in it, without having to invite someone first.</summary>
+	/// <summary>
+	/// Open party setup without having to invite someone first.
+	/// </summary>
 	[MenuConCmd( "party_create" )]
 	public static async Task CreateParty()
 	{

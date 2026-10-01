@@ -174,7 +174,7 @@ public static class RailPresence
 				state.Presence["party_id"] = id;
 				state.Presence["party_owner"] = owner.ToString();
 				state.Presence["party_size"] = size.ToString();
-				state.Presence["party_max"] = "16";
+				state.Presence["party_max"] = PartyDeck.MAX_MEMBERS.ToString();
 			}
 
 			//

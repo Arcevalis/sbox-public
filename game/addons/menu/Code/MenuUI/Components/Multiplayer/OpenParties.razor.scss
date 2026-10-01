@@ -13,7 +13,7 @@ OpenParties
 	font-family: $front-font;
 	color: $front-body;
 
-	> .party-empty > button
+	> .create-party, > .party-empty > button
 	{
 		@include front-button;
 		flex-shrink: 0;
@@ -21,17 +21,17 @@ OpenParties
 		gap: 6px;
 		font-size: 12px;
 
-		&.primary
-		{
-			background-color: $front-primary;
-			color: white;
-		}
-
 		&.disabled
 		{
 			opacity: 0.3;
 			pointer-events: none;
 		}
+	}
+
+	> .create-party
+	{
+		width: 100%;
+		cursor: pointer;
 	}
 
 	.party-list

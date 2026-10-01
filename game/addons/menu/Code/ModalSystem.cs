@@ -1,4 +1,4 @@
-﻿using MenuProject.Modals;
+using MenuProject.Modals;
 using MenuProject.Modals.PauseMenuModal;
 using Sandbox;
 using Sandbox.Modals;
@@ -129,6 +129,9 @@ public class ModalSystem : IModalSystem
 		Push( new PackageModal { Page = page, PackageIdent = packageIdent } );
 	}
 
+	/// <summary>
+	/// Opens the shared picker with the requested package types and filters.
+	/// </summary>
 	public void PackageSelect( string query, Action<Package> onPackageSelected, Action<string> onFilterChanged )
 	{
 		Push( new PackageSelectionModal
@@ -220,9 +223,20 @@ public class ModalSystem : IModalSystem
 	/// </summary>
 	public void CreateGame( in CreateGameOptions options, string via, Panel source )
 	{
-		var package = options.Package;
-		if ( package is null ) return;
+		if ( options.Package is null ) return;
+		_ = GetGamePage( options.Package ).OpenSetup( options.Package, options.OnComplete, via, source, options.InitialSettings );
+	}
 
+	internal void OpenGameSetup( Package package, string via = null, Panel source = null, MenuProject.PartyDraft draft = null, string initialMap = null )
+	{
+		if ( package is null ) return;
+		var selected = draft is not null ? draft.Game?.FullIdent == package.FullIdent : MenuProject.PartyView.IsGameSelected( package );
+		var shared = draft is not null ? draft.GameSettings : MenuProject.PartyView.SelectedGameSettings;
+		_ = GetGamePage( package ).OpenSetup( package, null, via, source, selected ? shared : null, partyActions: true, draft: draft, initialMap: initialMap );
+	}
+
+	GameModal GetGamePage( Package package )
+	{
 		OpenModals.RemoveAll( x => !x.IsValid() );
 
 		var page = OpenModals.OfType<GameModal>().FirstOrDefault( x => x.PackageIdent == package.FullIdent || x.Package == package );
@@ -234,7 +248,7 @@ public class ModalSystem : IModalSystem
 			Push( page );
 		}
 
-		page.OpenSetup( package, options.OnComplete, via, source );
+		return page;
 	}
 
 	public void PauseMenu()

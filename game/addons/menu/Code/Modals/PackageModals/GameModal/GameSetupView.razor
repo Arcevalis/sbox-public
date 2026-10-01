@@ -16,6 +16,15 @@
 
 <root>
 
+    @if ( !string.IsNullOrEmpty( Notice ) )
+    {
+        <div class="setup-notice"><icon>group</icon><label>@Notice</label></div>
+    }
+    @if ( !string.IsNullOrEmpty( Error ) )
+    {
+        <div class="setup-notice error"><icon>error</icon><label>@Error</label></div>
+    }
+
     @if ( Setup.NeedsMap || Setup.ItemsIn( null ).Any() )
     {
         <div class="section">
@@ -28,7 +37,14 @@
                     <div class="line">
                         <label class="name">Map</label>
                         <div class="control">
-                            <MapSelector Map=@Setup.Map GamePackage=@Setup.Package OnValueChanged=@OnMapChanged />
+                            @if ( ReadOnly )
+                            {
+                                <label>@Setup.MapTitle</label>
+                            }
+                            else
+                            {
+                                <MapSelector Map=@Setup.Map GamePackage=@Setup.Package OnValueChanged=@OnMapChanged OnSelectorOpened=@OnMapSelectorOpened />
+                            }
                         </div>
                     </div>
                 </div>
@@ -36,7 +52,7 @@
 
             @foreach ( var item in Setup.ItemsIn( null ) )
             {
-                <SettingsRow @key=@item.Id Item=@item />
+                <SettingsRow @key=@item Item=@item ReadOnly=@ReadOnly />
             }
         </div>
     }
@@ -46,12 +62,12 @@
         <div class="section">
             <div class="section-label"><icon>dns</icon><label>Server</label></div>
 
-            <SettingsRow Item=@Setup.ServerNameItem />
-            <SettingsRow Item=@Setup.PrivacyItem />
+            <SettingsRow Item=@Setup.ServerNameItem ReadOnly=@ReadOnly />
+            <SettingsRow Item=@Setup.PrivacyItem ReadOnly=@ReadOnly />
 
             @if ( Setup.HasPlayerRange )
             {
-                <SettingsRow Item=@Setup.PlayersItem />
+                <SettingsRow Item=@Setup.PlayersItem ReadOnly=@ReadOnly />
             }
         </div>
     }
@@ -63,7 +79,7 @@
 
             @foreach ( var item in Setup.ItemsIn( group ) )
             {
-                <SettingsRow @key=@item.Id Item=@item />
+                <SettingsRow @key=@item Item=@item ReadOnly=@ReadOnly />
             }
         </div>
     }
@@ -72,13 +88,39 @@
 
 @code
 {
+    /// <summary>
+    /// The local game settings displayed by this editor.
+    /// </summary>
     [Parameter] public GameSetup Setup { get; set; }
+
+    /// <summary>
+    /// Show the settings as values without editable controls.
+    /// </summary>
+    [Parameter] public bool ReadOnly { get; set; }
+
+    /// <summary>
+    /// Explain how this setup relates to the player's party.
+    /// </summary>
+    [Parameter] public string Notice { get; set; }
+
+    /// <summary>
+    /// A problem applying or starting the setup.
+    /// </summary>
+    [Parameter] public string Error { get; set; }
+
+    GameSetup selectingMapFor;
+
+    void OnMapSelectorOpened()
+    {
+        selectingMapFor = Setup;
+    }
 
     void OnMapChanged( string map )
     {
+        if ( ReadOnly || !IsValid || selectingMapFor != Setup ) return;
         Setup.Map = map;
         StateHasChanged();
     }
 
-    protected override int BuildHash() => HashCode.Combine( Setup, Setup?.Map );
+    protected override int BuildHash() => HashCode.Combine( Setup, Setup?.Map, Setup?.MapTitle, ReadOnly, Notice, Error );
 }
