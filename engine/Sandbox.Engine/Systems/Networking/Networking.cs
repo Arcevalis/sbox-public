@@ -706,10 +706,25 @@ public static partial class Networking
 		_ = TryConnect( target );
 	}
 
+	/// <summary>
+	/// Leave the previous session before connecting. Platform games unload their package too;
+	/// standalone games keep the package that their handshake expects to already be loaded.
+	/// </summary>
+	static void LeaveCurrentGame()
+	{
+		// Standalone joins reuse the loaded package: their handshake does not load it again.
+		if ( !Application.IsStandalone && IGameInstance.Current is not null )
+		{
+			IGameInstanceDll.Current.CloseGame();
+		}
+
+		Disconnect();
+	}
+
 	internal static async Task<bool> TryConnect( string target, int retries = 30, CancellationToken token = default, Action<string> onFailure = null )
 	{
 		token.ThrowIfCancellationRequested();
-		Disconnect();
+		LeaveCurrentGame();
 
 		if ( string.IsNullOrWhiteSpace( target ) )
 		{
@@ -827,7 +842,7 @@ public static partial class Networking
 	static async Task<bool> TryConnectSteamIdInternal( SteamId steamId, int retries, CancellationToken token = default, Action<string> onFailure = null )
 	{
 		token.ThrowIfCancellationRequested();
-		Disconnect();
+		LeaveCurrentGame();
 
 		SentrySdk.AddBreadcrumb( $"Connect to '{steamId}'", "network.connect" );
 		Assert.IsNull( System );
@@ -1026,7 +1041,7 @@ public static partial class Networking
 		var sameGame = data.Game is null || string.Equals( Game.Ident?.Split( '#' )[0], data.Game.Split( '#' )[0], StringComparison.OrdinalIgnoreCase );
 		Api.Activity.GameRequested( new( sameGame ? "reload" : "game", data.Game ) );
 
-		IGameInstanceDll.Current?.CloseGame();
+		LeaveCurrentGame();
 
 		string address = LastConnectionString;
 		if ( string.IsNullOrWhiteSpace( address ) )
@@ -1034,8 +1049,6 @@ public static partial class Networking
 			IGameInstanceDll.Current.Disconnect( "Reconnect failed, missing target address." );
 			return false;
 		}
-
-		Disconnect();
 
 		Log.Info( $"Reconnecting to {address}" );
 

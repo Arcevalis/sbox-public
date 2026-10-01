@@ -128,14 +128,27 @@ GameMenu
 			pointer-events: none;
 		}
 
-		// Leaving - on the foot, a hairline over it, red under the pointer like the rail's Quit
+		// Leaving - on the foot, a hairline over it, red so it reads as leaving, stronger under the
+		// pointer like the rail's Quit
 		&.leave
 		{
 			height: 58px;
 			border-top: $front-border-width solid $front-hairline;
+			background-color: rgba( $front-danger, 0.06 );
+
+			i
+			{
+				color: linear-gradient( 180deg, $front-danger * 1.2, $front-danger * 0.8 );
+			}
+
+			label
+			{
+				color: $front-danger;
+			}
 
 			&:hover
 			{
+				background-color: rgba( $front-danger, 0.12 );
 				background-image: linear-gradient( 90deg, rgba( $front-danger, 0 ), rgba( $front-danger, 0.16 ) );
 				border-right: 2px solid rgba( $front-danger, 0.7 );
 

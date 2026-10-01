@@ -90,14 +90,6 @@ internal static partial class Api
 		}
 
 		/// <summary>
-		/// What was asked for isn't going to load, e.g. a connect while already connected.
-		/// </summary>
-		public static void RequestDropped()
-		{
-			lock ( loadLock ) request = null;
-		}
-
-		/// <summary>
 		/// A game package started loading. <paramref name="remote"/> is a join to someone else's server.
 		/// </summary>
 		public static Load LoadBegin( string ident, bool remote )

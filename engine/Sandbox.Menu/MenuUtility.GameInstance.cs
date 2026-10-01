@@ -66,6 +66,13 @@ public static partial class MenuUtility
 			_isJoiningLobby = true;
 			Api.Activity.GameRequested( new( "quickplay", ident ), replace: false );
 
+			// Leave the game we're in before looking, the loading screen stays up for the search
+			if ( Game.InGame )
+			{
+				IGameInstanceDll.Current.CloseGame();
+				LoadingScreen.IsVisible = true;
+			}
+
 			Log.Info( "Searching for games.." );
 			var lobbies = await Networking.QueryLobbies( ident );
 			Log.Info( $"..found {lobbies.Count} available matches" );
