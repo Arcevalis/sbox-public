@@ -483,7 +483,6 @@
     (List<PartyGroup> Parties, List<FriendRow> Solo) GroupParties( List<Friend> friends )
     {
         var parties = new List<PartyGroup>();
-        var solo = new List<FriendRow>();
         var myParty = RailPresence.PartyId;
 
         // Who's really in our party, from the lobby itself. Everyone else's party comes from their
@@ -491,31 +490,19 @@
         // together) and can go stale after someone leaves - but for our own we don't have to wait
         var inMyParty = RailPresence.PartyMembers.Select( x => x.Id ).ToHashSet();
 
-        string PartyKey( Friend friend )
-        {
-            if ( inMyParty.Contains( friend.Id ) ) return myParty;
+        var grouped = FriendPartyGrouping.Group( friends,
+            x => x.Id, x => RailPresence.Get( x, "party_id" ), x => RailPresence.Get( x, "party_size" ).ToInt( 0 ),
+            myParty, inMyParty );
+        var solo = grouped.Solo.Select( ToRow ).ToList();
 
-            // Says they're with us, but they're not in the lobby - they've left
-            var key = RailPresence.Get( friend, "party_id" ) ?? "";
-            return key == myParty ? "" : key;
-        }
-
-        foreach ( var group in friends.GroupBy( PartyKey ) )
+        foreach ( var group in grouped.Parties )
         {
-            var members = group.OrderBy( x => x.Name ).ToList();
+            var members = group.Members.OrderBy( x => x.Name ).ToList();
             var first = members[0];
-            var size = group.Key == myParty
-                ? RailPresence.PartyMembers.Count
-                : Math.Max( members.Count, RailPresence.Get( first, "party_size" ).ToInt( 0 ) );
-
-            if ( string.IsNullOrEmpty( group.Key ) || size < 2 )
-            {
-                solo.AddRange( members.Select( ToRow ) );
-                continue;
-            }
+            var size = group.Size;
 
             var rows = members.Select( ToRow ).ToList();
-            var isMine = group.Key == myParty;
+            var isMine = group.Id == myParty;
             var host = rows.FirstOrDefault( x => x.Joinable );
 
             if ( isMine )
