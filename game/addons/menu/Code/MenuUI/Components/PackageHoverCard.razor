@@ -65,7 +65,9 @@
             @* After the genres, how it's played gets its own chip, so multiplayer stands out from them *@
             @if ( PlayerModes.For( Package ) is { Label: { } modeLabel } modes )
             {
-                <div class="mode @(modes.Multiplayer ? "multiplayer" : "")" tooltip="@modes.Hint">
+                var fit = modes.FitFor( PlayerModes.PartySize );
+
+                <div class="mode @(fit.Fit == PlayerModes.FitKind.Poor ? "mismatch" : modes.Multiplayer ? "multiplayer" : "")" tooltip="@(fit.Why ?? modes.Hint)">
                     <icon>@modes.Icon</icon>
                     <label>@modeLabel</label>
                 </div>
@@ -555,5 +557,5 @@
         return n.ToString();
     }
 
-    protected override int BuildHash() => HashCode.Combine( Package?.FullIdent, Package?.Usage.UsersNow, showVideo, VideoUrl(), MenuHelpers.HasAuthority, ShowJam, HashCode.Combine( _nominated, _busy, Package?.Interaction.Rating, Package?.Interaction.Favourite ) );
+    protected override int BuildHash() => HashCode.Combine( Package?.FullIdent, Package?.Usage.UsersNow, showVideo, VideoUrl(), MenuHelpers.HasAuthority, ShowJam, HashCode.Combine( _nominated, _busy, Package?.Interaction.Rating, Package?.Interaction.Favourite, PlayerModes.PartySize ) );
 }

@@ -74,9 +74,13 @@ public static class MenuHelpers
 	/// the button's pressed and the setup's only opened: backed out of, it was never played.
 	/// </para>
 	/// </summary>
-	public static async void PlayGame( Package package, Package mapPackage = null, string via = null, Panel source = null )
+	public static async void PlayGame( Package package, Package mapPackage = null, string via = null, Panel source = null, bool fitChecked = false )
 	{
 		Assert.True( HasAuthority, "You do not have authority to start a game, only the party owner can do that." );
+
+		// Your party isn't what it's made for - say so, and only go on if you want to
+		if ( !fitChecked && !ConfirmPartyFit( package, () => PlayGame( package, mapPackage, via, source, fitChecked: true ) ) )
+			return;
 
 		// VR-only game but not in VR
 		if ( package.Info.IsVrOnly && !Application.IsVR )
@@ -151,6 +155,34 @@ public static class MenuHelpers
 		{
 			MenuUtility.OpenGame( package.FullIdent, true );
 		}
+	}
+
+	/// <summary>
+	/// Whether your party's what the game's made for - true to go straight on. If it isn't, pops up why,
+	/// with Play anyway (which runs <paramref name="playAnyway"/>) and Return, and gives false.
+	/// </summary>
+	public static bool ConfirmPartyFit( Package package, Action playAnyway )
+	{
+		var size = MenuProject.PlayerModes.PartySize;
+		var modes = MenuProject.PlayerModes.For( package );
+		var (fit, why) = modes.FitFor( size );
+		if ( fit != MenuProject.PlayerModes.FitKind.Poor ) return true;
+
+		// Short of what it's made for, or past it - singleplayer, a full lobby, more than it's for
+		var tooSmall = modes.Multiplayer && modes.RecommendedMin > size && (modes.MaxPlayers <= 0 || size <= modes.MaxPlayers);
+
+		ModalSystem.Instance?.Open( new MenuProject.Modals.QuestionModal
+		{
+			Color = Color.Parse( "#f5a623" ) ?? Color.Orange,
+			Title = tooSmall ? "Your party is too small" : "Your party is too big",
+			Message = why,
+			ConfirmText = "Play anyway",
+			ConfirmIcon = "play_arrow",
+			CancelText = "Return",
+			OnConfirm = playAnyway
+		} );
+
+		return false;
 	}
 
 	static void ReportPlay( Package package, string via, Panel source )

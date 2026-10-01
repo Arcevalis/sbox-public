@@ -188,6 +188,15 @@ PackageHoverCard
 
 				icon, label { color: $front-accent; }
 			}
+
+			// Your party isn't what it's made for - the tooltip says why
+			&.mismatch
+			{
+				border-color: rgba( #f5a623, 0.4 );
+				background-color: rgba( #f5a623, 0.12 );
+
+				icon, label { color: #f5a623; }
+			}
 		}
 	}
 

@@ -175,6 +175,15 @@
 
     async Task<bool> OnJoinGame()
     {
+        // Your party isn't what it's made for - say so first, joining only if you want to anyway
+        if ( !MenuHelpers.ConfirmPartyFit( Package, () => _ = JoinGame() ) )
+            return false;
+
+        return await JoinGame();
+    }
+
+    async Task<bool> JoinGame()
+    {
         // Out of the way first - joining can hold things up, and the modal would freeze mid-close
         await MenuHelpers.PrepareForLoad( "Finding Game..", "Please wait while we find a game for you to join." );
 

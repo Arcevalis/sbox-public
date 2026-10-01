@@ -30,14 +30,18 @@
         </div>
 
         @* How it's played - on your own, together, against each other - up where you can't miss it,
-           with how many can play. Nothing when the tags don't say *@
+           with how many it's for. Green when your party's what it's made for, orange when it isn't (the
+           why's for the popup when you go to play), plain when the game doesn't say. Nothing when it
+           says nothing at all *@
         @if (PlayerModes.For(Package) is { Label: { } modeLabel } modes)
         {
-            <div class="play-mode @(modes.Multiplayer ? "multiplayer" : "solo")">
-                <div class="mode-icon"><i>@modes.Icon</i></div>
+            var fit = modes.FitFor( PlayerModes.PartySize );
+
+            <div class="play-mode @FitClass( fit.Fit )">
+                <div class="mode-icon"><i>@(fit.Fit == PlayerModes.FitKind.Poor ? "group_off" : modes.Icon)</i></div>
                 <div class="mode-text">
                     <label class="mode-label">@modeLabel</label>
-                    <label class="mode-hint">@ModeHint(modes)</label>
+                    <label class="mode-hint">@ModeHint( modes )</label>
                 </div>
             </div>
         }
@@ -185,11 +189,23 @@
 	/// The mode's own sentence, and how many can play when the full package says - "Team up with
 	/// friends · up to 8 players".
 	/// </summary>
+	/// <summary>
+	/// What it's like, and how many it's for - what it's made for when it says, the lobby's limit if not.
+	/// </summary>
 	string ModeHint( MenuProject.PlayerModes modes )
 	{
+		if ( modes.PlayersText is { } players ) return $"{modes.Hint} · {players}";
+
 		var max = Package?.Info.MaxPlayers ?? 0;
 		return modes.Multiplayer && max > 1 ? $"{modes.Hint} · up to {max} players" : modes.Hint;
 	}
+
+	static string FitClass( MenuProject.PlayerModes.FitKind fit ) => fit switch
+	{
+		MenuProject.PlayerModes.FitKind.Good => "fits",
+		MenuProject.PlayerModes.FitKind.Poor => "mismatch",
+		_ => ""
+	};
 
 	Package.ChangeListSummary? LatestChange => Package?.LatestChangeLists is { Length: > 0 } lists
 		? lists.OrderByDescending( x => x.Created ).First()
@@ -233,7 +249,8 @@
 		return "negative";
 	}
 
-	protected override int BuildHash() => System.HashCode.Combine(Package, ShowYourStats, ShowReviews);
+	// The party's size too - the play mode card goes green or orange with it, while the page is open
+	protected override int BuildHash() => System.HashCode.Combine(Package, ShowYourStats, ShowReviews, PlayerModes.PartySize);
 
 	protected override async Task OnParametersSetAsync()
 	{
