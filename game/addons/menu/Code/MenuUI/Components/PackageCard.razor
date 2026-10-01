@@ -107,7 +107,7 @@
     public const int VideoThumbsPerGrid = 4;
     /// <summary>Seconds a package video plays before handing over to the next card.</summary>
     public const float VideoThumbsSeconds = 10f;
-    // Past the card's 0.3s video start + 0.4s fade, so the preview inherits a settled video.
+    // Past the card's 0.3s video start, so the preview inherits the card's video mid-fade.
     const float HoverPreviewDelay = 0.4f;
 	const float VideoActivationDelay = 0.3f;
 	bool showVideo;
@@ -179,7 +179,11 @@
 	}
 
 	/// <summary>The video url this card is showing right now, or null.</summary>
-	public string PlayingVideoUrl => showVideo && !string.IsNullOrEmpty( Package?.VideoThumb ) ? VideoUrl() : null;
+	public string PlayingVideoUrl => VideoReady() ? VideoUrl() : null;
+
+	// Same cached player the style loaded, so this is false until its first frame arrives - and
+	// stays false when the clip never does, leaving the art alone instead of a title over nothing.
+	bool VideoReady() => showVideo && !string.IsNullOrEmpty( Package?.VideoThumb ) && Texture.Load( VideoUrl() )?.IsLoaded == true;
 
     string VideoUrl() => VideoUrl( Package, Quality == VideoQuality.Auto ? PickQuality( Box.Rect.Width ) : Quality );
 
@@ -300,7 +304,7 @@
     }
     void OnCardRightClicked() => RightClicked?.Invoke();
 
-    string BuildClass() => $"package-card {Size.ToString().ToLower()}";
+    string BuildClass() => $"package-card {Size.ToString().ToLower()} {(VideoReady() ? "playing" : "")}";
 
     string VotePercentage()
     {
@@ -328,5 +332,5 @@
     };
 
     // ShowVideo mounts the video layer, so hover changes have to re-render.
-    protected override int BuildHash() => System.HashCode.Combine(Package?.FullIdent, Package?.Usage.UsersNow, Package?.Flair.Length, ShowVideo(), ShowSummary, VideoUrl(), NominationCount);
+    protected override int BuildHash() => System.HashCode.Combine(Package?.FullIdent, Package?.Usage.UsersNow, Package?.Flair.Length, ShowVideo(), VideoReady(), ShowSummary, VideoUrl(), NominationCount);
 }

@@ -196,7 +196,6 @@ FrontPageGames
 	}
 
 	// Two tiles wide (the code sets the exact px), two rows tall (stretched by the row).
-	// The art fills whatever's left above the band; the summary sits over the art as a quote.
 	.big
 	{
 		flex-shrink: 0;
@@ -217,51 +216,11 @@ FrontPageGames
 				width: 100%;
 			}
 
-			// The summary panel below carries the scrim; this band is transparent over it.
-			column
-			{
-				padding: 8px 16px 34px 16px;
-				background-image: none;
-				background-color: transparent;
-			}
-
 			.package-title
 			{
-				font-size: 18px;
-				// The base card caps the title at 24px for its 14px font - too short for this size.
-				max-height: 30px;
-			}
-
-			// One-line subtitle under the title; also the scrim for both.
-			.package-summary
-			{
-				position: absolute;
-				left: 0;
-				right: 0;
-				bottom: 0;
-				flex-direction: row;
-				align-items: flex-end;
-				padding: 110px 16px 14px 16px;
-				background-image: linear-gradient( 0deg, rgba( 0, 0, 0, 0.8 ) 45%, rgba( 0, 0, 0, 0 ) );
-
-				.quote-mark
-				{
-					display: none;
-				}
-
-				.quote-text
-				{
-					flex-grow: 1;
-					flex-shrink: 1;
-					font-family: $front-font;
-					font-size: 13px;
-					font-weight: 500;
-					color: $front-body;
-					white-space: nowrap;
-					overflow: hidden;
-					text-overflow: ellipsis;
-					text-shadow: 0 1px 2px rgba( 0, 0, 0, 0.6 );
-				}
+				min-height: 25px;
+				padding: 2px 8px;
+				font-size: 16px;
 			}
 		}
 	}
