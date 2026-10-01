@@ -4,6 +4,27 @@ using System.Collections.Generic;
 [TestClass]
 public class FriendPartyGroupingTests
 {
+	[TestMethod]
+	public void SharedRosterShowsNonFriendsWithoutDuplicatingLeaderOrFriends()
+	{
+		var ids = FriendPartyGrouping.MemberIds( [1, 2], [1, 2, 3, 4], 3 );
+		CollectionAssert.AreEqual( new ulong[] { 3, 1, 2, 4 }, ids );
+	}
+
+	[TestMethod]
+	public void MissingRosterKeepsKnownFriendsAndLeader()
+	{
+		CollectionAssert.AreEqual( new ulong[] { 3, 1, 2 }, FriendPartyGrouping.MemberIds( [1, 2], [], 3 ) );
+		CollectionAssert.AreEqual( new ulong[] { 1 }, FriendPartyGrouping.MemberIds( [1], [], 0 ) );
+	}
+
+	[TestMethod]
+	public void DepartedNonFriendDisappearsOnNextRosterRefresh()
+	{
+		Assert.AreEqual( 3, FriendPartyGrouping.MemberIds( [1], [1, 2, 3], 1 ).Count );
+		CollectionAssert.AreEqual( new ulong[] { 1, 2 }, FriendPartyGrouping.MemberIds( [1], [1, 2], 1 ) );
+	}
+
 	record Presence( ulong SteamId, string PartyId = null, int PartySize = 0 );
 
 	static (List<FriendPartyGrouping.Party<Presence>> Parties, List<Presence> Solo) Group(

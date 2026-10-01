@@ -326,6 +326,21 @@ public static partial class MenuUtility
 	}
 
 	/// <summary>
+	/// The party members shared by this friend, including people outside our friends list.
+	/// Older clients may not share a roster. Requests missing Steam names as they are encountered.
+	/// </summary>
+	public static Friend[] GetPartyMembers( Friend friend )
+	{
+		if ( string.IsNullOrEmpty( friend.GetRichPresence( "party_id" ) ) ) return [];
+		var members = (friend.GetRichPresence( "party_members" ) ?? "").Split( ',' ).Take( 12 )
+			.Select( x => ulong.TryParse( x, out var id ) ? id : 0 ).Where( x => x != 0 ).Distinct()
+			.Select( x => new Friend( x ) ).ToArray();
+		foreach ( var member in members )
+			Steamworks.SteamFriends.RequestUserInformation( member.Id );
+		return members;
+	}
+
+	/// <summary>
 	/// Whether this friend can be invited to your current (or about-to-be-created) party -
 	/// ie. not you, and not already in it. Offline doesn't rule them out: people set to appear
 	/// offline in Steam are often really there, and still get the invite.

@@ -510,12 +510,13 @@
                 // Our own party - we're in the lobby, so we know everyone in it, friend or not
                 rows = RailPresence.PartyMembers.OrderByDescending( x => x.Id == RailPresence.PartyOwner ).Select( ToRow ).ToList();
             }
-            else if ( RailPresence.Get( first, "party_owner" ).ToULong( 0 ) is var ownerId and not 0
-                && !members.Any( x => x.Id == ownerId ) && !new Friend( ownerId ).IsMe )
+            else
             {
-                // Someone else's - all rich presence tells us about the rest is who leads it, so put
-                // their face up front even when they're not a friend. Anyone else stays a "+N"
-                rows.Insert( 0, ToRow( new Friend( ownerId ) ) );
+                // A friend shares their whole roster, so non-friends get faces and profile cards too.
+                var ownerId = RailPresence.Get( first, "party_owner" ).ToULong( 0 );
+                var roster = members.SelectMany( RailPresence.MembersOf ).Select( x => x.Id );
+                rows = FriendPartyGrouping.MemberIds( members.Select( x => x.Id ), roster, ownerId )
+                    .Select( x => ToRow( new Friend( x ) ) ).ToList();
             }
 
             size = Math.Max( size, rows.Count );

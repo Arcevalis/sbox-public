@@ -68,6 +68,10 @@ public static class RailPresence
 
 	public static string Get( Friend friend, string key ) => World?.Find( friend )?.Get( key ) ?? (World is null ? friend.GetRichPresence( key ) : null);
 
+	public static IEnumerable<Friend> MembersOf( Friend friend ) => World is { } world
+		? world.PartyRoster( Get( friend, "party_id" ) )
+		: MenuUtility.GetPartyMembers( friend );
+
 	public static bool IsOnline( Friend friend ) => World?.Find( friend )?.Online ?? friend.IsOnline;
 	public static bool IsPlayingThisGame( Friend friend ) => World?.Find( friend )?.Playing ?? friend.IsPlayingThisGame;
 	public static bool IsPlayingAGame( Friend friend ) => World?.Find( friend )?.OtherGame ?? friend.IsPlayingAGame;
@@ -122,6 +126,9 @@ public static class RailPresence
 		/// Anyone else (you) is read from Steam as normal.
 		/// </summary>
 		public MockState Find( Friend friend ) => _states.GetValueOrDefault( friend.Id );
+
+		public IEnumerable<Friend> PartyRoster( string id ) => string.IsNullOrEmpty( id ) ? Enumerable.Empty<Friend>()
+			: _states.Where( x => x.Value.Get( "party_id" ) == id ).Select( x => new Friend( x.Key ) );
 
 		const string Game = "facepunch.sandbox";
 		const string GameName = "Sandbox";
@@ -205,8 +212,11 @@ public static class RailPresence
 			foreach ( var f in partyA )
 				Party( Set( f, title: GameName, connect: f?.Id == host?.Id ? "+connect 1" : null ), "mock-a", host?.Id ?? 0, 3 );
 
-			// A friend in a party led by someone you don't know - their face goes up front, the third is a "+1"
+			// A friend with a leader and another member outside your friends list.
 			Party( Set( Take(), title: GameName ), "mock-b", strangerLeader?.Id ?? 0, 3 );
+			Party( Set( strangerLeader, title: GameName ), "mock-b", strangerLeader?.Id ?? 0, 3 );
+			var strangerMember = TakeStranger();
+			Party( Set( strangerMember, title: GameName ), "mock-b", strangerLeader?.Id ?? 0, 3 );
 
 			// A big one - ten friends and two others, more faces than fit
 			var bigLead = Take();

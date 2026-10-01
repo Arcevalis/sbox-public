@@ -12,6 +12,12 @@ internal static class FriendPartyGrouping
 {
 	internal record Party<T>( string Id, int Size, List<T> Members );
 
+	/// <summary>
+	/// Keep known friends, add the shared roster, and put the leader first without duplicates.
+	/// </summary>
+	internal static List<ulong> MemberIds( IEnumerable<ulong> friends, IEnumerable<ulong> shared, ulong owner ) =>
+		friends.Concat( shared ).Prepend( owner ).Where( x => x != 0 ).Distinct().ToList();
+
 	internal static (List<Party<T>> Parties, List<T> Solo) Group<T>( IEnumerable<T> friends,
 		Func<T, ulong> steamId, Func<T, string> partyId, Func<T, int> partySize,
 		string myParty, IReadOnlyCollection<ulong> localMembers )
