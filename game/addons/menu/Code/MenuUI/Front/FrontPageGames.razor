@@ -62,7 +62,7 @@
                        anything passed straight to it gets clobbered. *@
                     <div class="big" style="width: @( (int)BigWidth )px;">
                         <MenuProject.UI.PackageCard Package=@section.Big ShowSummary=@true DiscoveryContext=@section.Discovery
-                                     Rotation=@section.Rotation
+                                     Rotation=@section.Rotation VideoWeight=@BigVideoWeight
                                      Clicked="@(() => section.Big.OpenModal())"
                                      RightClicked="@(() => MenuHelpers.OpenPackageMenu( this, section.Big ))" />
                     </div>
@@ -152,6 +152,9 @@
     }
 
     List<Section> Sections { get; set; } = new();
+
+    // The big tile is the shelf's showpiece, so it takes its turn this many times as often.
+    const float BigVideoWeight = 3f;
 
     Package.ListResult builtGroup;
     int builtColumns = -1;
