@@ -106,7 +106,10 @@
 
 		<div class="footer">
 			<label class="note">Play games and every objective ticks itself off. Meet them all and the drop unlocks - no money involved.</label>
-			<label class="docs-link" onclick=@OpenStore>Browse the item store</label>
+			@if ( MenuHelpers.ShowMicrotransactions )
+			{
+				<label class="docs-link" onclick=@OpenStore>Browse the item store</label>
+			}
 		</div>
 
 	</div>

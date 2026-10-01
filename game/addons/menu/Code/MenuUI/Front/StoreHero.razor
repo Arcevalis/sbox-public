@@ -4,7 +4,7 @@
 @inherits Panel
 @namespace SboxMenu
 
-@if (def == null)
+@if (def == null || !MenuHelpers.ShowMicrotransactions)
     return;
 
 @{

@@ -8,6 +8,34 @@ using MenuPanel = MenuProject.UI.MenuPanel;
 public static class MenuHelpers
 {
 	/// <summary>
+	/// <c>menu_mock_new_account 1</c> - treat this account as under a week old, to see the menu without
+	/// anything for sale.
+	/// </summary>
+	[MenuConVar( "menu_mock_new_account", Help = "Treat this account as under a week old - no item store, no unowned store items: 0 or 1" )]
+	public static bool MockNewAccount { get; set; }
+
+	/// <summary>
+	/// How old an account has to be before anything's offered for sale.
+	/// </summary>
+	public static readonly TimeSpan MicrotransactionsMinimumAccountAge = TimeSpan.FromDays( 7 );
+
+	/// <summary>
+	/// The item store and everything else that sells - not until the account's a week old. The s&amp;box
+	/// account, from when the backend first saw it, not the Steam account. Not known yet (not logged in)
+	/// counts as new.
+	/// </summary>
+	public static bool ShowMicrotransactions
+	{
+		get
+		{
+			if ( MockNewAccount ) return false;
+
+			var firstSeen = Sandbox.MenuEngine.Account.FirstSeen;
+			return firstSeen != default && DateTimeOffset.UtcNow - firstSeen >= MicrotransactionsMinimumAccountAge;
+		}
+	}
+
+	/// <summary>
 	/// Do we have authority to start or join games.
 	/// If we're in a party, only the party owner can start or join games.
 	/// </summary>

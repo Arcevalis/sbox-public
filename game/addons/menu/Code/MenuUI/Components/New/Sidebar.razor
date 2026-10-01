@@ -29,7 +29,11 @@
         <Button Href="/games/all?Sort=trending&Filter=" Icon="sports_esports">Games</Button>
         <Button Href="/multiplayer" Icon="forum">Multiplayer</Button>
         <Button Href="/mounts" Icon="extension">Mounts</Button>
-        <Button Href="/itemstore" Icon="shopping_cart">#menu.store</Button>
+        @* Not for an account under a week old - nothing's for sale to it yet *@
+        @if ( MenuHelpers.ShowMicrotransactions )
+        {
+            <Button Href="/itemstore" Icon="shopping_cart">#menu.store</Button>
+        }
 
         @if ( jam is not null )
         {
@@ -225,5 +229,5 @@
         } );
     }
 
-    protected override int BuildHash() => HashCode.Combine( ShowInbox, NotificationBadge, RewardBadge, RewardProgress, RewardsOpen, jam?.Ident, JamLive, HashCode.Combine( JamCountdown, Game.InGame, InGamePackage, OnGamePage ) );
+    protected override int BuildHash() => HashCode.Combine( ShowInbox, NotificationBadge, RewardBadge, RewardProgress, RewardsOpen, jam?.Ident, JamLive, HashCode.Combine( JamCountdown, Game.InGame, InGamePackage, OnGamePage, MenuHelpers.ShowMicrotransactions ) );
 }
