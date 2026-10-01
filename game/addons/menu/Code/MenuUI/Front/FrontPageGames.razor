@@ -325,19 +325,40 @@
     /// <summary>
     /// Drop a package the player just hid.
     /// </summary>
-    public void RemovePackage( Package package )
+    /// <summary>
+    /// Take a package off every shelf it's on. Hands back how to put it back where it was - for undoing it.
+    /// </summary>
+    public Action RemovePackage( Package package )
     {
         if ( Group?.Groupings is null || package is null )
-            return;
+            return null;
+
+        var before = new List<(Package.ListResult.Grouping Grouping, Package[] Packages)>();
 
         foreach ( var grouping in Group.Groupings )
         {
             if ( grouping.Packages is null || !grouping.Packages.Any( x => x?.FullIdent == package.FullIdent ) )
                 continue;
 
+            before.Add( (grouping, grouping.Packages) );
             grouping.Packages = grouping.Packages.Where( x => x?.FullIdent != package.FullIdent ).ToArray();
         }
 
+        Rebuild();
+
+        return () =>
+        {
+            if ( !this.IsValid() ) return;
+
+            foreach ( var (grouping, packages) in before )
+                grouping.Packages = packages;
+
+            Rebuild();
+        };
+    }
+
+    void Rebuild()
+    {
         builtGroup = null;
         BuildSections();
         StateHasChanged();

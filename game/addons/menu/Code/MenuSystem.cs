@@ -33,6 +33,9 @@ public partial class MenuSystem : IMenuSystem
 		MenuUtility.SetModalSystem( new ModalSystem() );
 		MenuOverlay.Init();
 
+		// What's hidden, so a hidden game's page can offer to show it again
+		_ = MenuUtility.Hidden.Refresh();
+
 		var startupGameIdent = MenuUtility.StartupGameIdent;
 		if ( !string.IsNullOrEmpty( startupGameIdent ) )
 		{

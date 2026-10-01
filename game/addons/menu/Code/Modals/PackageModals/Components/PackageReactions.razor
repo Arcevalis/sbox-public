@@ -44,9 +44,20 @@
     @if ( OnHidden is not null )
     {
         <div class="group">
-            <div class="pill" onclick=@( () => _ = Hide() ) tooltip="@( Package.TypeName == "map" ? "Hide this map" : "Hide this game" )">
-                <icon>block</icon>
-            </div>
+            @* Hidden already - opened anyway, from a link or a friend - so it's the way to show it again *@
+            @if ( MenuUtility.Hidden.Contains( Package ) )
+            {
+                <div class="pill active" onclick=@( () => _ = Unhide() ) tooltip="@UnhideTooltip">
+                    <icon>visibility</icon>
+                    <label>Unhide</label>
+                </div>
+            }
+            else
+            {
+                <div class="pill" onclick=@( () => _ = Hide() ) tooltip="@( Package.TypeName == "map" ? "Hide this map" : "Hide this game" )">
+                    <icon>block</icon>
+                </div>
+            }
         </div>
     }
 
@@ -83,7 +94,7 @@
     /// </summary>
     [Parameter] public bool ShowReviewScore { get; set; } = true;
 
-    protected override int BuildHash() => HashCode.Combine( Package, Package?.Interaction.Rating, Package?.Interaction.Favourite, Package?.VotesUp, Package?.VotesDown, Package?.Favourited, Package?.Reviews.Total, HashCode.Combine( ShowJam, _nominated, _jamBusy, OnHidden is null, ShowReviews, ShowReviewScore ) );
+    protected override int BuildHash() => HashCode.Combine( Package, Package?.Interaction.Rating, Package?.Interaction.Favourite, Package?.VotesUp, Package?.VotesDown, Package?.Favourited, Package?.Reviews.Total, HashCode.Combine( ShowJam, _nominated, _jamBusy, OnHidden is null, ShowReviews, ShowReviewScore, MenuUtility.Hidden.Revision ) );
 
     string ReviewText => !ShowReviewScore ? "Write a review" : Package.Reviews.Total > 0 ? Package.Reviews.Score.ToString( "0\\%" ) : "Review";
     string ReviewTooltip => Package.Reviews.Total > 0 ? $"{Package.Reviews.Score:N0}% from {Package.Reviews.Total} reviews. Write yours" : "Write a review";
@@ -108,6 +119,34 @@
     {
         if ( await MenuHelpers.HidePackage( this, Package ) )
             OnHidden?.Invoke();
+    }
+
+    /// <summary>
+    /// Hidden as part of its creator rather than on its own - showing it again means showing all of theirs.
+    /// </summary>
+    bool HiddenByOrganization => !MenuUtility.Hidden.Packages.Contains( Package.FullIdent ) && MenuUtility.Hidden.IsOrganizationHidden( Package.Org?.Ident );
+
+    string UnhideTooltip => HiddenByOrganization
+        ? $"Everything by {Package.Org?.Title} is hidden - show it all again"
+        : "You've hidden this - show it again";
+
+    async Task Unhide()
+    {
+        if ( !HiddenByOrganization )
+        {
+            await MenuHelpers.UnhidePackage( Package );
+        }
+        else
+        {
+            var shown = await MenuUtility.Hidden.SetOrganizationHidden( Package.Org?.Ident, false );
+            MenuOverlay.Instance?.BottomRight?.Queue( new MenuProject.Toast
+            {
+                Title = shown ? $"Everything by {Package.Org?.Title} is back" : $"Couldn't unhide {Package.Org?.Title} right now",
+                Icon = "visibility"
+            } );
+        }
+
+        if ( this.IsValid() ) StateHasChanged();
     }
 
     //

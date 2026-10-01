@@ -295,8 +295,16 @@ public static class MenuHelpers
 
 		if ( hidden )
 		{
-			Toast( $"{package.Title} hidden", "visibility_off" );
-			source?.AncestorsAndSelf.OfType<FrontPageGames>().FirstOrDefault()?.RemovePackage( package );
+			var putBack = source?.AncestorsAndSelf.OfType<FrontPageGames>().FirstOrDefault()?.RemovePackage( package );
+
+			// Hid the wrong one - a way straight back, on the toast saying so
+			MenuOverlay.Instance?.BottomRight?.Queue( new MenuProject.Toast
+			{
+				Title = $"{package.Title} hidden",
+				Icon = "visibility_off",
+				ActionText = "Undo",
+				OnAction = () => _ = UnhidePackage( package, putBack )
+			}, duration: UndoSeconds );
 		}
 		else
 		{
@@ -304,6 +312,31 @@ public static class MenuHelpers
 		}
 
 		return hidden;
+	}
+
+	/// <summary>
+	/// How long the hidden toast stays up - longer than most, it's got an Undo on it.
+	/// </summary>
+	const float UndoSeconds = 7f;
+
+	/// <summary>
+	/// Show a hidden game again - and put it back on the shelf it came off, if there's a way to.
+	/// </summary>
+	public static async Task<bool> UnhidePackage( Package package, Action putBack = null )
+	{
+		var shown = await package.SetHiddenAsync( false );
+
+		if ( shown )
+		{
+			putBack?.Invoke();
+			Toast( $"{package.Title} is back", "visibility" );
+		}
+		else
+		{
+			Toast( $"Couldn't unhide {package.Title} right now", "visibility" );
+		}
+
+		return shown;
 	}
 
 	static void Toast( string title, string icon ) => MenuOverlay.Instance?.BottomRight?.Queue( new MenuProject.Toast() { Title = title, Icon = icon } );
