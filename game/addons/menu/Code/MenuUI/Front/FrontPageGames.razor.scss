@@ -36,28 +36,13 @@ FrontPageGames
 		width: 100%;
 		margin-bottom: 14px;
 		// .tiles' 5px side inset plus the card's 2px reserved (transparent) border, so the
-		// title and View All line up with the visible edges of the first and last card.
+		// title and See more line up with the visible edges of the first and last card.
 		padding: 0 7px;
 
 		.head-text
 		{
 			flex-direction: column;
-			gap: 2px;
-		}
-
-		.title-row
-		{
-			flex-direction: row;
-			align-items: center;
-			gap: 8px;
-
-			.chevron
-			{
-				font-size: 20px;
-				color: $front-secondary;
-				opacity: 0;
-				transition: all 0.1s ease;
-			}
+			gap: 1px;
 
 			&.link
 			{
@@ -79,6 +64,32 @@ FrontPageGames
 			}
 		}
 
+		// An aside under the title, quiet - the title is what the row is about. The backend only
+		// sends one for shelves whose title doesn't explain itself.
+		.description
+		{
+			font-family: $front-font;
+			font-size: 12px;
+			font-weight: 500;
+			color: $front-secondary;
+			opacity: 0.8;
+		}
+
+		.title-row
+		{
+			flex-direction: row;
+			align-items: center;
+			gap: 8px;
+
+			.chevron
+			{
+				font-size: 20px;
+				color: $front-secondary;
+				opacity: 0;
+				transition: all 0.1s ease;
+			}
+		}
+
 		.title
 		{
 			font-family: $front-font;
@@ -87,25 +98,18 @@ FrontPageGames
 			color: $front-heading;
 		}
 
-		.description
-		{
-			font-family: $front-font;
-			font-size: 14px;
-			font-weight: 500;
-			color: $front-secondary;
-		}
-
-		.view-all
+		.see-more
 		{
 			@include front-pill;
 
+			padding: 3px 9px;
 			cursor: pointer;
 			font-family: $front-font;
-			font-size: 10.5px;
+			font-size: 10px;
 			font-weight: 600;
 			text-transform: uppercase;
-			letter-spacing: 0.06em;
-			color: $front-body;
+			letter-spacing: 0.05em;
+			color: $front-secondary;
 
 			&:hover
 			{
@@ -129,7 +133,7 @@ FrontPageGames
 			text-shadow: 0 0 14px rgba( $front-trophy, 0.5 );
 		}
 
-		.view-all
+		.see-more
 		{
 			color: $front-trophy * 1.6;
 			border-color: rgba( $front-trophy, 0.5 );
@@ -178,7 +182,7 @@ FrontPageGames
 	}
 
 	// Flexible width: rows always stretch edge to edge - no max, so the last tile's
-	// right edge meets the View All button whatever the count. Height comes from the
+	// right edge meets the See more button whatever the count. Height comes from the
 	// art plus its band, not the card's default fixed height.
 	.row PackageCard
 	{
