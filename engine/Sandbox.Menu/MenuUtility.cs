@@ -161,7 +161,7 @@ public static partial class MenuUtility
 		var connectString = friend.GetRichPresence( "connect" );
 		if ( string.IsNullOrWhiteSpace( connectString ) ) return;
 
-		Api.Activity.GameRequested( new( "friend" ), replace: false );
+		Api.Activity.GameRequested( new( "friend" ) );
 
 		connectString = connectString.Replace( "+connect", "" );
 		connectString = connectString.Replace( " ", "" );

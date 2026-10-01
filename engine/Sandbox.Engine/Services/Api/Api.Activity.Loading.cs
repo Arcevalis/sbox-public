@@ -74,13 +74,14 @@ internal static partial class Api
 
 		/// <summary>
 		/// The player asked for a game. With <paramref name="replace"/> off, a generic route (a console
-		/// command) doesn't overwrite what the menu already said about the same game.
+		/// command, a lobby join) doesn't overwrite a fresh request, unless that one was for another game.
 		/// </summary>
 		public static void GameRequested( Origin origin, bool replace = true )
 		{
 			lock ( loadLock )
 			{
-				if ( !replace && request is not null && requestAge < RequestLifetime && (request.Ident is null || (origin.Ident is not null && SameGame( request.Ident, origin.Ident ))) )
+				if ( !replace && request is not null && requestAge < RequestLifetime &&
+					(origin.Ident is null || request.Ident is null || SameGame( request.Ident, origin.Ident )) )
 					return;
 
 				request = origin;

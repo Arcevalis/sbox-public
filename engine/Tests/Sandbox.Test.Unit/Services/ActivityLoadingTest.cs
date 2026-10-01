@@ -35,6 +35,24 @@ public class ActivityLoadingTest
 	}
 
 	[TestMethod]
+	public void LobbyJoinKeepsTheMenusOrigin()
+	{
+		Api.Activity.GameRequested( new( "menu", "org.game", "home", Via: "gamepage-join" ) );
+		Api.Activity.GameRequested( new( "quickplay" ), replace: false );
+
+		Assert.AreEqual( "gamepage-join", Api.Activity.LoadBegin( "org.game", true ).Origin.Via );
+	}
+
+	[TestMethod]
+	public void RequestForAnotherGameIsReplaced()
+	{
+		Api.Activity.GameRequested( new( "menu", "org.first", "home" ) );
+		Api.Activity.GameRequested( new( "menu", "org.second" ), replace: false );
+
+		Assert.AreEqual( "org.second", Api.Activity.LoadBegin( "org.second", false ).Origin.Ident );
+	}
+
+	[TestMethod]
 	public void RequestIsUsedOnce()
 	{
 		Api.Activity.GameRequested( new( "friend" ) );
