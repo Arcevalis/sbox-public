@@ -1,7 +1,7 @@
 @import "/styles/_front.scss";
 
 // Dress the engine Toolbar once; individual pages supply controls and arrange the strip.
-.mainmenu .toolbar
+MenuShell .toolbar
 {
 	font-family: $front-font;
 	color: $front-body;

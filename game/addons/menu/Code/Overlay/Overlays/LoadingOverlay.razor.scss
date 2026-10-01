@@ -197,87 +197,13 @@ LoadingOverlay
 		}
 	}
 
-	// No card - straight on the art, bottom left
+	// No card - straight on the art, bottom left. Its look's shared with the pause menu's latest update
 	.news
 	{
-		flex-direction: column;
+		@include front-headline;
+
 		flex-shrink: 1;
 		max-width: 480px;
-		gap: 6px;
-	}
-
-	.news-eyebrow
-	{
-		flex-direction: row;
-		align-items: center;
-		gap: 6px;
-
-		// Snug on the title under it - the column's gap is for the title and summary
-		margin-bottom: -9px;
-
-		// A megaphone and the label, in the blue the rail lights its active page with - picked out
-		// from the white title under it rather than just more white
-		.eyebrow
-		{
-			flex-direction: row;
-			align-items: center;
-			gap: 5px;
-
-			icon
-			{
-				font-size: 14px;
-				color: linear-gradient( 180deg, #7fb4ff, $front-primary );
-			}
-
-			label
-			{
-				@include front-section-label;
-				color: linear-gradient( 180deg, #9cc6ff, $front-primary );
-				text-shadow: 0 1px 6px rgba( 0, 0, 0, 0.7 );
-			}
-		}
-
-		// "3 months ago" in a little pill, with a clock
-		.ago
-		{
-			flex-direction: row;
-			flex-shrink: 0;
-			align-items: center;
-			gap: 4px;
-			height: 20px;
-			padding: 0 8px 0 6px;
-			border-radius: 999px;
-			background-color: rgba( 255, 255, 255, 0.07 );
-
-			icon
-			{
-				font-size: 12px;
-				color: $front-secondary;
-			}
-
-			label
-			{
-				font-size: 11px;
-				font-weight: 600;
-				color: $front-secondary;
-			}
-		}
-	}
-
-	.news-title
-	{
-		font-size: 26px;
-		font-weight: 700;
-		color: $front-heading;
-		text-shadow: 0 2px 10px rgba( 0, 0, 0, 0.75 );
-	}
-
-	.news-summary
-	{
-		font-size: 14px;
-		font-weight: 500;
-		color: $front-body;
-		text-shadow: 0 1px 6px rgba( 0, 0, 0, 0.75 );
 	}
 
 	.progress

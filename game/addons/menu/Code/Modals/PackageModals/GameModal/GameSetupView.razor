@@ -1,0 +1,84 @@
+@namespace MenuProject.Modals.GameModalComponents
+@inherits Panel
+@using Sandbox;
+@using Sandbox.UI;
+@using SboxMenu;
+@using MenuProject.Settings
+
+@*
+    Setting up a new game, in the game page's place - laid out like the settings page, with its rows
+    (SettingsRow): the game (where it starts, its general settings), the server (its name, who can
+    join, how many), then each group of the game's own settings. The game page's footer starts it
+    (ActionBar); its trail goes back.
+*@
+@if ( Setup is null )
+    return;
+
+<root>
+
+    @if ( Setup.NeedsMap || Setup.ItemsIn( null ).Any() )
+    {
+        <div class="section">
+            <div class="section-label"><icon>sports_esports</icon><label>Game</label></div>
+
+            @* Drawn here rather than a SettingsRow - a picture of it, which picks another *@
+            @if ( Setup.NeedsMap )
+            {
+                <div class="row map-row">
+                    <div class="line">
+                        <label class="name">Map</label>
+                        <div class="control">
+                            <MapSelector Map=@Setup.Map GamePackage=@Setup.Package OnValueChanged=@OnMapChanged />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @foreach ( var item in Setup.ItemsIn( null ) )
+            {
+                <SettingsRow @key=@item.Id Item=@item />
+            }
+        </div>
+    }
+
+    @if ( Setup.IsMultiplayer )
+    {
+        <div class="section">
+            <div class="section-label"><icon>dns</icon><label>Server</label></div>
+
+            <SettingsRow Item=@Setup.ServerNameItem />
+            <SettingsRow Item=@Setup.PrivacyItem />
+
+            @if ( Setup.HasPlayerRange )
+            {
+                <SettingsRow Item=@Setup.PlayersItem />
+            }
+        </div>
+    }
+
+    @foreach ( var group in Setup.OtherGroups )
+    {
+        <div class="section">
+            <div class="section-label"><icon>tune</icon><label>@group</label></div>
+
+            @foreach ( var item in Setup.ItemsIn( group ) )
+            {
+                <SettingsRow @key=@item.Id Item=@item />
+            }
+        </div>
+    }
+
+</root>
+
+@code
+{
+    [Parameter] public GameSetup Setup { get; set; }
+
+    void OnMapChanged( string map )
+    {
+        Setup.Map = map;
+        StateHasChanged();
+    }
+
+    protected override int BuildHash() => HashCode.Combine( Setup, Setup?.Map );
+}

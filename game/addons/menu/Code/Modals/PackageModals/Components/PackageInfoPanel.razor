@@ -48,16 +48,19 @@
 
         @* Label on the left, value on the right - one per line *@
         <div class="facts">
-            <div class="fact @(Package.Reviews.Total > 0 ? "clickable" : "")" @onclick="@(() => { if ( Package.Reviews.Total > 0 ) OnReviewsClicked?.Invoke(); })">
-                <label class="key">Reviews</label>
-                <div class="value">
-                    <label class="rating @RatingClass()">@RatingText()</label>
-                    @if (Package.Reviews.Total > 0)
-                    {
-                        <label class="muted">(@Package.Reviews.Total.ToString("N0"))</label>
-                    }
+            @if (ShowReviews)
+            {
+                <div class="fact @(Package.Reviews.Total > 0 ? "clickable" : "")" @onclick="@(() => { if ( Package.Reviews.Total > 0 ) OnReviewsClicked?.Invoke(); })">
+                    <label class="key">Reviews</label>
+                    <div class="value">
+                        <label class="rating @RatingClass( Package )">@RatingText( Package )</label>
+                        @if (Package.Reviews.Total > 0)
+                        {
+                            <label class="muted">(@Package.Reviews.Total.ToString("N0"))</label>
+                        }
+                    </div>
                 </div>
-            </div>
+            }
 
             @* The update itself is under the gallery on the Overview - here, just when, and a way to
                the Changes tab if there's a changelog *@
@@ -95,6 +98,32 @@
                 </div>
             </div>
         </div>
+
+        @* How much you've played it - in the pause menu, once you have *@
+        @if (ShowYourStats && Package.Interaction.Used)
+        {
+            <div class="facts yours">
+                <label class="section-label">You</label>
+
+                <div class="fact">
+                    <label class="key">Played</label>
+                    <div class="value"><label>@TimeSpan.FromSeconds( Package.Interaction.Seconds ).Humanize( 1 )</label></div>
+                </div>
+
+                <div class="fact">
+                    <label class="key">Sessions</label>
+                    <div class="value"><label>@Package.Interaction.Sessions.ToMetric( 0 )</label></div>
+                </div>
+
+                @if (Package.Interaction.FirstUsed is { } first)
+                {
+                    <div class="fact">
+                        <label class="key">First played</label>
+                        <div class="value"><label>@first.Date.Humanize()</label></div>
+                    </div>
+                }
+            </div>
+        }
 
         @if (achList is not null)
         {
@@ -144,6 +173,12 @@
 	/// <summary>Called when the reviews row is clicked - opens the Reviews tab.</summary>
 	[Parameter] public Action OnReviewsClicked { get; set; }
 
+	/// <summary>How much you've played it, under the facts - the pause menu's.</summary>
+	[Parameter] public bool ShowYourStats { get; set; }
+
+	/// <summary>How it's reviewed, first of the facts - not in the pause menu.</summary>
+	[Parameter] public bool ShowReviews { get; set; } = true;
+
 	AchievementCollection achList;
 
 	/// <summary>
@@ -162,12 +197,12 @@
 
 	/// <summary>
 	/// Steam's words for a review score - how positive, and how sure (how many reviews) it is.
-	/// Under ten reviews there's not enough to say.
+	/// Under ten reviews there's not enough to say. The pause menu's Overview says it too.
 	/// </summary>
-	string RatingText()
+	public static string RatingText( Package package )
 	{
-		var total = Package.Reviews.Total;
-		var score = Package.Reviews.Score;
+		var total = package.Reviews.Total;
+		var score = package.Reviews.Score;
 
 		if ( total <= 0 ) return "No reviews yet";
 		if ( total < 10 ) return $"{total} review{(total == 1 ? "" : "s")}";
@@ -185,17 +220,20 @@
 		return total >= 50 ? "Very Negative" : "Negative";
 	}
 
-	string RatingClass()
+	/// <summary>
+	/// "positive", "mixed" or "negative" for colouring <see cref="RatingText"/> - "none" under ten reviews.
+	/// </summary>
+	public static string RatingClass( Package package )
 	{
-		if ( Package.Reviews.Total < 10 ) return "none";
+		if ( package.Reviews.Total < 10 ) return "none";
 
-		var score = Package.Reviews.Score;
+		var score = package.Reviews.Score;
 		if ( score >= 70 ) return "positive";
 		if ( score >= 40 ) return "mixed";
 		return "negative";
 	}
 
-	protected override int BuildHash() => System.HashCode.Combine(Package);
+	protected override int BuildHash() => System.HashCode.Combine(Package, ShowYourStats, ShowReviews);
 
 	protected override async Task OnParametersSetAsync()
 	{

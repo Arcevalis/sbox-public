@@ -1,7 +1,7 @@
 @import "/styles/_front.scss";
 
 // Dress the engine StatusBar here; pages only supply their status widgets.
-.mainmenu .statusbar
+MenuShell .statusbar
 {
 	font-family: $front-font;
 	font-size: 11px;

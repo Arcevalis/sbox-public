@@ -4,7 +4,7 @@ namespace MenuProject;
 
 /// <summary>
 /// What the loading screen shows - the real <see cref="LoadingScreen"/>, or a made up load of a real
-/// game while <c>loading_mock</c> is running, so it can be looked at without actually loading
+/// game while <c>menu_mock_loading</c> is running, so it can be looked at without actually loading
 /// anything. The mock never touches the engine's loading state; only the overlay sees it.
 /// </summary>
 public static class LoadingView
@@ -18,11 +18,11 @@ public static class LoadingView
 	public static bool IsMocking => _mockPackage is not null;
 
 	/// <summary>
-	/// <c>loading_mock facepunch.sandbox</c> - put the loading screen up for that game, running
+	/// <c>menu_mock_loading facepunch.sandbox</c> - put the loading screen up for that game, running
 	/// through a pretend load (looking it up, downloading, loading, resources) over and over.
-	/// <c>loading_mock off</c>, or Cancel, puts it away.
+	/// <c>menu_mock_loading off</c>, or Cancel, puts it away.
 	/// </summary>
-	[MenuConCmd( "loading_mock", Help = "Show the loading screen for a game, running through a made up load: loading_mock <ident>, or loading_mock off" )]
+	[MenuConCmd( "menu_mock_loading", Help = "Show the loading screen for a game, running through a made up load: menu_mock_loading <ident>, or menu_mock_loading off" )]
 	public static async Task Mock( string ident )
 	{
 		if ( string.IsNullOrWhiteSpace( ident ) || ident == "off" )
@@ -35,7 +35,7 @@ public static class LoadingView
 		var package = await Package.FetchAsync( ident, false );
 		if ( package is null )
 		{
-			Log.Warning( $"loading_mock: couldn't find a package called {ident}" );
+			Log.Warning( $"menu_mock_loading: couldn't find a package called {ident}" );
 			return;
 		}
 

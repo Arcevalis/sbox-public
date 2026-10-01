@@ -60,7 +60,7 @@
 						@* Room for the party deck, which floats over this from the menu overlay (so it can stay
 						   above modals) and sets its height - see Footer.razor. Always here, just hidden when
 						   there's no party, so the deck's reference to it never goes stale. *@
-						<div class="party-slot @(PartyView.Exists ? "" : "hidden")" @ref="PartySlot"></div>
+						<div class="party-slot @(PartyView.Exists ? "" : "hidden")" @ref="_partySlot"></div>
 					</div>
 
 				</div>
@@ -125,9 +125,25 @@
 	}
 
 	/// <summary>
-	/// The space at the bottom of the rail the party deck lines itself up with.
+	/// The space at the bottom of the rail the party deck lines itself up with - the main menu's.
 	/// </summary>
 	public static Panel PartySlot { get; private set; }
+
+	/// <summary>
+	/// The same, in the pause menu's copy of this page - where the deck docks mid-game. Kept apart
+	/// from the main menu's, so neither takes the other's and leaves it gone when its menu closes.
+	/// </summary>
+	public static Panel PausePartySlot { get; private set; }
+
+	Panel _partySlot;
+
+	protected override void OnAfterTreeRender( bool firstTime )
+	{
+		if ( Ancestors.OfType<MenuProject.Modals.PauseMenuModal.PauseModal>().Any() )
+			PausePartySlot = _partySlot;
+		else
+			PartySlot = _partySlot;
+	}
 
 	Package.ListResult Result;
 

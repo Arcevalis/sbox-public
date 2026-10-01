@@ -68,7 +68,7 @@
 
 @code
 {
-	GameJamSystem Voting => GameJamSystem.Get( Scene );
+	GameJamSystem Voting => GameJamSystem.For( this );
 	Jam Jam => Voting?.ActiveJam;
 	bool IsLoading => Voting?.IsLoading == true;
 	Jam.Phase? PreviousPhase;

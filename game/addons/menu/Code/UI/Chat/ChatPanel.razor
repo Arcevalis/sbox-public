@@ -206,6 +206,10 @@
 
 	protected override int BuildHash()
 	{
-		return System.HashCode.Combine( ShowInput, InputPrefix, Entries.Count, (int)(Time.Now / 1f) );
+		// Rebuilt as each one's due to fade - by its own real time since it came in. Time.Now is the
+		// menu scene's clock, which stands still while a game's running, so a message that came in
+		// then (someone joining) never faded until something else rebuilt it
+		var faded = Entries.Count( x => x.TimeSinceAdded > MessageFadeTime );
+		return System.HashCode.Combine( ShowInput, InputPrefix, Entries.Count, faded );
 	}
 }

@@ -1,0 +1,241 @@
+@using Sandbox
+@using Sandbox.UI
+@using Sandbox.Modals
+@using MenuProject.Modals.PackageModalComponents
+@inherits Panel
+
+@*
+    Down the left of the game's page in the pause menu - everything you can do about the game you're
+    in, as a list like the rail's, in groups under little headings: its own buttons (its
+    [PauseAction] methods); the session - another map, streaming, who's here; and its info - its
+    achievements, news and changes, and reporting it (always something there, so the list's never
+    empty). Leaving it on the foot.
+    Getting back to it is the big bar across the top (GameBar); quitting s&box is the rail's.
+*@
+<root>
+
+    <div class="entries">
+        @* The game's own, in its order *@
+        @if ( Actions.Count > 0 )
+        {
+            <div class="group"><label>Actions</label></div>
+
+            @foreach ( var action in Actions )
+            {
+                <div class="entry @(action.IsEnabled ? "" : "disabled")" tooltip="@action.Tooltip" onclick=@( () => Press( action ) )>
+                    <i>@(action.Icon ?? "radio_button_unchecked")</i>
+                    <label>@action.Title</label>
+                </div>
+            }
+        }
+
+        @* This session of it - where you're playing, who with *@
+        @if ( HasSession )
+        {
+            <div class="group"><label>Session</label></div>
+
+            @if ( CanChangeMap )
+            {
+                <div class="entry" onclick=@ChangeMap>
+                    <i>map</i>
+                    <label>Change map</label>
+                </div>
+            }
+
+            @if ( IsStreamerGame )
+            {
+                <div class="entry @(Streamer.IsActive ? "on" : "")" onclick=@( () => Game.Overlay.ShowServiceConnector() )>
+                    <i>settings_input_antenna</i>
+                    <label>Stream</label>
+                </div>
+            }
+
+            @if ( GameInfoModal.ShowPlayers && ThisGame is { } playersGame )
+            {
+                <div class="entry" onclick=@( () => GameInfoModal.Open( playersGame, PackagePage.Players ) )>
+                    <i>group</i>
+                    <label>Players</label>
+                </div>
+            }
+        }
+
+        @* About the game itself - how far through it you are, what's new, and reporting it *@
+        @if ( ThisGame is { } game )
+        {
+            <div class="group"><label>Info</label></div>
+
+            @if ( HasAchievements )
+            {
+                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.Achievements ) )>
+                    <i>emoji_events</i>
+                    <label>Achievements</label>
+                </div>
+            }
+
+            @if ( game.LatestNewsPost is not null )
+            {
+                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.News ) )>
+                    <i>newspaper</i>
+                    <label>News</label>
+                </div>
+            }
+
+            @if ( game.LatestChangeLists.Length > 0 )
+            {
+                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.Changes ) )>
+                    <i>history</i>
+                    <label>Changes</label>
+                </div>
+            }
+
+            <div class="entry" onclick=@( () => Game.Overlay.ShowReportModal( game.FullIdent ) )>
+                <i>flag</i>
+                <label>Report</label>
+            </div>
+        }
+    </div>
+
+    <div class="grow"></div>
+
+    @* Out of the game, back to the menu - it asks first *@
+    <div class="entry leave" onclick=@Leave>
+        <i>logout</i>
+        <label>Leave game</label>
+    </div>
+
+</root>
+
+@code
+{
+    static Package ThisGame => PauseModal.CurrentGame;
+
+    PauseModal Modal => Ancestors.OfType<PauseModal>().FirstOrDefault();
+
+    static bool IsStreamerGame => ThisGame?.Info.IsStreamerGame ?? false;
+
+    static bool HasSession => CanChangeMap || IsStreamerGame || GameInfoModal.ShowPlayers;
+
+    static bool CanChangeMap => (!Networking.IsActive || Networking.IsHost) && (ThisGame?.Info.ShowsChangeMap ?? false);
+
+    void ChangeMap()
+    {
+        Game.Overlay.CreateGame( new CreateGameOptions( ThisGame, OnCreateGame ) );
+    }
+
+    void OnCreateGame( CreateGameResults x )
+    {
+        if ( Networking.IsActive && !Networking.IsHost )
+            return;
+
+        if ( !string.IsNullOrEmpty( x.Map ) )
+        {
+            LaunchArguments.Map = x.Map;
+        }
+
+        Game.Load( Game.Ident, true );
+
+        Modal?.CloseModal( true );
+    }
+
+    /// <summary>
+    /// Out of the game and back to the menu - it asks first, it's the game's unsaved progress.
+    /// </summary>
+    void Leave()
+    {
+        ModalSystem.Instance?.Open( new MenuProject.Modals.QuestionModal
+        {
+            Color = Color.Parse( "#ff5d6a" ) ?? Color.Red,
+            Title = "Leave Game?",
+            Message = "Any unsaved progress will be lost.",
+            ConfirmText = "Leave",
+            ConfirmIcon = "logout",
+            OnConfirm = () => Game.Close()
+        } );
+    }
+
+    //
+    // Whether it has achievements - a fetch, once for each game, for its entry
+    //
+
+    Package _achievementsFor;
+    bool HasAchievements;
+
+    async Task CheckAchievements( Package game )
+    {
+        HasAchievements = false;
+        if ( game is null ) return;
+
+        try
+        {
+            var achievements = await game.GetAchievements();
+
+            // Still the game it was asked for
+            if ( game == _achievementsFor )
+                HasAchievements = achievements?.All.Count > 0;
+        }
+        catch ( Exception e )
+        {
+            Log.Warning( $"Couldn't check {game.FullIdent}'s achievements: {e.Message}" );
+        }
+    }
+
+    //
+    // The game's own buttons - read off it every frame the list's up, so they follow the game
+    //
+
+    readonly List<MenuUtility.PauseAction> Actions = new();
+    int _actionsHash;
+
+    public override void Tick()
+    {
+        base.Tick();
+
+        if ( ThisGame != _achievementsFor )
+        {
+            _achievementsFor = ThisGame;
+            _ = CheckAchievements( ThisGame );
+        }
+
+        MenuUtility.GetPauseActions( Actions );
+
+        if ( _mockActions )
+            AddMockActions( Actions );
+
+        var hash = 0;
+        foreach ( var a in Actions )
+            hash = HashCode.Combine( hash, a.Title, a.Icon, a.Tooltip, a.IsEnabled );
+
+        _actionsHash = hash;
+    }
+
+    void Press( MenuUtility.PauseAction action )
+    {
+        if ( !action.IsEnabled ) return;
+
+        action.Press?.Invoke();
+
+        if ( action.DismissOnPress )
+            Modal?.Resume();
+    }
+
+    static bool _mockActions;
+
+    /// <summary>
+    /// <c>menu_mock_pause_actions</c> - a few made up game actions in the pause menu, to look at without a
+    /// game that has any. Again to take them off.
+    /// </summary>
+    [MenuConCmd( "menu_mock_pause_actions", Help = "Toggle a few made up game actions in the pause menu" )]
+    public static void MockActions()
+    {
+        _mockActions = !_mockActions;
+    }
+
+    static void AddMockActions( List<MenuUtility.PauseAction> actions )
+    {
+        actions.Add( new( "Vote map", "how_to_vote", "Pick the next map", true, true, () => Log.Info( "menu_mock_pause_actions: Vote map" ) ) );
+        actions.Add( new( "Scoreboard", "leaderboard", null, true, false, () => Log.Info( "menu_mock_pause_actions: Scoreboard" ) ) );
+        actions.Add( new( "Respawn", "restart_alt", "Can't respawn yet", false, true, () => Log.Info( "menu_mock_pause_actions: Respawn" ) ) );
+    }
+
+    protected override int BuildHash() => HashCode.Combine( ThisGame, CanChangeMap, Streamer.IsActive, _actionsHash, GameInfoModal.ShowPlayers, HasAchievements, ThisGame?.LatestNewsPost, ThisGame?.LatestChangeLists.Length );
+}

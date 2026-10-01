@@ -73,10 +73,6 @@
 
 			<div class="grow" />
 
-			<div class="icon-button voice @VoiceClass" tooltip="@VoiceTooltip">
-				<icon>@(Preferences.VoiceMode == VoiceMode.Disabled ? "mic_off" : "mic")</icon>
-			</div>
-
 			<div class="icon-button leave" onmouseup="@Leave" tooltip="Leave party">
 				<icon>logout</icon>
 			</div>
@@ -114,7 +110,7 @@
 {
 	public const int MAX_MEMBERS = 16;
 
-	// Everything goes through PartyView, so party_mock can fill the deck with made up data
+	// Everything goes through PartyView, so menu_mock_party can fill the deck with made up data
 	public IEnumerable<Friend> Members => PartyView.Members;
 
 	static Friend Me => PartyView.Me;
@@ -271,22 +267,13 @@
 
 	bool Talking => Preferences.VoiceMode == VoiceMode.OpenMicrophone || (Preferences.VoiceMode == VoiceMode.PushToTalk && Input.Down( "voice" ));
 
-	string VoiceClass => Preferences.VoiceMode == VoiceMode.Disabled ? "disabled" : Talking ? "talking" : "";
-
-	string VoiceTooltip => Preferences.VoiceMode switch
-	{
-		VoiceMode.Disabled => "Voice chat is turned off",
-		VoiceMode.OpenMicrophone => "Open mic - your party can hear you",
-		_ => "Hold push to talk to speak to your party"
-	};
-
 	protected override int BuildHash()
 	{
 		var members = new HashCode();
 		foreach ( var member in Members )
 			members.Add( StatusOf( member ) );
 
-		return System.HashCode.Combine( PartyView.Exists, MemberCount, PartyView.Owner, VoiceClass, Lifted, Status, members.ToHashCode(), HashCode.Combine( GameThumb, GameArt, PartyInvites.Hash ) );
+		return System.HashCode.Combine( PartyView.Exists, MemberCount, PartyView.Owner, Lifted, Status, members.ToHashCode(), HashCode.Combine( GameThumb, GameArt, PartyInvites.Hash ) );
 	}
 
 	/// <summary>

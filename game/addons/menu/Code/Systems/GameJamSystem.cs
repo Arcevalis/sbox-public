@@ -53,6 +53,12 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 		&& ActiveJam.Now < ActiveJam.NominationsEnd;
 
 	/// <summary>
+	/// The jam state for a panel to show - its own scene's, or with none (the pause menu's pages, up in
+	/// the menu overlay, aren't on one) the menu's.
+	/// </summary>
+	public static GameJamSystem For( Sandbox.UI.Panel panel ) => Get( panel?.Scene ) ?? Current;
+
+	/// <summary>
 	/// The nomination count for a package in the active jam. Null means nominations
 	/// are closed or unavailable; zero means the package has no nominations.
 	/// </summary>

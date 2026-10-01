@@ -76,8 +76,9 @@
 
 //
 // The front page's tile look, applied to the shared PackageCard. PackageCard lives in
-// the base addon and can't import these tokens, so the menu dresses it from here -
-// stylesheets are global, so this reaches every card the menu renders.
+// the base addon and can't import these tokens, so the menu dresses it from here. It only
+// reaches cards under a stylesheet that imports it - the menus (_menushell) and the pickers
+// (_picker) do; anywhere else in the overlay gets the bare card.
 //
 // The image-on-top variants get the full treatment. .list is a horizontal row and
 // keeps its own layout; only its colours are touched.

@@ -5,6 +5,7 @@
 @using SboxMenu;
 @using System;
 @using Sandbox.Network
+@using Sandbox.Modals
 @using MenuProject.Modals.GameModalComponents;
 @using MenuProject.Modals.PackageModalComponents;
 
@@ -16,72 +17,41 @@
             <PackageMetrics Package="@Package" ShowRatings="@false" ShowStats="@false"/>
         </Metrics>
         <Tabs>
+            @* Setting up a new game - a trail back to the game's page in the tabs' place *@
+            @if ( Setup is not null )
+            {
+                <div class="setup-trail">
+                    <div class="back" onclick=@CloseSetup>
+                        <i>arrow_back</i>
+                        <label>@Package?.Title</label>
+                    </div>
+                    <label class="sep">/</label>
+                    <label class="here">New game</label>
+                </div>
+            }
 
-            <PortalButton StartActive Portal=@Portal>
-                <Button>
-                    <SearchlightTab Title="Overview" Icon="people" />
-                </Button>
-                <Content>
-                    <Media Package=@Package></Media>
-
-                    @* Under the gallery, the newest update - not the long description *@
+            @* A game's tabs - the Overview's the gallery and the newest update under it. Kept while
+               setting up, just not shown, so the page is as it was left on the way back *@
+            <PackageTabs @ref=GameTabs Package=@Package Portal=@Portal>
+                <Overview>
+                    <Media Package=@Package Loaded=@HasFullPackage Failed=@FetchFailed></Media>
                     <PackageChanges Package=@Package Embedded=@true />
-                </Content>
-            </PortalButton>
-
-            <PortalButton @ref=ReviewsTab Portal=@Portal>
-                <Button>
-                    <SearchlightTab Title="Reviews" Icon="reviews" />
-                </Button>
-                <Content>
-                    <PackageReviews Package=@Package/>
-                </Content>
-            </PortalButton>
-
-            @if (Package.LatestChangeLists.Length > 0)
-            {
-                <PortalButton @ref=ChangesTab Portal=@Portal>
-                    <Button>
-                        <SearchlightTab Title="Changes" Icon="history" />
-                    </Button>
-                    <Content>
-                        <PackageChanges Package=@Package/>
-                    </Content>
-                </PortalButton>
-            }
-
-            @if (Package.LatestNewsPost is not null)
-            {
-                <PortalButton Portal=@Portal>
-                    <Button>
-                        <SearchlightTab Title="News" Icon="newspaper" />
-                    </Button>
-                    <Content>
-                        <PackageNews Package=@Package/>
-                    </Content>
-                </PortalButton>
-            }
-
-            @* Only for a game that has some - no empty tab *@
-            @if (HasAchievements)
-            {
-                <PortalButton Portal=@Portal>
-                    <Button>
-                        <SearchlightTab Title="Achievements" Icon="emoji_events" />
-                    </Button>
-                    <Content>
-					    <AchievementList Package=@Package />
-                    </Content>
-                </PortalButton>
-            }
-
+                </Overview>
+            </PackageTabs>
         </Tabs>
         <Left>
-            <PackageInfoPanel Portal=@Portal Package="@Package" OnChangelogClicked="@(() => ChangesTab?.ActivatePage())" OnReviewsClicked="@(() => ReviewsTab?.ActivatePage())" />
+            <PackageInfoPanel Portal=@Portal Package="@Package" OnChangelogClicked="@(() => GameTabs?.OpenChanges())" OnReviewsClicked="@(() => GameTabs?.OpenReviews())" />
 
         </Left>
 
-        <Content><PortalTarget @ref=Portal></PortalTarget></Content>
+        <Content>
+            <PortalTarget @ref=Portal></PortalTarget>
+
+            @if ( Setup is not null )
+            {
+                <GameSetupView Setup=@Setup />
+            }
+        </Content>
 
         <Footer>
             <ActionBar Modal="@this" Package="@Package"></ActionBar>
@@ -96,11 +66,70 @@
     public string PackageIdent { get; set; }
     public bool HasFullPackage { get; set; }
 
+    /// <summary>
+    /// The full package didn't come - the page is showing what was cached, which has no gallery.
+    /// </summary>
+    public bool FetchFailed { get; set; }
+
     public List<LobbyInformation> Lobbies = new();
 
     PortalTarget Portal = default;
-    PortalButton ChangesTab = default;
-    PortalButton ReviewsTab = default;
+    PackageTabs GameTabs = default;
+
+    /// <summary>
+    /// Setting up a new game of it, in the page's place - null when it's just showing the game.
+    /// </summary>
+    public GameSetup Setup { get; private set; }
+
+    /// <summary>
+    /// Set up a new game of it, rather than the page - where, who can join, its settings - then start
+    /// it from the footer. With <paramref name="onComplete"/> it's handed what was picked instead of
+    /// launching it.
+    /// </summary>
+    public void OpenSetup( Package package, Action<CreateGameResults> onComplete, string via = null, Panel source = null )
+    {
+        Setup = new GameSetup( package ?? Package, onComplete ) { Via = via, Source = source };
+        SetClass( "setting-up", true );
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Back to the game's page.
+    /// </summary>
+    public void CloseSetup()
+    {
+        Setup = null;
+        SetClass( "setting-up", false );
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Escape while setting up goes back to the page rather than closing it.
+    /// </summary>
+    public override bool Back()
+    {
+        if ( Setup is null ) return false;
+
+        CloseSetup();
+        return true;
+    }
+
+    /// <summary>
+    /// Start the game as it's set up - gone first, then whoever asked for it has what was picked.
+    /// </summary>
+    public void StartSetup()
+    {
+        if ( Setup is not { } setup ) return;
+
+        var results = setup.Finish();
+
+        // Set up and started - the play counts now, credited to the button and tile that got it here
+        if ( setup.Via is not null )
+            Discovery.Launching( setup.Package, setup.Via, setup.Source.IsValid() ? setup.Source : null );
+
+        CloseModal( true );
+        setup.OnComplete?.Invoke( results );
+    }
 
     async Task RefreshLobbies()
     {
@@ -123,38 +152,27 @@
 
         Discovery.PreviewOpened( "page", PackageIdent );
 
-        // Get whatever package info we have
-        Package.TryGetCached(PackageIdent, out Package, true);
+        // Get whatever package info we have - keeping the one it was opened with if there's none cached
+        if ( Package.TryGetCached( PackageIdent, out var cached, true ) ) Package = cached;
 
-        // Get Full Package info
-        Package = await Package.FetchAsync(PackageIdent, false);
-        HasFullPackage = true;
-
-        await RefreshLobbies();
-        await CheckAchievements();
-    }
-
-    /// <summary>
-    /// Whether it has any achievements at all - the tab's only there if it does.
-    /// </summary>
-    bool HasAchievements { get; set; }
-
-    async Task CheckAchievements()
-    {
-        if ( Package is null ) return;
-
+        // Get Full Package info - keeping what we had if it doesn't come, so the page still has
+        // something on it and can say what didn't load
+        Package full = null;
         try
         {
-            var achievements = await Package.GetAchievements();
-            HasAchievements = achievements?.All.Count > 0;
+            full = await Package.FetchAsync(PackageIdent, false);
         }
         catch ( Exception e )
         {
-            Log.Warning( $"Couldn't check {PackageIdent}'s achievements: {e.Message}" );
-            HasAchievements = false;
+            Log.Warning( $"Couldn't fetch {PackageIdent}: {e.Message}" );
         }
 
+        if ( full is not null ) Package = full;
+        HasFullPackage = full is not null;
+        FetchFailed = full is null;
         StateHasChanged();
+
+        await RefreshLobbies();
     }
 
     public override void OnDeleted()
@@ -163,5 +181,5 @@
         Discovery.PreviewClosed( "page", PackageIdent );
     }
 
-    protected override int BuildHash() => System.HashCode.Combine(Package, HasAchievements);
+    protected override int BuildHash() => System.HashCode.Combine(Package, HasFullPackage, FetchFailed, Setup);
 }

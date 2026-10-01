@@ -14,6 +14,19 @@ public static class MenuHelpers
 	public static bool HasAuthority => PartyRoom.Current?.Owner.IsMe ?? true;
 
 	/// <summary>
+	/// Go to one of the menu's pages, in whichever menu's showing - the pause menu's, mid-game with it
+	/// up, or the main menu's. For things that live over the pages rather than in them (popups, modals),
+	/// which have no navigator of their own to find.
+	/// </summary>
+	public static void Navigate( string url )
+	{
+		if ( MenuProject.Modals.PauseMenuModal.PauseModal.Open?.Navigate( url ) ?? false )
+			return;
+
+		MenuProject.MainMenu.Instance?.Navigator?.Navigate( url );
+	}
+
+	/// <summary>
 	/// True when a discovery query lists a jam's entries, e.g. "jam:three type:game".
 	/// </summary>
 	public static bool IsJamQuery( string query )
@@ -26,8 +39,14 @@ public static class MenuHelpers
 	/// <summary>
 	/// General-purpose method to play a game package. Handles quickplay, dedicated servers,
 	/// create-game modal, VR-only checks, default map fetching, and direct launch.
+	/// <para>
+	/// Reports the play to <see cref="Discovery"/> when it's given the button that was pressed
+	/// (<paramref name="via"/>, and the tile it was on, <paramref name="source"/>) - as it goes, or for a
+	/// game with something to set up first, once that's started (see GameModal.StartSetup). Not when
+	/// the button's pressed and the setup's only opened: backed out of, it was never played.
+	/// </para>
 	/// </summary>
-	public static async void PlayGame( Package package, Package mapPackage = null )
+	public static async void PlayGame( Package package, Package mapPackage = null, string via = null, Panel source = null )
 	{
 		Assert.True( HasAuthority, "You do not have authority to start a game, only the party owner can do that." );
 
@@ -38,6 +57,10 @@ public static class MenuHelpers
 		// QuickPlay: try to join an existing lobby first
 		if ( package.Info.IsQuickPlay )
 		{
+			// A lobby search is a go at playing it, whether it finds one or makes its own after
+			ReportPlay( package, via, source );
+			via = null;
+
 			await PrepareForLoad( "Finding Game..", "Please wait while we find a game for you to join." );
 
 			if ( await MenuUtility.TryJoinLobby( package.FullIdent ) )
@@ -53,10 +76,10 @@ public static class MenuHelpers
 			return;
 		}
 
-		// Show create game modal if the package requires it
-		if ( ShouldUseCreateGameModal( package ) )
+		// Something to set up first - on its game page, then started from there, the play reported then
+		if ( NeedsSetup( package ) )
 		{
-			Game.Overlay.CreateGame( new CreateGameOptions( package, async x =>
+			ModalSystem.Instance?.CreateGame( new CreateGameOptions( package, async x =>
 			{
 				if ( x.MaxPlayers > 0 ) LaunchArguments.MaxPlayers = x.MaxPlayers;
 
@@ -65,18 +88,20 @@ public static class MenuHelpers
 
 				LaunchArguments.Privacy = x.Privacy;
 
-				// The create game modal's the one closing now - let it go before the load holds things up
+				// The game page's closing now - let it go before the load holds things up
 				await PrepareForLoad();
 
 				if ( !string.IsNullOrEmpty( x.Map ) )
 					MenuUtility.OpenGameWithMap( package.FullIdent, x.Map, x.GameSettings );
 				else
 					MenuUtility.OpenGame( package.FullIdent, true, x.GameSettings );
-			} ) );
+			} ), via, source );
 			return;
 		}
 
 		// Direct launch
+		ReportPlay( package, via, source );
+
 		await PrepareForLoad();
 
 		if ( mapPackage is null )
@@ -98,6 +123,12 @@ public static class MenuHelpers
 		{
 			MenuUtility.OpenGame( package.FullIdent, true );
 		}
+	}
+
+	static void ReportPlay( Package package, string via, Panel source )
+	{
+		if ( via is not null )
+			Discovery.Launching( package, via, source );
 	}
 
 	/// <summary>
@@ -122,7 +153,7 @@ public static class MenuHelpers
 		await Task.Delay( LoadWarmUpMilliseconds );
 	}
 
-	static bool ShouldUseCreateGameModal( Package package )
+	static bool NeedsSetup( Package package )
 	{
 		if ( package.Info.UsesCreateGameModal )
 			return true;

@@ -1,0 +1,41 @@
+@using Sandbox
+@using Sandbox.UI
+@inherits Panel
+
+@*
+    The game you're in, in the pause menu - its list down the left (GameMenu), everything you can do
+    about it, and its Overview (PauseOverview) beside it, under the big Resume bar across the top
+    (GameBar). Its other pages - changes, news, who's here, achievements - open over it (GameInfoModal).
+    Not a route anyone else can reach - the pause menu's navigator is told about it (see PauseModal).
+*@
+<root>
+
+    @* Everything you can do about it down the left, its Overview beside that *@
+    <GameMenu />
+
+    @if ( ThisGame is { } game )
+    {
+        <PauseOverview Package=@game />
+    }
+    else
+    {
+        <div class="notice">
+            <i>construction</i>
+            <label class="notice-title">@Game.Ident</label>
+            <label class="notice-text">An unpublished game - there's nothing about it to show yet.</label>
+        </div>
+    }
+
+</root>
+
+@code
+{
+    public const string Url = "/pause";
+
+    /// <summary>
+    /// The pause menu's copy - the full package once it's in, the one the game started with until then.
+    /// </summary>
+    static Package ThisGame => PauseModal.CurrentGame;
+
+    protected override int BuildHash() => HashCode.Combine( ThisGame );
+}

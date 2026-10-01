@@ -14,7 +14,7 @@ namespace MenuProject.MenuUI.Jams;
 /// </summary>
 public abstract class JamFinalistPhasePanel : JamPhasePanel
 {
-	protected GameJamSystem Voting => GameJamSystem.Get( Scene );
+	protected GameJamSystem Voting => GameJamSystem.For( this );
 	protected JamFinalistCategory[] Categories => Voting?.Finalists;
 	protected JamFinalistCategory Category => Categories?.FirstOrDefault( x => x.Id == CategoryId ) ?? Categories?.FirstOrDefault();
 	protected int CategoryId;

@@ -115,7 +115,7 @@
 	RealTimeSince? hoverStartedAt;
 	bool hoverReported;
 
-	bool WantsVideo() => AlwaysPlayVideo || HasHovered || (VideoThumbs && (Rotation is null || Rotation.IsPlaying( this )));
+	bool WantsVideo() => Videos && (AlwaysPlayVideo || HasHovered || (VideoThumbs && (Rotation is null || Rotation.IsPlaying( this ))));
 	bool ShowVideo() => showVideo;
 
 	public override void Tick()
@@ -175,7 +175,7 @@
 		}
 
 		if ( HoverPreview && Size != SizeType.List )
-			PackageHoverCard.Show( this, Package, PlayingVideoUrl );
+			PackageHoverCard.Show( this, Package, PlayingVideoUrl, Videos );
 	}
 
 	/// <summary>The video url this card is showing right now, or null.</summary>
@@ -235,6 +235,12 @@
     /// Keeps this card's video playing independently of shared shelf rotation and hover.
     /// </summary>
     [Parameter] public bool AlwaysPlayVideo { get; set; }
+
+    /// <summary>
+    /// Its video at all - off, it's only ever the art, hovered or not. For somewhere a clip playing
+    /// is in the way, like the pause menu over a game that's still going.
+    /// </summary>
+    [Parameter] public bool Videos { get; set; } = true;
 
     [Parameter] public VideoQuality Quality { get; set; } = VideoQuality.Auto;
 

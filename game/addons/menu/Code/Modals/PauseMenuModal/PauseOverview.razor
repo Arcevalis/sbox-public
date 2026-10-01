@@ -1,0 +1,294 @@
+@using Sandbox
+@using Sandbox.UI
+@using SboxMenu
+@using System
+@using MenuProject.Modals.PackageModalComponents
+@inherits Panel
+
+@*
+    The pause menu's Overview, straight on the dimmed game - no cards - all down at the bottom. On the
+    left the game's name, big, what it is in a line, how it's reviewed and the pills to like it. On
+    the right what's new - its latest news post (the way the loading screen puts it) with its latest
+    changelog under it, or with no news its latest changelog on its own - and how far through its
+    achievements you are under that; lifted clear of the party deck when there is one. Each of those
+    opens the whole of it over the pause menu (GameInfoModal).
+*@
+<root>
+
+    <div class="spacer"></div>
+
+    <div class="bottom">
+        <div class="left">
+            <div class="hero">
+                <label class="name">@Package.Title</label>
+
+                @* How it's reviewed, in a line - the words for it and its score, the split of the three
+                   ratings a review can give (the review window's colours), how many. Opens the review window too *@
+                <div class="reviews" onclick=@( () => Game.Overlay.ShowReviewModal( Package ) )>
+                    <div class="verdict @PackageInfoPanel.RatingClass( Package )">
+                        <label>@PackageInfoPanel.RatingText( Package )</label>
+                        @if ( Package.Reviews.Total > 0 )
+                        {
+                            <label class="score">@Package.Reviews.Score.ToString( "0\\%" )</label>
+                        }
+                    </div>
+
+                    @if ( Package.Reviews.Total > 0 )
+                    {
+                        <div class="split">
+                            @* Only the ones anyone gave - an empty one would still leave its gap *@
+                            @if ( Package.Reviews.PositiveRatings > 0 )
+                            {
+                                <div class="part good" style="flex-grow: @Package.Reviews.PositiveRatings;"></div>
+                            }
+                            @if ( Package.Reviews.PromiseRatings > 0 )
+                            {
+                                <div class="part meh" style="flex-grow: @Package.Reviews.PromiseRatings;"></div>
+                            }
+                            @if ( Package.Reviews.NegativeRatings > 0 )
+                            {
+                                <div class="part bad" style="flex-grow: @Package.Reviews.NegativeRatings;"></div>
+                            }
+                        </div>
+                    }
+
+                    <label class="counts">@ReviewCounts()</label>
+                </div>
+
+                @if ( !string.IsNullOrWhiteSpace( Package.Summary ) )
+                {
+                    <label class="summary">@Package.Summary</label>
+                }
+
+                <PackageReactions Package=@Package ShowReviewScore=@false />
+            </div>
+        </div>
+
+        <div class="grow"></div>
+
+        @* Down the right, in a card like the party deck's - what's new, and how far through its
+           achievements you are under it. Over the party deck when it's there, at its width, so the two
+           stack as one column *@
+        <div class="extras" @ref="Extras">
+            @* What's new, up top under the bar - the loading screen's headline, its look and all *@
+            @if ( Package.LatestNewsPost is { } news )
+            {
+                @* The post - and its latest changelog under it, if it has one *@
+                <div class="latest" onclick=@OpenNews>
+                    @* Its picture, behind, down the right - fading out towards the words *@
+                    <div class="art" style="background-image: url( @ArtOf( news ) );"></div>
+
+                    <div class="latest-text">
+                        <div class="headline">
+                            <div class="news-eyebrow">
+                                <div class="eyebrow"><icon>campaign</icon><label>Latest news</label></div>
+                                <div class="ago"><icon>schedule</icon><label>@MenuHelpers.TimeAgo( news.Created )</label></div>
+                            </div>
+                            <label class="news-title">@news.Title</label>
+                            @if ( !string.IsNullOrWhiteSpace( news.Summary ) )
+                            {
+                                <label class="news-summary">@news.Summary</label>
+                            }
+                        </div>
+
+                        @if ( LatestUpdate is { } update )
+                        {
+                            @* Its own way in - to the changes, not the news the card opens *@
+                            <div class="changelog" onclick=@( ( e ) => { e.StopPropagation(); OpenChanges(); } )>
+                                <i>history</i>
+                                <label class="changelog-title">@UpdateTitle( update )</label>
+                                <i class="go">chevron_right</i>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else if ( LatestUpdate is { } update )
+            {
+                @* No news - the changelog is the news *@
+                <div class="latest" onclick=@OpenChanges>
+                    @* The game's own art, behind, down the right - an update has no picture of its own *@
+                    <div class="art" style="background-image: url( @GameArt );"></div>
+
+                    <div class="latest-text">
+                        <div class="headline">
+                            <div class="news-eyebrow">
+                                <div class="eyebrow"><icon>campaign</icon><label>Latest update</label></div>
+                                <div class="ago"><icon>schedule</icon><label>@MenuHelpers.TimeAgo( update.Created )</label></div>
+                            </div>
+                            <label class="news-title">@UpdateTitle( update )</label>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @* Under what's new, when it has any - how far through them you are *@
+            @if ( Achievements is { Count: > 0 } all )
+            {
+                <div class="achievements" onclick=@( () => GameInfoModal.Open( Package, PackagePage.Achievements ) )>
+                    @* Headed like the news up top, how many you've got out of how many on the end *@
+                    <div class="head">
+                        <div class="eyebrow"><icon>emoji_events</icon><label>Achievements</label></div>
+                        <div class="grow"></div>
+                        <label class="count">@Unlocked of @all.Count</label>
+                    </div>
+
+                    @* Unlocked first, as many as fit - the last spot says how many more *@
+                    <div class="icons">
+                        @foreach ( var a in ShownAchievements )
+                        {
+                            <div class="icon @(a.IsUnlocked ? "unlocked" : "")" style="background-image: url( @IconOf( a ) );"></div>
+                        }
+
+                        @if ( all.Count > ShownIcons )
+                        {
+                            <div class="icon more"><label>+@(all.Count - ShownIcons)</label></div>
+                        }
+                    </div>
+
+                    <div class="track"><div class="fill" style="width: @Percent( Unlocked, all.Count )%;"></div></div>
+                </div>
+            }
+        </div>
+
+    </div>
+
+</root>
+
+@code
+{
+    [Parameter] public Package Package { get; set; }
+
+    Panel Extras;
+    float _extrasLift = -1;
+
+    /// <summary>
+    /// The right column sits on the page's bottom line - or, with the party deck up in that corner,
+    /// just over the top of it, following it as the party grows or the deck lifts.
+    /// </summary>
+    public override void Tick()
+    {
+        base.Tick();
+
+        if ( !Extras.IsValid() ) return;
+
+        var lift = 0f;
+
+        if ( Sandbox.UI.Footer.Current is not null && Sandbox.UI.Footer.Anchor is { } deck && deck.IsValid() )
+        {
+            // From the column's resting foot (its box's, less what it's lifted by now) up to a gap over the deck
+            var restingBottom = Extras.Box.Rect.Bottom + (_extrasLift > 0 ? _extrasLift * Extras.ScaleToScreen : 0);
+            var over = restingBottom - deck.Box.Rect.Top;
+            if ( over > 0 ) lift = over * Extras.ScaleFromScreen + DeckGap;
+        }
+
+        // The deck's width, so their edges line up - its own otherwise
+        float? width = Sandbox.UI.Footer.Current is not null && Sandbox.UI.Footer.Anchor is { } of && of.IsValid() && of.Box.Rect.Width > 0
+            ? of.Box.Rect.Width * Extras.ScaleFromScreen
+            : null;
+
+        if ( width != _extrasWidth )
+        {
+            _extrasWidth = width;
+            Extras.Style.Width = width;
+        }
+
+        if ( MathF.Abs( lift - _extrasLift ) < 0.5f ) return;
+
+        _extrasLift = lift;
+        Extras.Style.MarginBottom = lift;
+    }
+
+    float? _extrasWidth;
+
+    /// <summary>
+    /// Clear air between the column and the party deck under it.
+    /// </summary>
+    const float DeckGap = 16;
+
+    /// <summary>
+    /// How many there are - the split's in the bar above - or that there aren't any yet.
+    /// </summary>
+    string ReviewCounts()
+    {
+        var total = Package.Reviews.Total;
+        if ( total == 0 ) return "Be the first to review it";
+
+        return $"{total:N0} review{(total == 1 ? "" : "s")}";
+    }
+
+    Package.ChangeListSummary? LatestUpdate => Package.LatestChangeLists.Length > 0
+        ? Package.LatestChangeLists.MaxBy( x => x.Created )
+        : null;
+
+    /// <summary>
+    /// The post's own picture - or the game's art for one without, or with a video there's no still of.
+    /// </summary>
+    string ArtOf( Sandbox.Services.News news )
+    {
+        if ( !string.IsNullOrEmpty( news.Media ) && !news.Media.EndsWith( ".mp4" ) )
+            return news.Media;
+
+        return GameArt;
+    }
+
+    string GameArt => !string.IsNullOrEmpty( Package?.ThumbWide ) ? Package.ThumbWide : Package?.Thumb;
+
+    void OpenNews() => GameInfoModal.Open( Package, PackagePage.News );
+    void OpenChanges() => GameInfoModal.Open( Package, PackagePage.Changes );
+
+    // Its title, falling back to its version, then the day it came out
+    static string UpdateTitle( Package.ChangeListSummary update )
+    {
+        if ( !string.IsNullOrWhiteSpace( update.Title ) ) return update.Title;
+        if ( !string.IsNullOrWhiteSpace( update.Version ) ) return update.Version;
+        return update.Created.LocalDateTime.ToString( "d MMMM yyyy" );
+    }
+
+    /// <summary>
+    /// A row's worth across the column - past that, a "+N".
+    /// </summary>
+    const int ShownIcons = 5;
+
+    List<Achievement> Achievements;
+
+    int Unlocked => Achievements?.Count( x => x.IsUnlocked ) ?? 0;
+
+    /// <summary>
+    /// The ones still to get first - what you're working towards - the nearest to done first; then the
+    /// ones you've got, the latest of them first. As many as fit in the row.
+    /// </summary>
+    IEnumerable<Achievement> ShownAchievements => Achievements
+        .OrderBy( x => x.IsUnlocked )
+        .ThenByDescending( x => x.IsUnlocked ? x.UnlockTimestamp ?? default : default )
+        .ThenByDescending( x => x.IsUnlocked ? 0f : x.ProgressionFraction )
+        .ThenBy( x => x.Title, StringComparer.Ordinal )
+        .Take( Achievements.Count > ShownIcons ? ShownIcons : Achievements.Count );
+
+    static string IconOf( Achievement a ) => string.IsNullOrEmpty( a.Icon )
+        ? "https://files.facepunch.com/garry/ae277f80-8a5d-4d54-833e-e7d6f11580fc.png"
+        : a.Icon;
+
+    static string Percent( int part, int whole ) => (whole > 0 ? part * 100f / whole : 0f).ToString( "0.0", System.Globalization.CultureInfo.InvariantCulture );
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Achievements = null;
+        if ( Package is null ) return;
+
+        try
+        {
+            // The hidden ones stay hidden until they're had
+            var collection = await Package.GetAchievements();
+            Achievements = collection?.All.Where( x => x.IsVisible || x.IsUnlocked ).ToList();
+        }
+        catch ( Exception e )
+        {
+            Log.Warning( $"Couldn't fetch {Package.FullIdent}'s achievements: {e.Message}" );
+        }
+
+        StateHasChanged();
+    }
+
+    protected override int BuildHash() => HashCode.Combine( Package, Package?.LatestNewsPost, Achievements?.Count, Unlocked );
+}

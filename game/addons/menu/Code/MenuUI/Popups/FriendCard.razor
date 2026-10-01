@@ -507,9 +507,12 @@
 		StateHasChanged();
 	}
 
+	/// <summary>
+	/// Their Steam profile - this card's their s&box one.
+	/// </summary>
 	void ViewProfile()
 	{
-		Game.Overlay.ShowPlayer( Friend.Id );
+		Friend.OpenInOverlay();
 		Delete();
 	}
 

@@ -2,148 +2,24 @@
 @using Sandbox
 @using Sandbox.UI
 @using MenuProject.Social
+@using MenuProject.MenuUI.Front
 
 @namespace MenuProject.Modals
 @inherits MenuProject.Modals.BaseModal
 
+@*
+    The friends list as a popup - the home page's own list (FriendsRail), the same search, groups, party
+    cards and rows, in a card of its own. Off the party deck it sits over it at the deck's width, so the
+    two line up as one column.
+*@
 <root class="friendslist-modal @(IsAnchored ? "anchored" : "")">
 	<div class="inner" @ref="Inner">
-
-        <div class="header">
-            <i>people</i>
-            <h2>Friends</h2>
-            <div class="grow" />
-            <div class="count" tooltip="Friends online">
-                <icon>person</icon>
-                <label>@OnlineCount</label>
-            </div>
-        </div>
-
-		<div class="friends-list">
-            @if ( InGameFriends.Any() )
-            {
-                <div class="group-label">
-                    <span class="text">In Game</span>
-                    <span class="count">@InGameFriends.Count()</span>
-                    <separator class="horizontal" />
-                </div>
-
-                @foreach ( var group in GroupForDisplay( InGameFriends ) )
-                {
-                    if ( group.IsParty )
-                    {
-                        <div class="party-cluster">
-                            @foreach ( var friend in group.Members )
-                            {
-                                <FriendEntry Friend=@friend></FriendEntry>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <FriendEntry Friend=@group.Members[0]></FriendEntry>
-                    }
-                }
-            }
-
-            @if ( OnlineFriends.Any() )
-            {
-                <div class="group-label">
-                    <span class="text">Online</span>
-                    <span class="count">@OnlineFriends.Count()</span>
-                    <separator class="horizontal" />
-                </div>
-
-                @foreach ( var friend in OnlineFriends.OrderBy( x => x.Name ) )
-                {
-                    <FriendEntry Friend=@friend></FriendEntry>
-                }
-            }
-
-            @if ( OfflineFriends.Any() )
-            {
-                <div class="group-label">
-                    <span class="text">Offline</span>
-                    <span class="count">@OfflineFriends.Count()</span>
-                    <separator class="horizontal" />
-                </div>
-
-                @foreach ( var friend in OfflineFriends )
-                {
-                    <FriendEntry Friend=@friend></FriendEntry>
-                }
-            }
-
-            @if( !AllFriends.Any() )
-            {
-                <EmptyState Icon="group_off" Title="No one around" Subtitle="None of your friends are online right now." />
-            }
-
-		</div>
+		<FriendsRail />
 	</div>
 </root>
 
 @code
 {
-    public IEnumerable<Friend> AllFriends => MenuUtility.Friends.Where( ShouldShow );
-
-    int OnlineCount => MenuUtility.Friends.Count( x => !x.IsMe && x.IsOnline );
-
-    public IEnumerable<Friend> InGameFriends => AllFriends.Where( x => x.IsPlayingThisGame );
-    public IEnumerable<Friend> OnlineFriends => AllFriends.Where( x => !x.IsPlayingThisGame && x.IsOnline );
-
-    public IEnumerable<Friend> OfflineFriends => AllFriends.Where( x => !x.IsOnline )
-        .OrderBy( x => x.Name );
-
-    private static bool IsJoinable( Friend friend ) => !string.IsNullOrEmpty( friend.GetRichPresence( "connect" ) );
-
-    /// <summary>
-    /// The Steam lobby id of whatever party this friend is currently in, or null if they're not in one.
-    /// Friends sharing the same (non-null) value are in a party together.
-    /// </summary>
-    private static string PartyKey( Friend friend )
-    {
-        var id = friend.GetRichPresence( "party_id" );
-        return string.IsNullOrEmpty( id ) ? null : id;
-    }
-
-    /// <summary>
-    /// A cluster of friends to render together - either a single friend on their own, or
-    /// several friends who share a party (see <see cref="PartyKey"/>).
-    /// </summary>
-    private record FriendGroup( string PartyId, IReadOnlyList<Friend> Members )
-    {
-        public bool IsParty => PartyId is not null && Members.Count > 1;
-    }
-
-    /// <summary>
-    /// Groups friends who are in the same party together, with joinable friends/parties bubbled
-    /// to the top. Friends with no party (or the only one of our friends in a given party) each
-    /// get their own singleton group - only real, shared parties get clustered together.
-    /// </summary>
-    private IEnumerable<FriendGroup> GroupForDisplay( IEnumerable<Friend> friends )
-    {
-        var groups = new List<FriendGroup>();
-
-        foreach ( var g in friends.GroupBy( PartyKey ) )
-        {
-            if ( g.Key is not null && g.Count() > 1 )
-            {
-                groups.Add( new FriendGroup( g.Key, g.OrderByDescending( IsJoinable ).ThenBy( x => x.Name ).ToList() ) );
-            }
-            else
-            {
-                foreach ( var friend in g )
-                    groups.Add( new FriendGroup( null, new[] { friend } ) );
-            }
-        }
-
-        return groups
-            .OrderByDescending( g => g.IsParty )
-            .ThenByDescending( g => g.Members.Any( IsJoinable ) )
-            .ThenBy( g => g.Members[0].Name );
-    }
-
     FriendsListModalOptions Options;
     Panel Inner;
 
@@ -167,22 +43,6 @@
     }
 
     bool IsAnchored => Options.Anchor.HasValue && Options.Anchor.Value.Panel.IsValid();
-
-    private bool ShouldShow(Friend friend)
-    {
-        if (friend.IsMe) return false;
-
-        if (friend.IsOnline && friend.IsPlayingThisGame)
-            return true;
-
-        if (Options.ShowOnlineMembers && friend.IsOnline)
-            return true;
-
-        if (Options.ShowOfflineMembers && !friend.IsOnline)
-            return true;
-
-        return false;
-    }
 
     /// <summary>
     /// Anchors <see cref="Inner"/> next to <paramref name="source"/>, on the side given by
@@ -221,13 +81,11 @@
                 break;
         }
 
+        // As wide as what it's off - the party deck's card, so the two line up as one column
+        if ( rect.Width > 0 )
+            Inner.Style.Width = rect.Width;
+
         Inner.Style.Position = PositionMode.Absolute;
         Inner.Style.Dirty();
-    }
-
-    [Event("friend.change")]
-    public void SteamFriends_OnPersonaStateChange(Friend friend)
-    {
-        StateHasChanged();
     }
 }

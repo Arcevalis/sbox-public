@@ -128,7 +128,7 @@
 	record StandingRow( int Rank, string PackageIdent, int? Votes = null, bool Nominated = false,
 		bool Pending = false, bool Confirmed = false, string Prize = null );
 
-	GameJamSystem Voting => GameJamSystem.Get( Scene );
+	GameJamSystem Voting => GameJamSystem.For( this );
 	JamNominationSummary Nominations => Voting?.ActiveJam?.Ident == Jam?.Ident ? Voting?.Nominations : null;
 	JamNominationCategory Category => Nominations?.Categories.FirstOrDefault();
 	StandingRow[] Rows = [];

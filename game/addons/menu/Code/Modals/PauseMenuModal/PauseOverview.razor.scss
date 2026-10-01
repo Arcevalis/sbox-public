@@ -1,0 +1,454 @@
+@import "/styles/_theme.scss";
+@import "/styles/_front.scss";
+
+// Straight on the dimmed game, no cards - one block down at the bottom of the page, the game showing
+// above it. A step in from the bar's edges, as there's no card to line up with them
+PauseOverview
+{
+	flex-direction: column;
+	flex-grow: 1;
+	gap: 40px;
+	font-family: $front-font;
+
+	// A step in from the bar's edges, as there's no card to line up with them. What it sits on reads
+	// over the game thanks to the pause menu's own shade, across the whole screen (PauseModal)
+	padding: 0 16px 8px 16px;
+
+	// Everything pushed down to the bottom, the game showing above it
+	> .spacer
+	{
+		flex-grow: 1;
+	}
+
+	// What's new and the achievements down the right, each in a card of its own like the party deck's,
+	// stacked over it with its gap. Lifted clear of the deck from code when it's there (a margin along
+	// its foot) and set to its width, following the deck frame by frame - no transition of its own,
+	// one restarts on every change
+	.extras
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		align-items: stretch;
+		width: 380px;
+		gap: 16px;
+
+		// Each card opens the whole of it - lifting a touch under the pointer to say so: its outline
+		// brighter, its slab a shade lighter, its shadow deeper
+		> .latest, > .achievements
+		{
+			@include front-card;
+
+			position: relative;
+			padding: 16px;
+			box-shadow: 0 16px 40px rgba( 0, 0, 0, 0.55 );
+			cursor: pointer;
+			pointer-events: all;
+			transition: border-color 0.12s ease, background-image 0.12s ease, box-shadow 0.12s ease;
+
+			&:hover
+			{
+				sound-in: "ui.button.over";
+				border-color: rgba( 255, 255, 255, 0.2 );
+				background-image: linear-gradient( 180deg, rgba( 40, 44, 56, 0.97 ), rgba( 30, 34, 43, 0.98 ) );
+				box-shadow: 0 18px 44px rgba( 0, 0, 0, 0.65 );
+
+				.news-title
+				{
+					color: #ffffff;
+				}
+			}
+
+			&:active
+			{
+				sound-in: "ui.button.press";
+			}
+		}
+
+		// The post's picture behind the card's right third or so, fading out towards the words on the
+		// left - white shows, black hides. The card clips it to its corners
+		> .latest > .art
+		{
+			position: absolute;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: 35%;
+			background-size: cover;
+			background-position: center;
+			mask-image: linear-gradient( 90deg, black 0%, white 100% );
+			pointer-events: none;
+		}
+
+		// The news, a size down to sit in its card
+		.headline .news-title
+		{
+			font-size: 18px;
+		}
+
+		// Its label a little clear of the title - the headline's snug pull-up's for the big title
+		.headline .news-eyebrow
+		{
+			margin-bottom: -3px;
+		}
+
+		// The changelog close under the title, a size smaller again
+		.changelog
+		{
+			margin-top: -4px;
+
+			.changelog-title
+			{
+				font-size: 11px;
+			}
+		}
+
+		// Its heading, its faces and its bar evenly apart
+		> .achievements
+		{
+			gap: 10px;
+
+			.head
+			{
+				margin-bottom: 0;
+			}
+		}
+	}
+
+	// The game down the left
+	> .bottom
+	{
+		flex-direction: row;
+		align-items: flex-end;
+		gap: 48px;
+
+		// A little up off the foot of the page
+		margin-bottom: 16px;
+	}
+
+	.left
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-width: 0;
+	}
+
+	.grow
+	{
+		flex-grow: 1;
+	}
+
+
+	.section-label
+	{
+		@include front-section-label;
+	}
+
+	//
+	// The game
+	//
+
+	.hero
+	{
+		flex-direction: column;
+		gap: 6px;
+
+		// Its big type carries room of its own under the letters - taken back, so the line under it
+		// sits snug on it
+		.name
+		{
+			font-size: 40px;
+			font-weight: 700;
+			color: $front-heading;
+			margin-bottom: -6px;
+		}
+
+		.summary
+		{
+			font-size: 15px;
+			color: $front-body;
+			white-space: normal;
+		}
+
+		PackageReactions
+		{
+			margin-top: 10px;
+			pointer-events: all;
+		}
+	}
+
+	//
+	// How far through its achievements you are
+	//
+
+	// Each opens the whole of it
+	.reviews, .achievements
+	{
+		cursor: pointer;
+		pointer-events: all;
+		transition: opacity 0.1s ease;
+
+		&:hover
+		{
+			sound-in: "ui.button.over";
+		}
+
+		&:active
+		{
+			sound-in: "ui.button.press";
+		}
+	}
+
+	//
+	// How it's reviewed, in a line under the name - the words and score, the split of recommend /
+	// promising / needs work, and how many
+	//
+
+	.reviews
+	{
+		flex-direction: row;
+		align-self: flex-start;
+		align-items: center;
+		gap: 12px;
+	}
+
+	// The words for it, and its score beside them a shade quieter - both in its colour
+	.verdict
+	{
+		flex-direction: row;
+		align-items: center;
+		gap: 6px;
+
+		label
+		{
+			font-size: 14px;
+			font-weight: 700;
+			color: $front-body;
+		}
+
+		.score
+		{
+			opacity: 0.7;
+		}
+
+		&.positive label { color: $front-reward; }
+		&.mixed label { color: $front-trophy; }
+		&.negative label { color: $front-danger; }
+	}
+
+	// The three, side by side at their share - the review window's green, amber and red
+	.split
+	{
+		flex-direction: row;
+		width: 96px;
+		height: 4px;
+		gap: 2px;
+		border-radius: 999px;
+		background-color: $front-track;
+		overflow: hidden;
+
+		.part
+		{
+			flex-basis: 0;
+			height: 100%;
+		}
+
+		.good { background-color: $front-reward; }
+		.meh { background-color: $front-trophy; }
+		.bad { background-color: $front-danger; }
+	}
+
+	.counts
+	{
+		font-size: 12.5px;
+		color: $front-secondary;
+	}
+
+	.achievements
+	{
+		flex-direction: column;
+		gap: 12px;
+
+		.head
+		{
+			flex-direction: row;
+			align-items: center;
+		}
+
+		.eyebrow
+		{
+			@include front-eyebrow;
+		}
+
+		.count
+		{
+			font-size: 13px;
+			font-weight: 600;
+			color: $front-body;
+			transition: color 0.1s ease;
+		}
+
+		&:hover .count
+		{
+			color: #ffffff;
+		}
+
+		// Across the card's width - the tiles share it out between them
+		.icons
+		{
+			flex-direction: row;
+			gap: 6px;
+		}
+
+		// An even share of the row each, square - so however wide the card, they fill it. Unlocked ones
+		// outlined in the trophy gold, the rest greyed right back
+		.icon
+		{
+			flex-grow: 1;
+			flex-shrink: 1;
+			flex-basis: 0;
+			min-width: 0;
+			// So a game with only a few doesn't blow them up huge
+			max-width: 64px;
+			aspect-ratio: 1;
+			align-items: center;
+			justify-content: center;
+			border-radius: 6px;
+			border: 1px solid $front-border;
+			background-color: rgba( 255, 255, 255, 0.04 );
+			background-size: cover;
+			background-position: center;
+			opacity: 0.35;
+
+			&.unlocked
+			{
+				border-color: rgba( $front-trophy, 0.7 );
+				opacity: 1;
+			}
+
+			&.more
+			{
+				opacity: 1;
+
+				label
+				{
+					font-size: 12px;
+					font-weight: 600;
+					color: $front-body;
+				}
+			}
+		}
+
+		.track
+		{
+			height: 3px;
+			border-radius: 999px;
+			background-color: $front-track;
+			overflow: hidden;
+		}
+
+		.fill
+		{
+			height: 100%;
+			border-radius: 999px;
+			background-color: $front-trophy;
+		}
+	}
+
+	//
+	// What's new, up top under the bar - its latest post (or with no news, its latest update) in the
+	// loading screen's headline (front-headline), the post's picture beside it, and its latest
+	// changelog under it
+	//
+
+	// Its lines from the left
+	.latest
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-width: 0;
+		align-items: stretch;
+	}
+
+	.latest-text
+	{
+		flex-direction: column;
+		flex-shrink: 1;
+		min-width: 0;
+		gap: 8px;
+	}
+
+	.headline
+	{
+		@include front-headline;
+
+		&:hover .news-title
+		{
+			color: #ffffff;
+		}
+	}
+
+	// Its latest changelog under the post - a line like the post's own label over its title: a glyph,
+	// the label, which update, and it opens its changes. No pill round it - it's the post's, not a
+	// button of its own
+	.changelog
+	{
+		flex-direction: row;
+		align-self: flex-start;
+		align-items: center;
+		gap: 6px;
+		// No wider than what it's in - its title gives way, with an ellipsis
+		max-width: 100%;
+
+		// Up into the room the big title above carries under its letters, so it sits under it the
+		// way the label sits over it
+		margin-top: -12px;
+		cursor: pointer;
+		pointer-events: all;
+
+		i
+		{
+			font-size: 14px;
+			color: $front-secondary;
+			transition: color 0.1s ease;
+		}
+
+		// One line, cut off with an ellipsis rather than wrapping
+		.changelog-title
+		{
+			flex-shrink: 1;
+			min-width: 0;
+			font-size: 13px;
+			font-weight: 600;
+			color: $front-body;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			transition: color 0.1s ease;
+		}
+
+		i
+		{
+			flex-shrink: 0;
+		}
+
+		.go
+		{
+			font-size: 16px;
+		}
+
+		&:hover
+		{
+			sound-in: "ui.button.over";
+
+			i, .changelog-title
+			{
+				color: #ffffff;
+			}
+		}
+
+		&:active
+		{
+			sound-in: "ui.button.press";
+		}
+	}
+}

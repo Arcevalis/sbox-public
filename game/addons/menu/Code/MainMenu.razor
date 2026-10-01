@@ -8,24 +8,15 @@
 
 <div class="mainmenu">
 
-    <NavigationHost DefaultUrl="/home" @ref="Navigator">
-        <ChildContent>
-
-            <Sidebar />
-
-            <div class="stage">
-
-                <div class="navigator-canvas" slot="navigator-canvas"></div>
-                <div class="overlay">
-                    <div class="overlay-container">
-                        <OfflineMode />
-                    </div>
+    <MenuShell DefaultUrl="/home" @ref="Navigator">
+        <Overlay>
+            <div class="overlay">
+                <div class="overlay-container">
+                    <OfflineMode />
                 </div>
-
             </div>
-
-        </ChildContent>
-    </NavigationHost>
+        </Overlay>
+    </MenuShell>
 </div>
 
 @code

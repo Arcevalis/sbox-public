@@ -17,15 +17,21 @@
         <label class="name">@Sandbox.Utility.Steam.PersonaName</label>
     </div>
 
-    <div class="edit clicky" tooltip="Edit your avatar" @onclick="@OpenAvatarScene">
-        <icon>emoji_people</icon>
-        <label>Edit</label>
-    </div>
+    @* Not mid-game - editing it would pull you out of the game into the avatar scene *@
+    @if ( !Game.InGame )
+    {
+        <div class="edit clicky" tooltip="Edit your avatar" @onclick="@OpenAvatarScene">
+            <icon>emoji_people</icon>
+            <label>Edit</label>
+        </div>
+    }
 
 </root>
 
 @code
 {
+    protected override int BuildHash() => HashCode.Combine( Game.InGame );
+
     void OpenAvatarScene()
     {
         var options = new SceneLoadOptions();

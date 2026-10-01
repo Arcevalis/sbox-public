@@ -52,28 +52,7 @@ PartyDeck
 		// How many are in it - a users glyph and the number
 		.count
 		{
-			flex-direction: row;
-			flex-shrink: 0;
-			align-items: center;
-			gap: 4px;
-			height: 20px;
-			padding: 0 8px 0 6px;
-			border-radius: 999px;
-			border: $front-border-width solid $front-hairline;
-			background-color: rgba( 255, 255, 255, 0.05 );
-
-			icon
-			{
-				font-size: 13px;
-				color: $front-secondary;
-			}
-
-			label
-			{
-				font-size: 11px;
-				font-weight: 700;
-				color: $front-body;
-			}
+			@include front-meta-pill;
 		}
 
 		// Following the leader - the header's what's happening instead
@@ -197,7 +176,7 @@ PartyDeck
 		}
 	}
 
-	// Square, quiet, glyph only - the mic state and leaving
+	// Square, quiet, glyph only - leaving
 	.icon-button
 	{
 		flex-shrink: 0;
@@ -215,25 +194,6 @@ PartyDeck
 			text-align: center;
 			font-size: 17px;
 			color: $front-secondary;
-		}
-
-		&.voice
-		{
-			&.talking
-			{
-				background-color: rgba( $primary-green, 0.15 );
-				border-color: rgba( $primary-green, 0.35 );
-
-				icon
-				{
-					color: $primary-green;
-				}
-			}
-
-			&.disabled icon
-			{
-				color: $front-tertiary;
-			}
 		}
 
 		&.leave

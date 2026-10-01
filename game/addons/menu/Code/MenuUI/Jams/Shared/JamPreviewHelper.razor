@@ -35,7 +35,7 @@
 	/// </summary>
 	[Parameter] public Jam Jam { get; set; }
 
-	GameJamSystem Voting => GameJamSystem.Get( Scene );
+	GameJamSystem Voting => GameJamSystem.For( this );
 	JamFinalistCategory Category => Voting?.Finalists?.FirstOrDefault();
 	bool InKnockout => Voting?.Phase == Jam.Phase.Finals && Jam.Now >= Jam.FinalsStart;
 	bool InReveal => Jam.CommunityVoting && Jam.Now >= Jam.NominationsEnd && Jam.Now < Jam.FinalsStart;

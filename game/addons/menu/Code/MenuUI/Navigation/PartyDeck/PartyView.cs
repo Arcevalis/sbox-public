@@ -4,28 +4,28 @@ using Sandbox.Menu;
 namespace MenuProject;
 
 /// <summary>
-/// What the party deck shows - the real <see cref="PartyRoom"/>, or made up data while <c>party_mock</c>
-/// or <c>friends_mock</c> is set, so every state can be looked at without a second account and a slow
+/// What the party deck shows - the real <see cref="PartyRoom"/>, or made up data while <c>menu_mock_party</c>
+/// or <c>menu_mock_friends</c> is set, so every state can be looked at without a second account and a slow
 /// download. The made up party is the friends list's (<see cref="MenuUI.Front.RailPresence"/>), so the
 /// deck and the list always show the same people.
 /// </summary>
 public static class PartyView
 {
 	/// <summary>
-	/// The states <c>party_mock</c> understands.
+	/// The states <c>menu_mock_party</c> understands.
 	/// </summary>
 	public static readonly string[] MockStates = { "off", "idle", "downloading", "fetching", "waiting", "connecting", "failed", "cancelled", "unavailable", "full" };
 
-	[MenuConVar( "party_mock", Help = "Fill the party deck with made up data: off, idle, downloading, fetching, waiting, connecting, failed, cancelled, unavailable, full" )]
+	[MenuConVar( "menu_mock_party", Help = "Fill the party deck with made up data: off, idle, downloading, fetching, waiting, connecting, failed, cancelled, unavailable, full" )]
 	public static string Mock { get; set; } = "off";
 
 	/// <summary>
-	/// <c>party_mock</c> is set to one of its states.
+	/// <c>menu_mock_party</c> is set to one of its states.
 	/// </summary>
 	public static bool IsMockingJoin => !string.IsNullOrWhiteSpace( Mock ) && Mock != "off" && MockStates.Contains( Mock );
 
 	/// <summary>
-	/// Showing made up data instead of the real party - a <c>party_mock</c> state, or <c>friends_mock</c>'s
+	/// Showing made up data instead of the real party - a <c>menu_mock_party</c> state, or <c>menu_mock_friends</c>'s
 	/// party sat idle.
 	/// </summary>
 	public static bool IsMocking => IsMockingJoin || MenuUI.Front.RailPresence.Mocking;
@@ -138,7 +138,7 @@ public static class PartyView
 
 	/// <summary>
 	/// You and some of your friends - real names and avatars, so it looks like the real thing. The same
-	/// party the friends list shows under <c>friends_mock</c>.
+	/// party the friends list shows under <c>menu_mock_friends</c>.
 	/// </summary>
 	static List<Friend> MockMembers => MenuUI.Front.RailPresence.MockPartyMembers.ToList();
 

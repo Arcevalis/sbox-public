@@ -242,7 +242,7 @@
 
         if ( !IsVisible ) return;
 
-        // Streamer mode changes friend names, and friends_mock changes everything - refresh straight away
+        // Streamer mode changes friend names, and menu_mock_friends changes everything - refresh straight away
         if ( Preferences.StreamerMode != _lastStreamerMode || RailPresence.Mock != _lastMock )
         {
             _lastStreamerMode = Preferences.StreamerMode;
@@ -571,7 +571,7 @@
         // They're not really in anything
         if ( RailPresence.Mocking )
         {
-            Log.Info( $"friends_mock: would join {row.Name}" );
+            Log.Info( $"menu_mock_friends: would join {row.Name}" );
             return;
         }
 

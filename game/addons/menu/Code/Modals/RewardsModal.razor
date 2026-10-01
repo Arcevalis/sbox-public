@@ -275,8 +275,8 @@
 
 	void OpenStore()
 	{
-		// We live under the overlay, not the navigator, so go through the menu directly.
-		MenuProject.MainMenu.Instance?.Navigator?.Navigate( "/itemstore" );
+		// We live under the overlay, not the navigator - the store in whichever menu's up
+		MenuHelpers.Navigate( "/itemstore" );
 		CloseModal( true );
 	}
 

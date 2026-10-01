@@ -1,15 +1,36 @@
 ﻿@namespace MenuProject.Modals
 @inherits MenuProject.Modals.BaseModal
 @using Sandbox;
+@using Sandbox.UI;
 @using SboxMenu;
 @using System;
 
-<root class="package-selection-modal">
+@*
+    Picking a package - a game to play a map in, a map for a game. The same window as the map picker
+    (front-picker), without its sources down the left: what you're picking and the search for it up
+    top, the list with its filters under that. Picking one closes it and hands it back.
+*@
+<root>
 
 	<div class="window">
-		<PackageSelector Query=@PackageQuery OnPackageSelected="@OnSelect" OnFilterChanged="@OnFilterChanged"></PackageSelector>
+		<div class="main">
+
+			<div class="head">
+				<div class="text">
+					<label class="eyebrow-label">@Eyebrow</label>
+					<label class="title">@Title</label>
+				</div>
+				<div class="grow"></div>
+				<TextEntry class="picker-search" OnTextEdited=@( ( string x ) => List?.Search( x ) ) Icon="search" Placeholder=@($"Search {Plural}") />
+			</div>
+
+			<div class="body">
+				<MenuProject.UI.PackageList @ref="List" Surface="picker" Shelf=@Kind ShowFilters="@true" ShowSearch="@false" Query=@PackageQuery OnFilterChanged="@OnFilterChanged" OnSelected="@OnSelect" Take=@(200) />
+			</div>
+
+		</div>
 	</div>
-                
+
 </root>
 
 @code
@@ -18,6 +39,19 @@
 
     public Action<Package> OnPackageSelected { get; set; }
     public Action<string> OnFilterChanged { get; set; }
+
+    MenuProject.UI.PackageList List;
+
+    /// <summary>
+    /// What it lists - the query's type, "game" or "map" (anything else, just packages).
+    /// </summary>
+    string Kind => PackageQuery?.Split( ' ' ).FirstOrDefault( x => x.StartsWith( "type:" ) )?["type:".Length..];
+
+    string Plural => Kind switch { "game" => "games", "map" => "maps", _ => "packages" };
+
+    string Eyebrow => Kind switch { "game" => "Pick a game", "map" => "Pick a map", _ => "Pick one" };
+
+    string Title => Kind switch { "game" => "Games", "map" => "Maps", _ => "Packages" };
 
     void OnSelect( Package package )
     {
