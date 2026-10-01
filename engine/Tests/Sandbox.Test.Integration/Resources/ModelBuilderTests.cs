@@ -7,6 +7,48 @@ namespace ResourceTests;
 [TestClass]
 public class ModelBuilderTests
 {
+	[DataTestMethod]
+	[DataRow( null, "sbox_procedural_model.vmdl" )]
+	[DataRow( "", "sbox_procedural_model.vmdl" )]
+	[DataRow( "model_builder_named", "model_builder_named.vmdl" )]
+	[DataRow( "scenes/world/aggregate_0.vmdl", "scenes/world/aggregate_0.vmdl" )]
+	[DataRow( "mounts/goldsrc/model.mdl", "mounts/goldsrc/model.vmdl" )]
+	[DataRow( "mounts/quake/model.md5mesh", "mounts/quake/model.vmdl" )]
+	[DataRow( "mount://goldsrc/models/barney.mdl.vmdl", "mount_/goldsrc/models/barney.mdl.vmdl" )]
+	[DataRow( "mount://quake/id1/models/player.md5mesh.vmdl", "mount_/quake/id1/models/player.md5mesh.vmdl" )]
+	[DataRow( "C:\\Models\\Builder\\Named.MDL", "c_/models/builder/named.vmdl" )]
+	[DataRow( "vpk:models/named.vmdl", "vpk_models/named.vmdl" )]
+	[DataRow( "/", "sbox_procedural_model.vmdl" )]
+	[DataRow( "Models\\Builder\\MixedCase.MDL", "models/builder/mixedcase.vmdl" )]
+	[DataRow( "/scenes/world/aggregate_0.vmdl_c", "scenes/world/aggregate_0.vmdl" )]
+	public void WithNameNamesNativeModel( string name, string nativeName )
+	{
+		var model = Model.Builder.WithName( name ).AddMesh( CreateBoundsMesh() ).Create();
+
+		Assert.IsNotNull( model );
+		Assert.IsFalse( model.IsError );
+		Assert.IsTrue( model.IsProcedural );
+		Assert.AreEqual( name ?? nativeName, model.Name );
+		Assert.AreEqual( Resource.FixPath( name ?? nativeName ), model.ResourcePath );
+		Assert.AreEqual( nativeName, model.native.GetModelName() );
+		Assert.AreEqual( nativeName, NativeGlue.Resources.GetModelResourceName( model.native ) );
+	}
+
+	[TestMethod]
+	public void NamedBuildersRemainAnonymous()
+	{
+		var name = $"model_builder_{Guid.NewGuid():N}.vmdl";
+		var first = Model.Builder.WithName( name ).AddMesh( CreateBoundsMesh() ).Create();
+		var second = Model.Builder.WithName( name ).AddMesh( CreateBoundsMesh() ).Create();
+
+		Assert.AreNotSame( first, second );
+		Assert.AreNotEqual( first.native.GetBindingPtr(), second.native.GetBindingPtr() );
+		Assert.AreEqual( Guid.Empty, first.Guid );
+		Assert.AreEqual( Guid.Empty, second.Guid );
+		Assert.AreEqual( name, first.native.GetModelName() );
+		Assert.AreEqual( name, second.native.GetModelName() );
+	}
+
 	[StructLayout( LayoutKind.Sequential )]
 	private struct BoundsVertex
 	{
