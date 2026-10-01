@@ -16,7 +16,7 @@
 
         @if ( Package != null && Package.Flair.IsEmpty == false)
         {
-            <MenuProject.UI.PackageFlairBar Flair="@Package.Flair" />
+            <MenuProject.UI.PackageFlairBar Flair="@Package.Flair" Limit=@(2) />
         }
 
 		@if ( NominationCount is int nominations )
