@@ -320,7 +320,7 @@
     /// </summary>
     static Package PickBig( Package[] packages ) => packages.FirstOrDefault( x => !string.IsNullOrEmpty( x?.VideoThumb ) );
 
-    static string GroupUrl( Package.ListResult.Grouping g ) => MenuHelpers.IsJamQuery( g.QueryString ) ? "/jam" : $"/games/group?Query={g.QueryString}&title={g.Title}&subtitle={g.Description}";
+    static string GroupUrl( Package.ListResult.Grouping g ) => MenuHelpers.IsJamQuery( g.QueryString ) ? "/jam" : $"/home/group?Query={g.QueryString}&title={g.Title}&subtitle={g.Description}";
 
     /// <summary>
     /// Drop a package the player just hid.
