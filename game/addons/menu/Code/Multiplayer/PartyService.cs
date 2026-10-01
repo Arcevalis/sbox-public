@@ -3,12 +3,22 @@ using Sandbox;
 namespace MenuProject.Multiplayer;
 
 /// <summary>
-/// Creates and joins parties from the multiplayer page and shared invitations.
+/// Discovers, creates and joins parties from the menu and shared invitations.
 /// </summary>
 internal static class PartyService
 {
 	internal static bool Busy { get; private set; }
 	internal static string Error { get; private set; }
+
+	/// <summary>
+	/// Open parties still gathering players, shared by Multiplayer and the home sidebar.
+	/// </summary>
+	internal static async Task<PartyRoom.Entry[]> FindOpenParties()
+	{
+		var parties = await PartyRoom.Find();
+		return parties.Where( x => !x.IsPlaying && !x.IsFull && x.OwnerId != 0 && !new Friend( x.OwnerId ).IsBlocked )
+			.OrderByDescending( x => x.Members ).ToArray();
+	}
 
 	internal static Task Create() => Run( async () =>
 	{
