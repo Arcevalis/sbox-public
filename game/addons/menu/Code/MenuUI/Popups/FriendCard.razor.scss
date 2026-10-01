@@ -42,21 +42,21 @@ FriendCard.popup-panel
 			mask-image: linear-gradient( 270deg, white 0%, black 100% );
 		}
 
-		// Not in anything - their backdrop, at full strength behind their citizen and only fading off
-		// once it's past them, towards their name
+		// The front page avatar's backdrop: blurred and dimmed so their citizen stands out.
+		// Extend past the clipped hero edges so the blur doesn't pull transparency into the border.
 		.backdrop
 		{
 			position: absolute;
-			left: 0;
-			top: 0;
-			right: 0;
-			bottom: 0;
+			left: -20px;
+			top: -20px;
+			right: -20px;
+			bottom: -20px;
 			pointer-events: none;
 			background-image: url( "/ui/citizen-backdrop.webp" );
 			background-size: cover;
 			background-position: center;
-			opacity: 1;
-			mask-image: linear-gradient( 270deg, white 0%, white 45%, black 100% );
+			filter: blur( 8px ) brightness( 0.45 );
+			mask-image: linear-gradient( to bottom, white 0%, white 50%, black 100% );
 		}
 
 		// In the editor - a blue grid where a game's screenshot would go, faded the same way
