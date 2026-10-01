@@ -41,8 +41,11 @@
             <Item Context="item">
                 @if ( item is HeadItem head )
                 {
-                    <div class="group-head" onmousedown=@( () => ToggleSection( head.Id ) )>
-                        <icon>@(head.Collapsed ? "chevron_right" : "expand_more")</icon>
+                    @* One chevron, turned to point at the section when it's folded - so it can turn there. Folded
+                       is read live rather than kept in the item, so the header isn't rebuilt when it changes,
+                       and the chevron's transition has something to run on. *@
+                    <div class="group-head @(Collapsed.Contains( head.Id ) ? "collapsed" : "")" onmousedown=@( () => ToggleSection( head.Id ) )>
+                        <icon>expand_more</icon>
                         <label class="group-title">@head.Title</label>
                         <label class="group-count">@head.Count</label>
                     </div>
@@ -197,9 +200,12 @@
     // what it was - so everything a cell shows that can change lives in its item.
     //
 
-    record HeadItem( string Id, string Title, int Count, bool Collapsed );
-    record PartyItem( PartyGroup Party, string Art );
-    record FriendItem( FriendRow Row, string Art );
+    record HeadItem( string Id, string Title, int Count );
+
+    // Section and Offset - which section a row's in and how far down it it starts - are for the fold
+    // animation, which has to know how much of a section is showing
+    record PartyItem( PartyGroup Party, string Art, string Section, float Offset );
+    record FriendItem( FriendRow Row, string Art, string Section, float Offset );
 
     /// <summary>
     /// How tall each kind of item is - the list lays out from these, so they're pinned in the
@@ -209,12 +215,35 @@
     const float PartyHeight = 76f;
     const float FriendHeight = 42f;
 
-    static readonly Func<object, float> HeightOf = item => item switch
+    static float BaseHeight( object item ) => item switch
     {
         HeadItem => HeadHeight,
         PartyItem => PartyHeight,
         _ => FriendHeight,
     };
+
+    /// <summary>
+    /// How tall an item is right now. While a section folds or unfolds, only the top of it shows - as
+    /// if a box round its rows were shrinking - so the rows run out from its bottom up, each cut off
+    /// where the box ends.
+    /// </summary>
+    float HeightOf( object item )
+    {
+        var height = BaseHeight( item );
+
+        var (section, offset) = item switch
+        {
+            PartyItem party => (party.Section, party.Offset),
+            FriendItem friend => (friend.Section, friend.Offset),
+            _ => (null, 0f),
+        };
+
+        if ( section is null || section != _toggled || !_animating )
+            return height;
+
+        var showing = _toggledHeight * FoldAmount;
+        return Math.Clamp( showing - offset, 0f, height );
+    }
 
     List<object> Items = new();
     MixedVirtualList ListPanel;
@@ -224,6 +253,53 @@
     /// Sections the player has folded away. Remembered for the session.
     /// </summary>
     static readonly HashSet<string> Collapsed = new();
+
+    /// <summary>
+    /// The section last folded or unfolded, and when - it animates while that's recent. Folding, its
+    /// rows stay in the list until they've shrunk away.
+    /// </summary>
+    string _toggled;
+    RealTimeSince _toggledAt;
+    float _toggledHeight;
+    const float ToggleTime = 0.2f;
+
+    /// <summary>
+    /// The toggled section is animating - set when it's toggled, and only cleared by the rebuild once
+    /// it's done, never by the clock. The list can lay out between the time running out and that
+    /// rebuild, and if the clock said it was over, the section would spring back to its full height
+    /// for that one frame and build every one of its rows.
+    /// </summary>
+    bool _animating;
+
+    /// <summary>
+    /// How much of a section, starting <paramref name="top"/> down the list, the view can show below
+    /// it - only that much takes part in the animation. The rest is out of sight whatever happens:
+    /// animating it, most of the movement would happen where you can't see it, and shrunk to nothing
+    /// every row would sit inside the view at once and build a cell each in one frame.
+    /// </summary>
+    float VisibleBelow( float top )
+    {
+        if ( ListPanel is not { } list || list.Box.Rect.Height <= 0 )
+            return 1200f;
+
+        var view = list.Box.Rect.Height * list.ScaleFromScreen;
+        var scroll = list.ScrollOffset.y * list.ScaleFromScreen;
+
+        return Math.Max( 0f, view - (top - scroll) );
+    }
+
+    /// <summary>
+    /// How much of the toggled section is showing, 0 to 1 - eased out, so it moves quickly and settles.
+    /// </summary>
+    float FoldAmount
+    {
+        get
+        {
+            var t = Math.Clamp( _toggledAt / ToggleTime, 0f, 1f );
+            var eased = 1f - (1f - t) * (1f - t);
+            return Collapsed.Contains( _toggled ) ? 1f - eased : eased;
+        }
+    }
 
     const float RefreshInterval = 3f;
     RealTimeSince TimeSinceRefresh = RefreshInterval;
@@ -241,6 +317,22 @@
         base.Tick();
 
         if ( !IsVisible ) return;
+
+        // A section folding or unfolding - lay the list out again each frame as it moves, then once it's
+        // done, rebuild without it (a folded section's rows are only kept until they've shrunk away)
+        if ( _animating )
+        {
+            if ( _toggledAt < ToggleTime )
+            {
+                if ( ListPanel is not null )
+                    ListPanel.NeedsRebuild = true;
+            }
+            else
+            {
+                _animating = false;
+                Refresh();
+            }
+        }
 
         // Streamer mode changes friend names, and menu_mock_friends changes everything - refresh straight away
         if ( Preferences.StreamerMode != _lastStreamerMode || RailPresence.Mock != _lastMock )
@@ -291,7 +383,14 @@
         if ( !Collapsed.Remove( id ) )
             Collapsed.Add( id );
 
+        _toggled = id;
+        _toggledAt = 0;
+        _animating = true;
+
         Refresh();
+
+        // Its header's on screen with the old state - show it the new one
+        ListPanel?.RefreshCells();
     }
 
     void Refresh()
@@ -337,19 +436,41 @@
     List<object> Flatten( List<Section> sections )
     {
         var items = new List<object>();
+        var y = 0f; // how far down the list we are
 
         foreach ( var section in sections )
         {
             var collapsed = Collapsed.Contains( section.Id );
-            items.Add( new HeadItem( section.Id, section.Title, section.Count, collapsed ) );
+            var toggled = section.Id == _toggled && _animating;
+            items.Add( new HeadItem( section.Id, section.Title, section.Count ) );
+            y += HeadHeight;
 
-            if ( collapsed ) continue;
+            // Folded away - unless it's still shrinking
+            if ( collapsed && !toggled ) continue;
+
+            var offset = 0f;
+            var foldLimit = toggled ? VisibleBelow( y ) : float.MaxValue;
 
             foreach ( var party in section.Parties )
-                items.Add( new PartyItem( party, GameArt( party.Members.FirstOrDefault()?.GameIdent ) ) );
+            {
+                if ( offset >= foldLimit ) break;
+
+                items.Add( new PartyItem( party, GameArt( party.Members.FirstOrDefault()?.GameIdent ), section.Id, offset ) );
+                offset += PartyHeight;
+            }
 
             foreach ( var row in section.Friends )
-                items.Add( new FriendItem( row, row.InEditor ? null : GameArt( row.GameIdent ) ) );
+            {
+                if ( offset >= foldLimit ) break;
+
+                items.Add( new FriendItem( row, row.InEditor ? null : GameArt( row.GameIdent ), section.Id, offset ) );
+                offset += FriendHeight;
+            }
+
+            if ( toggled )
+                _toggledHeight = offset;
+
+            y += offset;
         }
 
         return items;
