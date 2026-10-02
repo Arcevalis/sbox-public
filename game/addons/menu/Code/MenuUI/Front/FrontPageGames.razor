@@ -9,16 +9,21 @@
     return;
 
 <root>
-    @if ( Sections.Count == 0 )
+    @if ( HasJamShelf )
+    {
+        <JamShelf Jam=@ActiveJam />
+    }
+
+    @if ( Sections.Count == 0 && !HasJamShelf )
     {
         <div class="empty-wrap">
             <EmptyState Icon="search_off" Title="Nothing to show" Subtitle="No games came back for this feed. Try another tab, or check back in a bit." />
         </div>
     }
 
-    @foreach ( var section in Sections )
+    @foreach ( var section in Sections.Where( x => !(x.Jam && HasJamShelf) ) )
     {
-        <div class="section @( section.Jam ? "jam" : "" )">
+        <div class="section @( section.Jam ? "jam" : "" ) @(section.ContinuePlaying ? "continue-playing" : "")">
 
             <div class="head">
                 @* Title and blurb are one link, so hovering either lights the title up. *@
@@ -105,7 +110,7 @@
                     <div class="row">
                         @foreach ( var package in section.RowOne )
                         {
-                            <MenuProject.UI.PackageCard Package=@package style="@section.RowOneStyle" DiscoveryContext=@section.Discovery
+                            <MenuProject.UI.PackageCard Package=@package ShowSubtitle=@section.ContinuePlaying style="@section.RowOneStyle" DiscoveryContext=@section.Discovery
                                          Rotation=@section.Rotation
                                          Clicked="@(() => package.OpenModal())"
                                          RightClicked="@(() => MenuHelpers.OpenPackageMenu( this, package ))" />
@@ -146,6 +151,7 @@
         public string Description;
         public string Url;
         public bool Jam;
+        public bool ContinuePlaying;
 
         public bool BigRight;
         public Package Big;
@@ -159,6 +165,9 @@
     }
 
     List<Section> Sections { get; set; } = new();
+
+    Sandbox.Services.Jam ActiveJam => GameJamSystem.For( this )?.ActiveJam;
+    bool HasJamShelf => ActiveJam is not null;
 
     // The big tile is the shelf's showpiece, so it takes its turn this many times as often.
     const float BigVideoWeight = 3f;
@@ -212,6 +221,7 @@
                 Description = grouping.Description,
                 Url = GroupUrl( grouping ),
                 Jam = MenuHelpers.IsJamQuery( grouping.QueryString ),
+                ContinuePlaying = grouping.QueryString?.Contains( "sort:used", StringComparison.OrdinalIgnoreCase ) == true,
                 Rotation = i < previous.Count ? previous[i].Rotation : new MenuProject.UI.CardVideoRotation(),
             };
 
@@ -220,7 +230,7 @@
                 section.Url = null;
 
             // Featured groups get a mosaic, alternating which side the big tile sits on.
-            var big = grouping.Style == "large" ? PickBig( packages ) : null;
+            var big = !section.ContinuePlaying && grouping.Style == "large" ? PickBig( packages ) : null;
 
             if ( big is not null && Columns >= 3 && packages.Length >= 3 )
             {
@@ -364,5 +374,5 @@
         StateHasChanged();
     }
 
-    protected override int BuildHash() => HashCode.Combine( Group, Sections.Count, Columns, BigWidth );
+    protected override int BuildHash() => HashCode.Combine( Group, Sections.Count, Columns, BigWidth, ActiveJam );
 }

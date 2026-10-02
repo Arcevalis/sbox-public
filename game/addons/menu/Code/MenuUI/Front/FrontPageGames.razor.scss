@@ -146,6 +146,65 @@ FrontPageGames
 		}
 	}
 
+	// Returning players already know these games: a short horizontal card is enough.
+	.continue-playing
+	{
+		.head { margin-bottom: 6px; }
+		.head .description { display: none; }
+		.row PackageCard
+		{
+			flex-direction: row;
+			height: 86px;
+			background-color: rgba( 255, 255, 255, 0.035 );
+			border-radius: 6px;
+			.image
+			{
+				flex-grow: 0;
+				flex-shrink: 0;
+				width: 100px;
+				height: 100%;
+				aspect-ratio: auto;
+				border-radius: 6px 0 0 6px;
+			}
+			> column
+			{
+				position: relative;
+				left: auto;
+				right: auto;
+				top: auto;
+				bottom: auto;
+				flex-grow: 1;
+				flex-shrink: 1;
+				width: 0;
+				min-width: 0;
+				padding: 10px;
+				justify-content: center;
+				gap: 4px;
+			}
+			.package-title
+			{
+				width: 100%;
+				align-self: stretch;
+				font-size: 14px;
+				opacity: 1;
+				margin: 0;
+				padding: 0;
+				background-color: transparent;
+			}
+			.package-meta { display: none; }
+			PackageFlairBar, .package-nominations { display: none; }
+			.package-subtitle
+			{
+				width: 100%;
+				font-size: 12px;
+				color: $front-secondary;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+		}
+	}
+
 	// The tile area. Plain: one .row. Mosaic: a .big beside a .grid of two .rows.
 	// The code counts how many tiles fit, so nothing should actually clip.
 	.tiles

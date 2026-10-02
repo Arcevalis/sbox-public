@@ -42,6 +42,11 @@
             @(Package?.Title ?? "Invalid Package")
         </label>
 
+        @if ( ShowSubtitle && !string.IsNullOrWhiteSpace( Package?.Summary ) )
+        {
+            <label class="package-subtitle" tooltip="@Package.Summary">@Package.Summary</label>
+        }
+
         @if (Package == null)
         {
             <row>
@@ -284,6 +289,9 @@
     /// </summary>
     [Parameter] public bool ShowSummary { get; set; }
 
+    /// <summary>Show a short description beneath the title in compact horizontal cards.</summary>
+    [Parameter] public bool ShowSubtitle { get; set; }
+
     /// <summary>Open a <see cref="PackageHoverCard"/> after hovering for a moment.</summary>
     [Parameter] public bool HoverPreview { get; set; } = true;
 
@@ -332,5 +340,5 @@
     };
 
     // ShowVideo mounts the video layer, so hover changes have to re-render.
-    protected override int BuildHash() => System.HashCode.Combine(Package?.FullIdent, Package?.Usage.UsersNow, Package?.Flair.Length, ShowVideo(), VideoReady(), ShowSummary, VideoUrl(), NominationCount);
+    protected override int BuildHash() => System.HashCode.Combine(Package?.FullIdent, Package?.Usage.UsersNow, Package?.Flair.Length, ShowVideo(), VideoReady(), HashCode.Combine( ShowSummary, ShowSubtitle, Package?.Summary ), VideoUrl(), NominationCount);
 }
