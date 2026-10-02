@@ -105,6 +105,15 @@
         CheckForDelete();
     }
 
+    public override void Delete( bool immediate = false )
+    {
+        // The party deck lives in here while it's up - send it back to the overlay, or it goes with us
+        if ( MenuProject.PartyDeck.Instance is { } deck && deck.Parent == this )
+            deck.Parent = MenuOverlay.Instance;
+
+        base.Delete( immediate );
+    }
+
     public override void OnDeleted()
     {
         base.OnDeleted();

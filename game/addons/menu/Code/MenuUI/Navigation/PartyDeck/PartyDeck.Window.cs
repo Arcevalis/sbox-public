@@ -41,7 +41,15 @@ public partial class PartyDeck : Panel
 		Instance = this;
 	}
 
-	bool InParty => !LoadingView.IsVisible && (Draft is not null || PartyView.Exists && !Game.InGame && MainMenu.Instance.IsValid() && MainMenu.Instance.Active);
+	bool InParty => !LoadingView.IsVisible && (Draft is not null || PartyView.Exists && (InMainMenu || PausePage is not null));
+
+	static bool InMainMenu => !Game.InGame && MainMenu.Instance.IsValid() && MainMenu.Instance.Active;
+
+	/// <summary>
+	/// In a game, the pause menu while it's up - the deck lives in it, over its shade. Not while it's
+	/// hidden back in the game, or on its way out.
+	/// </summary>
+	static Panel PausePage => Modals.PauseMenuModal.PauseModal.Open is { IsDeleting: false } pause ? pause : null;
 
 	void UpdateWindow()
 	{
@@ -70,7 +78,7 @@ public partial class PartyDeck : Panel
 		// Keep the window on the same input surface while it is moving.
 		if ( Window is { IsDragging: true } or { IsAnimating: true } ) return;
 
-		var page = !Game.InGame && MainMenu.Instance.IsValid() ? MainMenu.Instance.Panel?.FindPopupPanel() : null;
+		var page = !Game.InGame && MainMenu.Instance.IsValid() ? MainMenu.Instance.Panel?.FindPopupPanel() : PausePage;
 		var home = InParty && page.IsValid() ? page : MenuOverlay.Instance;
 		if ( !home.IsValid() || Parent == home ) return;
 

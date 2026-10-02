@@ -10,8 +10,8 @@
     left the game's name, big, what it is in a line, how it's reviewed and the pills to like it. On
     the right what's new - its latest news post (the way the loading screen puts it) with its latest
     changelog under it, or with no news its latest changelog on its own - and how far through its
-    achievements you are under that; lifted clear of the party deck when there is one. Each of those
-    opens the whole of it over the pause menu (GameInfoModal).
+    achievements you are under that, down in the corner. Each of those opens the whole of it over the
+    pause menu (GameInfoModal).
 *@
 <root>
 
@@ -86,10 +86,9 @@
 
         <div class="grow"></div>
 
-        @* Down the right, in a card like the party deck's - what's new, and how far through its
-           achievements you are under it. Over the party deck when it's there, at its width, so the two
-           stack as one column *@
-        <div class="extras" @ref="Extras">
+        @* Down the right, each in a card of its own - what's new, and how far through its
+           achievements you are under it *@
+        <div class="extras">
             @* What's new, up top under the bar - the loading screen's headline, its look and all *@
             @if ( Package.LatestNewsPost is { } news )
             {
@@ -178,53 +177,6 @@
 @code
 {
     [Parameter] public Package Package { get; set; }
-
-    Panel Extras;
-    float _extrasLift = -1;
-
-    /// <summary>
-    /// The right column sits on the page's bottom line - or, with the party deck up in that corner,
-    /// just over the top of it, following it as the party grows or the deck lifts.
-    /// </summary>
-    public override void Tick()
-    {
-        base.Tick();
-
-        if ( !Extras.IsValid() ) return;
-
-        var lift = 0f;
-
-        if ( MenuProject.PartyDeck.Current?.Window is { } deck && deck.IsValid() )
-        {
-            // From the column's resting foot (its box's, less what it's lifted by now) up to a gap over the deck
-            var restingBottom = Extras.Box.Rect.Bottom + (_extrasLift > 0 ? _extrasLift * Extras.ScaleToScreen : 0);
-            var over = restingBottom - deck.Box.Rect.Top;
-            if ( over > 0 ) lift = over * Extras.ScaleFromScreen + DeckGap;
-        }
-
-        // The deck's width, so their edges line up - its own otherwise
-        float? width = MenuProject.PartyDeck.Current?.Window is { } of && of.IsValid() && of.Box.Rect.Width > 0
-            ? of.Box.Rect.Width * Extras.ScaleFromScreen
-            : null;
-
-        if ( width != _extrasWidth )
-        {
-            _extrasWidth = width;
-            Extras.Style.Width = width;
-        }
-
-        if ( MathF.Abs( lift - _extrasLift ) < 0.5f ) return;
-
-        _extrasLift = lift;
-        Extras.Style.MarginBottom = lift;
-    }
-
-    float? _extrasWidth;
-
-    /// <summary>
-    /// Clear air between the column and the party deck under it.
-    /// </summary>
-    const float DeckGap = 16;
 
     /// <summary>
     /// How many there are - the split's in the bar above - or that there aren't any yet.

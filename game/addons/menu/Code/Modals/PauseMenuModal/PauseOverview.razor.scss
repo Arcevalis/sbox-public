@@ -20,10 +20,7 @@ PauseOverview
 		flex-grow: 1;
 	}
 
-	// What's new and the achievements down the right, each in a card of its own like the party deck's,
-	// stacked over it with its gap. Lifted clear of the deck from code when it's there (a margin along
-	// its foot) and set to its width, following the deck frame by frame - no transition of its own,
-	// one restarts on every change
+	// What's new and the achievements down the right, each in a card of its own, stacked with a gap
 	.extras
 	{
 		flex-direction: column;
