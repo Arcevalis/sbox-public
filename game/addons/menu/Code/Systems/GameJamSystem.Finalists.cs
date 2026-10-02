@@ -37,6 +37,8 @@ public sealed partial class GameJamSystem
 	bool finalistsRefreshRequested = true;
 	DateTimeOffset? nextFinalistsRefresh;
 	int finalistVoteVersion;
+	RealTimeUntil nextPreviewVote;
+	int previewVoteBatch;
 
 	bool HasFinalists => ActiveJam is not null
 		&& ActiveJam.Now >= (ActiveJam.CommunityVoting ? ActiveJam.NominationsEnd : ActiveJam.FinalsStart);
@@ -56,7 +58,7 @@ public sealed partial class GameJamSystem
 			if ( ActiveJam is null ) return Jam.Phase.Upcoming;
 
 			var index = ActiveJam.CurrentStepIndex;
-			var scheduled = index >= 0 ? ActiveJam.Timeline[index].Phase : ActiveJam.CurrentPhase;
+			var scheduled = index >= 0 ? ActiveJam.Timeline[index].Phase : Jam.Phase.Upcoming;
 			if ( !ActiveJam.CommunityVoting || ActiveJam.Now < ActiveJam.NominationsEnd ) return scheduled;
 			if ( ActiveJam.Now < ActiveJam.FinalsStart ) return Jam.Phase.Finals;
 			if ( Finalists is null ) return scheduled >= Jam.Phase.GrandFinal ? Jam.Phase.GrandFinal : Jam.Phase.Finals;
@@ -98,6 +100,8 @@ public sealed partial class GameJamSystem
 		finalistsLoading = false;
 		IsSubmittingFinalistVote = false;
 		finalistsRefreshRequested = true;
+		nextPreviewVote = 0;
+		previewVoteBatch = 0;
 	}
 
 	bool IsCurrentFinalists( JamFinalistSource source ) => Scene.IsValid() && finalistSource == source;
@@ -105,6 +109,7 @@ public sealed partial class GameJamSystem
 	void TickFinalists()
 	{
 		if ( !HasFinalists ) return;
+		TickPreviewVotes();
 
 		if ( nextFinalistsRefresh <= ActiveJam.Now )
 		{
@@ -116,6 +121,35 @@ public sealed partial class GameJamSystem
 		{
 			_ = RefreshFinalistsAsync();
 		}
+	}
+
+	/// <summary>
+	/// Rehearses incoming final tallies in the shared state, so the shelf and jam page animate
+	/// the same updates. These are local preview votes and never reach the backend.
+	/// </summary>
+	void TickPreviewVotes()
+	{
+		if ( !Jam.IsEditorPreview || finalistSource is not JamFinalistPreview || Finalists is null
+			|| finalistsLoading || IsSubmittingFinalistVote || nextPreviewVote > 0 ) return;
+
+		var finals = Finalists.Where( x => x.GrandFinal && x.Round.HasValue && x.IsVotingAt( ActiveJam.Now ) ).ToArray();
+		if ( finals.Length == 0 ) return;
+
+		nextPreviewVote = 1.2f;
+		foreach ( var category in finals )
+		{
+			var contenders = category.Contenders.Where( x => x.PackageIdent is not null ).ToArray();
+			for ( var i = 0; i < contenders.Length; i++ )
+			{
+				var ident = contenders[i].PackageIdent;
+				var boost = (previewVoteBatch / 5) % 2 == i ? 24 : 0;
+				var added = previewVoteBatch == 0 ? 800 + i * 35 : 8 + (previewVoteBatch * 17 + i * 11) % 23 + boost;
+				category.Apply( new JamVoteUpdate( ActiveJam.Ident, category.Id, category.Round.Value, ident,
+					category.TotalVotes + added, category.Counts.GetValueOrDefault( ident ) + added ) );
+			}
+		}
+		previewVoteBatch++;
+		Version++;
 	}
 
 	async Task RefreshFinalistsAsync()
@@ -151,6 +185,7 @@ public sealed partial class GameJamSystem
 			Log.Warning( $"Couldn't refresh jam finalists ({e.Message})" );
 			FinalistsError = Finalists is null ? "Couldn't load finalists. You can still browse all entries."
 				: "Couldn't refresh finalists. Showing the last confirmed slate.";
+			nextFinalistsRefresh = jam.Now.AddSeconds( 15 );
 		}
 		finally
 		{
@@ -173,6 +208,15 @@ public sealed partial class GameJamSystem
 			.Select( x => x.VotingOpen ? x.RoundEnds : x.NextRoundOpens )
 			.Concat( new DateTimeOffset?[] { ActiveJam.FinalsStart, ActiveJam.GrandFinal, ActiveJam.Results } )
 			.Where( x => x > requestedAt ).Min();
+
+		// Round transitions can reach us before the backend has opened the next round. Retry the
+		// closed/expired snapshot instead of waiting until the next day's scheduled phase.
+		if ( (Finalists ?? []).Any( x => !x.Decided && (x.VotingOpen ? !x.IsVotingAt( ActiveJam.Now )
+			: !x.NextRoundOpens.HasValue || x.NextRoundOpens <= ActiveJam.Now) ) )
+		{
+			var retry = ActiveJam.Now.AddSeconds( 15 );
+			if ( !nextFinalistsRefresh.HasValue || nextFinalistsRefresh > retry ) nextFinalistsRefresh = retry;
+		}
 	}
 
 	void ApplyFinalistVotes( JamVoteUpdate update )

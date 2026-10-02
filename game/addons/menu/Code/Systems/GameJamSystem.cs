@@ -79,6 +79,49 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 		RefreshFinalists();
 	}
 
+	/// <summary>
+	/// Rebuilds preview snapshots when seeking in either direction, including before the finals.
+	/// </summary>
+	public void SeekEditorPreview( DateTimeOffset target )
+	{
+		if ( !Jam.IsEditorPreview ) return;
+		Jam.SeekEditorPreview( target );
+		previewDays = Jam.PreviewDays;
+		Nominations = null;
+		nextRefresh = ActiveJam?.NextStep?.At;
+		ResetFinalists();
+		Refresh();
+		Version++;
+	}
+
+	/// <summary>
+	/// Rehearses a confirmed result, casting a local deciding vote if the preview final is tied.
+	/// </summary>
+	public async Task SeekEditorPreviewResultsAsync( DateTimeOffset target )
+	{
+		if ( !Jam.IsEditorPreview || ActiveJam is null ) return;
+
+		var jam = ActiveJam;
+		var source = finalistSource as JamFinalistPreview ?? (JamFinalistPreview)JamFinalistSource.Create( jam );
+		Jam.SeekEditorPreview( jam.Results.AddSeconds( -30 ) );
+		try
+		{
+			foreach ( var category in await source.ReadAsync() )
+			{
+				if ( !category.VotingOpen || category.Contenders.Count < 2 ) continue;
+				var leaders = category.Contenders.OrderByDescending( x => category.Counts.GetValueOrDefault( x.PackageIdent ) ).ToArray();
+				if ( category.Counts.GetValueOrDefault( leaders[0].PackageIdent ) == category.Counts.GetValueOrDefault( leaders[1].PackageIdent ) )
+					await source.VoteAsync( category, leaders[0].PackageIdent );
+			}
+		}
+		finally
+		{
+			SeekEditorPreview( target );
+			// Retain the rehearsal's accepted vote across the seek's normal snapshot reset.
+			finalistSource = source;
+		}
+	}
+
 	void Tick()
 	{
 		if ( Scene.IsEditor ) return;
@@ -123,7 +166,7 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 
 		try
 		{
-			var jam = await Jam.GetActive();
+			var jam = Jam.IsEditorPreview && ActiveJam is not null ? ActiveJam : await Jam.GetActive();
 			if ( !Scene.IsValid() || days != Jam.PreviewDays ) return;
 
 			if ( ActiveJam?.Ident != jam?.Ident )
