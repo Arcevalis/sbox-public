@@ -5,21 +5,44 @@
 @using Sandbox.UI;
 @inherits Panel
 
-@if ( Group is null )
-    return;
+<root class="@( Group is null ? "loading" : "" )">
+    @if ( Group is null )
+    {
+        @* Still fetching - shelves in the real ones' shape, enough to fill the page *@
+        @for ( var i = 0; i < SkeletonShelves; i++ )
+        {
+            <div class="section">
+                <div class="head">
+                    <div class="bone shelf-title"></div>
+                </div>
 
-<root>
-    @if ( !StarterDismissed )
+                <div class="tiles">
+                    <div class="row">
+                        @for ( var j = 0; j < SkeletonTiles; j++ )
+                        {
+                            <div class="bone-tile">
+                                <div class="bone art"></div>
+                                <div class="bone line title"></div>
+                                <div class="bone line meta"></div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    }
+
+    @if ( Group is not null && !StarterDismissed )
     {
         <StarterShelf Dismissed=@(() => SetStarterDismissed( true )) />
     }
 
-    @if ( StarterDismissed && HasJamShelf )
+    @if ( Group is not null && StarterDismissed && HasJamShelf )
     {
         <JamShelf Jam=@ActiveJam />
     }
 
-    @if ( Sections.Count == 0 && StarterDismissed && !HasJamShelf )
+    @if ( Group is not null && Sections.Count == 0 && StarterDismissed && !HasJamShelf )
     {
         <div class="empty-wrap">
             <EmptyState Icon="search_off" Title="Nothing to show" Subtitle="No games came back for this feed. Try another tab, or check back in a bit." />
@@ -135,6 +158,10 @@
     const float TileGap = 8f;
 
     [Parameter] public Package.ListResult Group { get; set; }
+
+    // While loading - more shelves than any screen shows, so it's full whatever its height
+    const int SkeletonShelves = 6;
+    const int SkeletonTiles = 4;
 
     /// <summary>
     /// How many tile columns fit across a row at the current width. The big tile spans two of them.

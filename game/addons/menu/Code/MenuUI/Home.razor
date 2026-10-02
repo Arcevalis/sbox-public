@@ -31,14 +31,8 @@
 
 					@if ( CurrentTab.IsDiscover )
 					{
-						@if (Result is null)
-						{
-							<LoadingPanel></LoadingPanel>
-						}
-						else
-						{
-							<FrontPageGames Group="@Result" />
-						}
+						@* Shelves of placeholders until the result's in *@
+						<FrontPageGames Group="@Result" />
 					}
 					else
 					{

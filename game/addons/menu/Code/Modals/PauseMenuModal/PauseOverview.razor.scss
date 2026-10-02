@@ -169,6 +169,32 @@ PauseOverview
 			white-space: normal;
 		}
 
+		// Play time and this session, side by side - labelled like the cards down the right
+		.playtime
+		{
+			flex-direction: row;
+			gap: 28px;
+			margin-top: 8px;
+
+			.stat
+			{
+				flex-direction: column;
+				gap: 2px;
+			}
+
+			.eyebrow
+			{
+				@include front-eyebrow;
+			}
+
+			.stat-value
+			{
+				font-size: 15px;
+				font-weight: 600;
+				color: $front-body;
+			}
+		}
+
 		PackageReactions
 		{
 			margin-top: 10px;

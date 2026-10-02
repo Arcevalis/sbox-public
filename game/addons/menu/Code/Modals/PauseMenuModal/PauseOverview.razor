@@ -60,6 +60,25 @@
                     <label class="summary">@Package.Summary</label>
                 }
 
+                @* How long you've played it, all told and this time round - like Steam's *@
+                @if ( TotalPlayTime > TimeSpan.Zero )
+                {
+                    <div class="playtime">
+                        <div class="stat">
+                            <div class="eyebrow"><icon>schedule</icon><label>Play time</label></div>
+                            <label class="stat-value">@Duration( TotalPlayTime )</label>
+                        </div>
+
+                        @if ( MenuUtility.SessionTime > TimeSpan.Zero )
+                        {
+                            <div class="stat">
+                                <div class="eyebrow"><icon>timer</icon><label>This session</label></div>
+                                <label class="stat-value">@Duration( MenuUtility.SessionTime )</label>
+                            </div>
+                        }
+                    </div>
+                }
+
                 <PackageReactions Package=@Package ShowReviewScore=@false />
             </div>
         </div>
@@ -217,6 +236,32 @@
         return $"{total:N0} review{(total == 1 ? "" : "s")}";
     }
 
+    /// <summary>
+    /// The backend's total, as of when the pause menu fetched the package - never less than this session.
+    /// </summary>
+    TimeSpan TotalPlayTime
+    {
+        get
+        {
+            var total = TimeSpan.FromSeconds( Package.Interaction.Seconds );
+            return total > MenuUtility.SessionTime ? total : MenuUtility.SessionTime;
+        }
+    }
+
+    // In minutes under an hour, hours to a decimal place past that - Steam's way
+    static string Duration( TimeSpan time )
+    {
+        if ( time.TotalHours >= 1 )
+        {
+            var hours = Math.Floor( time.TotalHours * 10 ) / 10;
+            return $"{hours:0.#} hour{(hours == 1 ? "" : "s")}";
+        }
+
+        var minutes = (int)time.TotalMinutes;
+        if ( minutes < 1 ) return "Under a minute";
+        return $"{minutes} minute{(minutes == 1 ? "" : "s")}";
+    }
+
     Package.ChangeListSummary? LatestUpdate => Package.LatestChangeLists.Length > 0
         ? Package.LatestChangeLists.MaxBy( x => x.Created )
         : null;
@@ -290,5 +335,6 @@
         StateHasChanged();
     }
 
-    protected override int BuildHash() => HashCode.Combine( Package, Package?.LatestNewsPost, Achievements?.Count, Unlocked );
+    // The session's minutes, so its time ticks over while the menu's up
+    protected override int BuildHash() => HashCode.Combine( Package, Package?.LatestNewsPost, Achievements?.Count, Unlocked, (int)MenuUtility.SessionTime.TotalMinutes );
 }

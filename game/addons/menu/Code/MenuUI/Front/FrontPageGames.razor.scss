@@ -206,6 +206,64 @@ FrontPageGames
 	}
 
 	// The tile area. Plain: one .row. Mosaic: a .big beside a .grid of two .rows.
+	// Still loading - nothing to scroll to or click, the shelves just fill the page
+	&.loading
+	{
+		overflow: hidden;
+		pointer-events: none;
+	}
+
+	// A placeholder's shape, pulsing
+	.bone
+	{
+		border-radius: 6px;
+		background-color: rgba( 255, 255, 255, 0.05 );
+		animation: front-page-bone 1.2s ease-in-out infinite alternate;
+	}
+
+	.shelf-title
+	{
+		width: 180px;
+		height: 22px;
+	}
+
+	// Sized like a shelf's PackageCard - its art, then its title and stats lines under it
+	.bone-tile
+	{
+		flex-direction: column;
+		flex-grow: 1;
+		flex-shrink: 1;
+		flex-basis: 0;
+		min-width: 0;
+		gap: 8px;
+
+		.art
+		{
+			width: 100%;
+			aspect-ratio: 16 / 9;
+			border-radius: $rounding-small;
+		}
+
+		.line
+		{
+			height: 12px;
+			margin-left: 2px;
+		}
+
+		.title
+		{
+			width: 60%;
+			height: 14px;
+			margin-top: 2px;
+		}
+
+		.meta
+		{
+			width: 35%;
+			margin-bottom: 8px;
+		}
+	}
+
 	// The code counts how many tiles fit, so nothing should actually clip.
 	.tiles
 	{
@@ -289,3 +347,16 @@ FrontPageGames
 	}
 }
 
+
+@keyframes front-page-bone
+{
+	0%
+	{
+		opacity: 0.55;
+	}
+
+	100%
+	{
+		opacity: 1;
+	}
+}

@@ -82,6 +82,11 @@ public static partial class MenuUtility
 	/// </summary>
 	public static Package GamePackage => Application.GamePackage;
 
+	/// <summary>
+	/// How long the current game session has been running, or zero when there isn't one.
+	/// </summary>
+	public static TimeSpan SessionTime => TimeSpan.FromSeconds( Api.Activity.SessionSeconds );
+
 
 	public static SceneWorld CreateSceneWorld()
 	{
