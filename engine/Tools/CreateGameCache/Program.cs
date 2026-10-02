@@ -44,6 +44,9 @@ public static class Program
 		await InstallPackage( "priceless.deliveryhopper" );
 		await InstallPackage( "facepunch.blockparty" );
 
+		await InstallPackage( "taxi.mow_the_lawn" );
+		await InstallPackage( "kivin.goblingeddon" );
+
 		await Task.WhenAll( tasks );
 		return 0;
 	}
