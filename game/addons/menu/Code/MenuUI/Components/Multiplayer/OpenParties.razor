@@ -7,7 +7,9 @@
 	<Sandbox.UI.Toolbar>
 		<ChildContent>
 			<TextEntry class="toolbar-search" Placeholder="Search parties" Value:bind=@search HasClearButton=@true />
-			<Button class="refresh icon-only" Icon="refresh" disabled=@loading onclick=@Refresh title="Refresh parties" tooltip="Refresh parties" />
+			<div class="pill-group">
+				<Button class="refresh icon-only" Icon="refresh" disabled=@loading onclick=@Refresh title="Refresh parties" tooltip="Refresh parties" />
+			</div>
 		</ChildContent>
 	</Sandbox.UI.Toolbar>
 	@if ( !string.IsNullOrEmpty( error ?? PartyService.Error ) )

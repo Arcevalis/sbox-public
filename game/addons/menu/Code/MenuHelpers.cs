@@ -279,6 +279,23 @@ public static class MenuHelpers
 	}
 
 	/// <summary>
+	/// How long something's been played - in minutes under an hour, hours to a decimal place past that,
+	/// Steam's way: "Under a minute", "23 minutes", "4.6 hours".
+	/// </summary>
+	public static string PlayTime( System.TimeSpan time )
+	{
+		if ( time.TotalHours >= 1 )
+		{
+			var hours = System.Math.Floor( time.TotalHours * 10 ) / 10;
+			return $"{hours:0.#} hour{(hours == 1 ? "" : "s")}";
+		}
+
+		var minutes = (int)time.TotalMinutes;
+		if ( minutes < 1 ) return "Under a minute";
+		return $"{minutes} minute{(minutes == 1 ? "" : "s")}";
+	}
+
+	/// <summary>
 	/// "3 days ago", "2 weeks ago", "5 months ago", "2 years ago" - the biggest unit that fits, so
 	/// half a year reads as months, not 26 weeks.
 	/// </summary>

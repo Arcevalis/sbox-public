@@ -3,6 +3,21 @@
 
 GameModal
 {
+	// Who's playing it - the server list, with the tabs' insets, as tall as its rows, the content
+	// scrolling it
+	.sessions
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		padding: 24px 24px 64px 24px;
+
+		ServerList
+		{
+			flex-shrink: 0;
+			overflow: visible;
+		}
+	}
+
 	.setup-loading
 	{
 		padding: 32px;

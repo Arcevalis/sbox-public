@@ -199,18 +199,6 @@ PackageInfoPanel
         padding: 0 0 4px 0;
     }
 
-    // Yours - under a hairline of its own
-    .facts.yours
-    {
-        padding-top: 10px;
-        border-top: $front-border-width solid $front-hairline;
-
-        .section-label
-        {
-            margin-left: 2px;
-        }
-    }
-
     .fact
     {
         flex-direction: row;

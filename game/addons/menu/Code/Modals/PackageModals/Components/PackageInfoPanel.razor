@@ -103,30 +103,10 @@
             </div>
         </div>
 
-        @* How much you've played it - in the pause menu, once you have *@
-        @if (ShowYourStats && Package.Interaction.Used)
+        @* You and it - your time, against everyone's, and what you've got to show for it. Once you've played it *@
+        @if (Package.Interaction.Used)
         {
-            <div class="facts yours">
-                <label class="section-label">You</label>
-
-                <div class="fact">
-                    <label class="key">Played</label>
-                    <div class="value"><label>@TimeSpan.FromSeconds( Package.Interaction.Seconds ).Humanize( 1 )</label></div>
-                </div>
-
-                <div class="fact">
-                    <label class="key">Sessions</label>
-                    <div class="value"><label>@Package.Interaction.Sessions.ToMetric( 0 )</label></div>
-                </div>
-
-                @if (Package.Interaction.FirstUsed is { } first)
-                {
-                    <div class="fact">
-                        <label class="key">First played</label>
-                        <div class="value"><label>@first.Date.Humanize()</label></div>
-                    </div>
-                }
-            </div>
+            <PackageYourRecord Package=@Package />
         }
 
         @if (achList is not null)
@@ -177,8 +157,6 @@
 	/// <summary>Called when the reviews row is clicked - opens the Reviews tab.</summary>
 	[Parameter] public Action OnReviewsClicked { get; set; }
 
-	/// <summary>How much you've played it, under the facts - the pause menu's.</summary>
-	[Parameter] public bool ShowYourStats { get; set; }
 
 	/// <summary>How it's reviewed, first of the facts - not in the pause menu.</summary>
 	[Parameter] public bool ShowReviews { get; set; } = true;
@@ -250,7 +228,7 @@
 	}
 
 	// The party's size too - the play mode card goes green or orange with it, while the page is open
-	protected override int BuildHash() => System.HashCode.Combine(Package, ShowYourStats, ShowReviews, PlayerModes.PartySize);
+	protected override int BuildHash() => System.HashCode.Combine(Package, Package?.Interaction.Used, ShowReviews, PlayerModes.PartySize);
 
 	protected override async Task OnParametersSetAsync()
 	{

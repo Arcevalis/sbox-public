@@ -4,7 +4,7 @@
 @using Sandbox.UI
 
 <root>
-    @if ( scopedGame is not null )
+    @if ( scopedGame is not null && ShowGameHeader )
     {
         <GameGroupRow GameIdent="@scopedGame"
                       TotalPlayers="@VisiblePlayerCount"
@@ -27,8 +27,17 @@
     }
     @if ( busy && !HasResults )
     {
+        @* Still looking - the shape of a few rows, breathing *@
         <div class="loading">
-            <Spinner/>
+            @for ( var i = 0; i < 5; i++ )
+            {
+                <div class="row skeleton">
+                    <div class="bone name"></div>
+                    <div class="bone map"></div>
+                    <div class="bone members"></div>
+                    <div class="bone ping"></div>
+                </div>
+            }
         </div>
     }
     else if ( viewMode == ViewMode.GameGroup && HasResults )
@@ -61,20 +70,36 @@
         else
         {
             <div class="header row">
-                <h2 class="title" onclick="@(() => SetSort( "name" ))">Server @SortIndicator( "name" )</h2>
+                <h2 class="title" onclick="@(() => SetSort( "name" ))">Name @SortIndicator( "name" )</h2>
                 <h2 class="map" onclick="@(() => SetSort( "map" ))">Map @SortIndicator( "map" )</h2>
                 <h2 class="members" onclick="@(() => SetSort( "members" ))">Players @SortIndicator( "members" )</h2>
                 <h2 class="ping-icon" />
                 <h2 class="ping-value" onclick="@(() => SetSort("ping"))">Ping @SortIndicator( "ping" )</h2>
             </div>
-            <VirtualList class="server-rows" Items=@GetServerData() ItemHeight=@(60)>
-                <Item Context="item">
-                    @if ( item is LobbyInformation lobby )
+            @if ( Virtual )
+            {
+                <VirtualList class="server-rows" Items=@GetServerData() ItemHeight=@(60)>
+                    <Item Context="item">
+                        @if ( item is LobbyInformation lobby )
+                        {
+                            <ServerRow Server="@lobby"></ServerRow>
+                        }
+                    </Item>
+                </VirtualList>
+            }
+            else
+            {
+                @* Just the rows, as tall as they come - for inside something that scrolls them itself *@
+                <div class="server-rows plain">
+                    @foreach ( var item in GetServerData() )
                     {
-                        <ServerRow Server="@lobby"></ServerRow>
+                        @if ( item is LobbyInformation lobby )
+                        {
+                            <ServerRow Server="@lobby"></ServerRow>
+                        }
                     }
-                </Item>
-            </VirtualList>
+                </div>
+            }
         }
     }
 </root>
@@ -100,6 +125,19 @@
     /// Search and filter controls, placed below the selected game's header.
     /// </summary>
     [Parameter] public RenderFragment Toolbar { get; set; }
+
+    /// <summary>
+    /// The selected game's header over its servers - its name, how many are playing, the friends filter.
+    /// Off where the game's already named, like its own page.
+    /// </summary>
+    [Parameter] public bool ShowGameHeader { get; set; } = true;
+
+    /// <summary>
+    /// Only the rows on screen built, the list scrolling itself - for every game's servers, which can be
+    /// a lot. Off, they're all built and it's as tall as they are, for inside something that scrolls
+    /// (a game's own page, where there are a handful). A virtual list there has no height to show in.
+    /// </summary>
+    [Parameter] public bool Virtual { get; set; } = true;
 
     /// <summary>
     /// Opens a game outside this list. When unset, games open within the list.

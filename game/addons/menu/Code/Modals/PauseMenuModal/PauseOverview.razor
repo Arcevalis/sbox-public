@@ -95,14 +95,14 @@
         <div class="playtime">
             <div class="stat">
                 <div class="eyebrow"><icon>schedule</icon><label>Play time</label></div>
-                <label class="stat-value">@Duration( TotalPlayTime )</label>
+                <label class="stat-value">@MenuHelpers.PlayTime( TotalPlayTime )</label>
             </div>
 
             @if ( MenuUtility.SessionTime > TimeSpan.Zero )
             {
                 <div class="stat">
                     <div class="eyebrow"><icon>timer</icon><label>This session</label></div>
-                    <label class="stat-value">@Duration( MenuUtility.SessionTime )</label>
+                    <label class="stat-value">@MenuHelpers.PlayTime( MenuUtility.SessionTime )</label>
                 </div>
             }
         </div>
@@ -121,20 +121,6 @@
     /// The backend's total plus this session, so it climbs while you play.
     /// </summary>
     TimeSpan TotalPlayTime => TimeSpan.FromSeconds( Package.Interaction.Seconds ) + MenuUtility.SessionTime;
-
-    // In minutes under an hour, hours to a decimal place past that - Steam's way
-    static string Duration( TimeSpan time )
-    {
-        if ( time.TotalHours >= 1 )
-        {
-            var hours = Math.Floor( time.TotalHours * 10 ) / 10;
-            return $"{hours:0.#} hour{(hours == 1 ? "" : "s")}";
-        }
-
-        var minutes = (int)time.TotalMinutes;
-        if ( minutes < 1 ) return "Under a minute";
-        return $"{minutes} minute{(minutes == 1 ? "" : "s")}";
-    }
 
     Package.ChangeListSummary? LatestUpdate => Package.LatestChangeLists.Length > 0
         ? Package.LatestChangeLists.MaxBy( x => x.Created )

@@ -63,6 +63,100 @@ MenuShell .toolbar
 		}
 	}
 
+	> .pill-group
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		align-items: center;
+		height: 34px;
+		padding: 0 3px;
+		gap: 2px;
+		border: 1px solid $front-border;
+		border-radius: 999px;
+		background-color: $front-card-deep;
+		transition: border-color 0.1s ease;
+
+		&:hover
+		{
+			border-color: rgba( $front-link, 0.65 );
+		}
+	}
+
+	> .pill-group > .button
+	{
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: center;
+		min-width: 28px;
+		height: 26px;
+		padding: 0 10px;
+		gap: 5px;
+		font-size: 12px;
+		font-weight: 600;
+		text-transform: none;
+		letter-spacing: 0;
+		border: 0;
+		border-radius: 999px;
+		background-color: transparent;
+		color: $front-body;
+		opacity: 1;
+		transition: background-color 0.1s ease;
+
+		.iconpanel
+		{
+			font-size: 20px;
+			margin: 0;
+			color: $front-body;
+		}
+
+		&.icon-only
+		{
+			width: 28px;
+			padding: 0;
+		}
+
+		&:hover
+		{
+			sound-in: "ui.button.over";
+			background-color: rgba( 255, 255, 255, 0.08 );
+			color: $front-heading;
+			opacity: 1;
+
+			.iconpanel
+			{
+				color: $front-heading;
+			}
+		}
+
+		&:active
+		{
+			sound-in: "ui.button.press";
+		}
+
+		&.active
+		{
+			background-color: rgba( $front-primary, 0.32 );
+			color: $front-heading;
+			opacity: 1;
+
+			.iconpanel
+			{
+				color: $front-primary * 1.7;
+			}
+		}
+
+		&.disabled
+		{
+			opacity: 1;
+			pointer-events: none;
+
+			.iconpanel
+			{
+				opacity: 0.35;
+			}
+		}
+	}
+
 	> .toolbar-search
 	{
 		// Let search shrink while command buttons keep their usable size.

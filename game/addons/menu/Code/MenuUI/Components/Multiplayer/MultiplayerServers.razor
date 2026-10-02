@@ -10,9 +10,13 @@
 			<Sandbox.UI.Toolbar>
 				<ChildContent>
 					<TextEntry class="toolbar-search" Placeholder="@(servers?.SelectedGame is null ? "Search games, servers or maps" : "Search servers or maps")" Value:bind=@search HasClearButton=@true />
-					<Button class="filter icon-only" Icon="event_seat" Active=@HideFullServers onclick=@(() => HideFullServers = !HideFullServers) title="Only show servers with available slots" tooltip="Only show servers with available slots" />
-					<Button class="filter icon-only" Icon="groups" Active=@HideEmptyServers onclick=@(() => HideEmptyServers = !HideEmptyServers) title="Only show servers with players online" tooltip="Only show servers with players online" />
-					<Button class="refresh icon-only" Icon="refresh" disabled=@(servers?.IsRefreshing == true) onclick=@RefreshServers title="Refresh servers" tooltip="Refresh servers" />
+					<div class="pill-group">
+						<Button class="filter icon-only" Icon="event_seat" Active=@HideFullServers onclick=@(() => HideFullServers = !HideFullServers) title="Only show servers with available slots" tooltip="Only show servers with available slots" />
+						<Button class="filter icon-only" Icon="groups" Active=@HideEmptyServers onclick=@(() => HideEmptyServers = !HideEmptyServers) title="Only show servers with players online" tooltip="Only show servers with players online" />
+					</div>
+					<div class="pill-group">
+						<Button class="refresh icon-only" Icon="refresh" disabled=@(servers?.IsRefreshing == true) onclick=@RefreshServers title="Refresh servers" tooltip="Refresh servers" />
+					</div>
 				</ChildContent>
 			</Sandbox.UI.Toolbar>
 		</Toolbar>
