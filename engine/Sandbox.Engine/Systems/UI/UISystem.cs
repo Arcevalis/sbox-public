@@ -24,16 +24,7 @@ internal partial class UISystem
 	/// Roots participating in frame and input processing. Keep RootPanels for maintenance and teardown.
 	/// Use indices because panel callbacks can add or remove roots during iteration.
 	/// </summary>
-	internal IEnumerable<RootPanel> GetActiveRoots( bool reverse = false )
-	{
-		var step = reverse ? -1 : 1;
-
-		for ( var i = reverse ? RootPanels.Count - 1 : 0; i >= 0 && i < RootPanels.Count; i += step )
-		{
-			var root = RootPanels[i];
-			if ( root is { IsActive: true } ) yield return root;
-		}
-	}
+	internal ActiveRootEnumerable GetActiveRoots( bool reverse = false ) => new( this, reverse );
 
 	/// <summary>
 	/// Tooltips for the panels in this UI. Each instance has its own, so a tooltip in one window
