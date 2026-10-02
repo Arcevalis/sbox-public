@@ -19,7 +19,7 @@ internal static class ShadowMapperCallbacks
 	internal static void InitForView( IntPtr handle, ISceneView sceneView ) => Get( handle ).InitForView( sceneView );
 	internal static void SetShaderAttributes( IntPtr handle, CRenderAttributes renderAttr )
 	{
-		Get( handle ).SetShaderAttributes( new RenderAttributes( renderAttr ) );
+		Get( handle ).SetShaderAttributes( renderAttr );
 	}
 
 	internal static void UploadToGPU( IntPtr handle ) => Get( handle ).UploadToGPU();

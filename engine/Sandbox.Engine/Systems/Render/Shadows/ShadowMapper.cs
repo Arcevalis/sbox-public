@@ -149,20 +149,21 @@ internal partial class ShadowMapper
 	/// </summary>
 	internal ref GPUDirectionalLight DirectionalLightData => ref GPUDirectionalLightData;
 
-	internal void SetShaderAttributes( RenderAttributes attributes )
+	internal unsafe void SetShaderAttributes( CRenderAttributes attributes )
 	{
-		if ( attributes is null )
+		if ( !attributes.IsValid )
 			return;
 
 		ResolveTextureIndices();
 		EnsureBuffers();
 
-		attributes.Set( "ProjectedShadows", GPUProjectedShadowsBuffer );
-		attributes.Set( "ProjectedCubeShadows", GPUProjectedCubeShadowsBuffer );
+		attributes.SetBufferValue( "ProjectedShadows", GPUProjectedShadowsBuffer.native );
+		attributes.SetBufferValue( "ProjectedCubeShadows", GPUProjectedCubeShadowsBuffer.native );
 
-		attributes.SetData( "DirectionalLightCB", GPUDirectionalLightData );
+		var directionalLight = GPUDirectionalLightData;
+		RenderTools.SetDynamicConstantBufferData( attributes, "DirectionalLightCB", Graphics.Context, (IntPtr)(&directionalLight), sizeof( GPUDirectionalLight ) );
 
-		attributes.Set( "DirectionalLightDebug", DebugEnabled );
+		attributes.SetBoolValue( "DirectionalLightDebug", DebugEnabled );
 	}
 
 	/// <summary>
