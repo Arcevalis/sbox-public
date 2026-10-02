@@ -163,16 +163,15 @@ public abstract class BasePostProcess<T> : BasePostProcess where T : BasePostPro
 		U v = defaultVal;
 		var lerper = Interpolator.GetDefault<U>();
 
-		int i = 0;
-		foreach ( var e in context.Components )
+		var components = context.Components;
+		for ( int i = 0; i < components.Count; i++ )
 		{
+			var e = components[i];
 			var target = value( (T)e.Effect );
 			v = lerper.Interpolate( v, target, e.Weight );
 
 			if ( onlyLerpBetweenVolumes && i == 0 )
 				v = target;
-
-			i++;
 		}
 
 		return v;
