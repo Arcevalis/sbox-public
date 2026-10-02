@@ -58,7 +58,7 @@ internal static class OutfitScenes
 	/// <summary>
 	/// A citizen wearing a costume: where it stands across the camera's view, whether it has the deforms, whether they reach its
 	/// costume, whether it has a big head too (<see cref="BigHead"/>), and its label. A rigid one's costume moves with the
-	/// deforms without being reshaped (<see cref="SkinnedModelRenderer.RigidDeformation"/>).
+	/// deforms without being reshaped (<see cref="SkinnedModelRenderer.DeformationMode"/>).
 	/// </summary>
 	record struct Variant( string Name, float Y, bool Deforms, bool DeformCostume, bool BigHead, string Title, string Body, string Costume, bool Rigid = false );
 
@@ -188,7 +188,7 @@ internal static class OutfitScenes
 			deformer.SceneVolume = new Sandbox.Volumes.SceneVolume { Type = Sandbox.Volumes.SceneVolume.VolumeTypes.Sphere, Sphere = new Sphere( 0, HeadRadius ) };
 			deformer.Operation = ModelDeformer.OperationType.Inflate;
 			deformer.Inflation = BigHead;
-			deformer.ApplyToBoneMergedChildren = citizen.DeformCostume;
+			deformer.ApplyToBoneMergedChildren = true;
 		}
 
 		costume.Reset();
@@ -250,14 +250,15 @@ internal static class OutfitScenes
 				BridgeScene.Dress( outfit, body );
 
 				foreach ( var item in body.GameObject.Children.Select( x => x.Components.Get<SkinnedModelRenderer>() ).Where( x => x?.BoneMergeTarget == body ) )
-					item.RigidDeformation = citizen.Rigid;
+					item.DeformationMode = !citizen.DeformCostume ? SkinnedModelRenderer.DeformationModeType.None
+						: citizen.Rigid ? SkinnedModelRenderer.DeformationModeType.Rigid : SkinnedModelRenderer.DeformationModeType.Normal;
 
 				var root = body.Components.Get<Dresser>().UpdateDeforms( outfit, citizen.Deforms );
 				if ( citizen.Deforms && root is null ) Log.Warning( $"Scene Lab: no {DeformsPrefab}" );
 
 				foreach ( var deformer in root?.GetComponentsInChildren<ModelDeformer>( true ) ?? [] )
 				{
-					deformer.ApplyToBoneMergedChildren = citizen.DeformCostume;
+					deformer.ApplyToBoneMergedChildren = true;
 
 					// Set past the sliders, after the Dresser has set them from its appearance
 					if ( deformer.GameObject.Name == "deform_neck" ) deformer.Weight = ThinNeck;

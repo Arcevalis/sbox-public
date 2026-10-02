@@ -235,7 +235,7 @@ public sealed partial class Dresser
 			var r = go.Components.Create<SkinnedModelRenderer>();
 			r.Model = model;
 			r.BoneMergeTarget = body;
-			r.RigidDeformation = c.RigidDeformation;
+			r.DeformationMode = c.DeformationMode;
 			_clothingRenderers[entry] = r;
 
 			r.SetMaterialOverride( skinMaterial, "skin" );

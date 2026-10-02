@@ -213,11 +213,11 @@ public sealed partial class Clothing : GameResource
 	public BodyGroups HideBody { get; set; }
 
 	/// <summary>
-	/// Move with the avatar's body deforms without being reshaped by them. For hard items like earrings or a sword, which a
-	/// thin neck or a big head would otherwise bend. Each part moves as the bone it's weighted to does.
+	/// How this clothing responds to the avatar's body deforms. Normal reshapes it, None ignores them, and Rigid moves it
+	/// without reshaping it, for hard items like earrings or a sword.
 	/// </summary>
 	[Category( "Clothing Setup" )]
-	public bool RigidDeformation { get; set; }
+	public SkinnedModelRenderer.DeformationModeType DeformationMode { get; set; } = SkinnedModelRenderer.DeformationModeType.Normal;
 
 	[Category( "User Customization" )]
 	public bool AllowTintSelect { get; set; }

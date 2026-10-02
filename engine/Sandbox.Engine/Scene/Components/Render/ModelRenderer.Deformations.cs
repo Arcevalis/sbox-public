@@ -35,7 +35,7 @@ partial class ModelRenderer
 		_effectiveVolumes.Clear();
 		_orderedDeformers.Clear();
 		_deformationSources.Clear();
-		var source = this;
+		var source = this is SkinnedModelRenderer { DeformationMode: SkinnedModelRenderer.DeformationModeType.None } ? null : this;
 		while ( source.IsValid() && source.Active && _deformationSources.Add( source ) )
 		{
 			foreach ( var component in source.ModelDeformers )
@@ -142,12 +142,33 @@ partial class SkinnedModelRenderer
 	internal override ModelRenderer DeformationSource => _boneMergeTarget;
 
 	/// <summary>
-	/// Move with model deformers without being reshaped by them - for hard items like earrings or a sword. Each part of the
-	/// model moves as the deformation moves the bone it hangs from: its own, or when bone merged, the nearest up its chain
-	/// that the model it's merged to has, so jiggle bones move as one piece with it.
+	/// How this model responds to model deformers. Normal reshapes it, None ignores them, and Rigid moves it without
+	/// reshaping it, for hard items like earrings or a sword.
 	/// </summary>
-	[Property, Group( "Deformation" )]
-	public bool RigidDeformation { get; set; }
+	[Property, Advanced]
+	public DeformationModeType DeformationMode { get; set; } = DeformationModeType.Normal;
+
+	/// <summary>
+	/// How model deformers affect a skinned model.
+	/// </summary>
+	public enum DeformationModeType
+	{
+		/// <summary>
+		/// Reshape the model with model deformers.
+		/// </summary>
+		Normal,
+
+		/// <summary>
+		/// Ignore model deformers, including those inherited through bone merging.
+		/// </summary>
+		None,
+
+		/// <summary>
+		/// Move each part as the deformation moves the bone it hangs from without reshaping it. When bone merged,
+		/// use the nearest bone up its chain that the target has, so jiggle bones move as one piece with it.
+		/// </summary>
+		Rigid
+	}
 
 	private Vector4[] _anchors = [];
 	private (Model Model, Model Target) _anchorModels;
@@ -159,7 +180,7 @@ partial class SkinnedModelRenderer
 	{
 		get
 		{
-			if ( !RigidDeformation || Model is null ) return [];
+			if ( DeformationMode != DeformationModeType.Rigid || Model is null ) return [];
 
 			var target = _boneMergeTarget?.Model;
 			if ( _anchorModels != (Model, target) )
