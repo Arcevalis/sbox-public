@@ -9,21 +9,17 @@
 
 @*
     The main menu, mid-game - the same frame (MenuShell), its own navigator, minus the scene behind,
-    opening on the game's own page (PauseHome). Across the top of every page, the big button back to
-    the game (GameBar).
+    opening on the game's own page (PauseHome) - its pages, and the buttons back to it and out of it,
+    down the left (GameMenu).
 *@
 <root>
 
-    @* A shade coming up from the foot of the screen, behind everything - so what sits straight on
-       the game down there (the Overview's name and pills) reads over it. Across the whole width, the
+    @* A shade coming down from the top of the screen, behind everything - so what sits straight on
+       the game up there (the Overview's name and pills) reads over it. Across the whole width, the
        rail's side too, so it's one even darkening rather than a patch *@
     <div class="screen-shade"></div>
 
-    <MenuShell @ref="Navigator">
-        <Top>
-            <GameBar Modal=@this />
-        </Top>
-    </MenuShell>
+    <MenuShell @ref="Navigator" />
 
 </root>
 

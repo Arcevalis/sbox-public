@@ -94,13 +94,68 @@ Sidebar
 			border-radius: 8px;
 			background-size: cover;
 			background-position: center;
-			border: $front-border-width solid $front-border;
+			// No outline of its own - only the one the calling pulse brings in. Always there, unseen, so
+			// the pulse doesn't change its size
+			border: 2px solid transparent;
 			cursor: pointer;
+			transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease;
 		}
 
-		&.active .game-icon
+		// "Back to game", under the icon when it's calling you - tucked up into the icon, small and gone, the
+		// rest of the time, sliding back out when it calls again
+		.back
 		{
-			border-color: $front-primary;
+			flex-shrink: 0;
+			height: 0;
+			margin-top: 0;
+			opacity: 0;
+			transform: translateY( -16px ) scale( 0.6 );
+			font-family: $front-font;
+			font-size: 9.5px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.03em;
+			white-space: nowrap;
+			color: linear-gradient( 180deg, #cfe3ff, $front-primary * 1.6 );
+			text-shadow: 0 0 8px rgba( $front-primary, 0.9 );
+			transition: height 0.25s ease, margin-top 0.25s ease, opacity 0.2s ease, transform 0.25s ease;
+		}
+
+		// Out in the menu's own pages mid-game - calling you back to it. The tab's blue breathing in
+		// and out, the icon swelling a touch with a glow round it, "Back to game" lit under it
+		&.calling
+		{
+			animation: game-tab-call 0.5s ease-in-out infinite alternate;
+
+			.game-icon
+			{
+				width: 40px;
+				height: 40px;
+				animation: game-icon-call 0.5s ease-in-out infinite alternate;
+			}
+
+			.back
+			{
+				height: 12px;
+				margin-top: 4px;
+				opacity: 1;
+				transform: translateY( 0 ) scale( 1 );
+			}
+
+			// Under the pointer, it's got your attention - still, and fully lit
+			&:hover
+			{
+				animation: none;
+				background-color: rgba( $front-primary, 0.22 );
+
+				.game-icon
+				{
+					animation: none;
+					transform: scale( 1.06 );
+					border-color: $front-primary;
+					box-shadow: 0 0 18px 4px rgba( $front-primary, 0.8 );
+				}
+			}
 		}
 	}
 
@@ -138,5 +193,37 @@ Sidebar
 		{
 			color: $front-danger;
 		}
+	}
+}
+
+// The game tab calling you back - its blue tint breathing
+@keyframes game-tab-call
+{
+	0%
+	{
+		background-color: rgba( $front-primary, 0.04 );
+	}
+
+	100%
+	{
+		background-color: rgba( $front-primary, 0.2 );
+	}
+}
+
+// Its icon swelling a touch, its outline and a glow growing round it
+@keyframes game-icon-call
+{
+	0%
+	{
+		transform: scale( 1 );
+		border-color: rgba( $front-primary, 0 );
+		box-shadow: 0 0 0px 0px rgba( $front-primary, 0 );
+	}
+
+	100%
+	{
+		transform: scale( 1.08 );
+		border-color: rgba( $front-primary, 1 );
+		box-shadow: 0 0 20px 5px rgba( $front-primary, 0.75 );
 	}
 }

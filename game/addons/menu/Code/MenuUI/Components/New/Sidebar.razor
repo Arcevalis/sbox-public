@@ -10,11 +10,14 @@
 <root>
 
     @* Mid-game, the mark's place is the game you're in - a tab of its own, its icon, for its page in
-       the pause menu, lit like any other entry when you're on it *@
+       the pause menu, lit like any other entry when you're on it. Off it, out in the menu's own pages,
+       it calls you back - glowing, pulsing, "Back to game" under it - so it's plain you're still in a game *@
     @if ( Game.InGame && InGamePackage is { } game )
     {
-        <div class="game-tab @(OnGamePage ? "active" : "")" tooltip="@game.Title" onclick=@( () => this.Navigate( GamePageUrl ) )>
+        <div class="game-tab @(OnGamePage ? "active" : "calling")" tooltip="@(OnGamePage ? game.Title : $"Back to {game.Title}")" onclick=@( () => this.Navigate( GamePageUrl ) )>
             <div class="game-icon" style="background-image: url( @game.Thumb );"></div>
+            @* Always there, so going back to the game can slide it up into the icon rather than drop it *@
+            <label class="back">Back to game</label>
         </div>
     }
     else

@@ -1,54 +1,91 @@
 @import "/styles/_theme.scss";
 @import "/styles/_front.scss";
+@import "/Modals/PauseMenuModal/_pause.scss";
 
-// The game's list, down the left of its page - a card like the rail, its entries the rail's turned
-// on their side: a glyph beside the word, full width, the marker down the right edge
+// Down the left of the page - a card like the rail: the game's pages, then what you can do as buttons
 GameMenu
 {
 	@include front-card;
 
 	flex-shrink: 0;
-	width: 256px;
+	width: 340px;
 	// None - its entries run edge to edge, top included, like the rail's
 	box-shadow: $front-rail-shadow;
 	pointer-events: all;
 	font-family: $front-font;
 
-	.entries
+	// Under the buttons, a hairline over them
+	.pages
 	{
 		flex-direction: column;
 		flex-shrink: 0;
-		padding-bottom: 8px;
+		padding: 8px 0;
+		border-top: $front-border-width solid $front-hairline;
 	}
 
-	// A group's heading - the page's small blue label, like the Overview's ACHIEVEMENTS and
-	// LATEST NEWS. Snug - the entries round it carry room of their own in their height
-	.group
+	// Reporting it, on its own under the pages - a quiet line of text, no button to it, lit up under
+	// the pointer
+	.footer
 	{
-		@include front-eyebrow;
-		padding: 10px 20px 0 20px;
+		flex-shrink: 0;
+		padding: 12px 20px 14px 20px;
+		border-top: $front-border-width solid $front-hairline;
+	}
 
-		// Off the card's top edge
-		&:first-child
+	.report
+	{
+		flex-direction: row;
+		align-self: flex-start;
+		align-items: center;
+		gap: 6px;
+		cursor: pointer;
+
+		i
 		{
-			padding-top: 16px;
+			font-size: 14px;
+			color: $front-label;
+			transition: color 0.1s ease;
+		}
+
+		label
+		{
+			font-size: 12px;
+			font-weight: 500;
+			color: $front-label;
+			transition: color 0.1s ease;
+		}
+
+		&:hover
+		{
+			sound-in: "ui.button.over";
+
+			i, label
+			{
+				color: $front-heading;
+			}
+		}
+
+		&:active
+		{
+			sound-in: "ui.button.press";
 		}
 	}
 
-	// Between the list and leaving, so leaving's on the card's foot
+	// Between the pages and reporting it, so that's on the card's foot
 	.grow
 	{
 		flex-grow: 1;
 	}
 
-	// An entry - its glyph and its word, the rail's colours, a marker kept clear down its right edge
+	// A page - the rail's entries turned on their side: a glyph beside the word, full width, the marker
+	// down the right edge
 	.entry
 	{
 		flex-direction: row;
 		flex-shrink: 0;
 		align-items: center;
 		gap: 14px;
-		height: 54px;
+		height: 42px;
 		padding: 0 20px;
 		border-right: 2px solid transparent;
 		cursor: pointer;
@@ -59,7 +96,7 @@ GameMenu
 			width: 22px;
 			flex-shrink: 0;
 			text-align: center;
-			font-size: 21px;
+			font-size: 20px;
 			color: linear-gradient( 180deg, #8e97a8, #3e4553 );
 		}
 
@@ -95,7 +132,7 @@ GameMenu
 			sound-in: "ui.button.press";
 		}
 
-		// The page this is - the rail's page you're on, its blue
+		// The page showing - the rail's page you're on, its blue
 		&.active
 		{
 			cursor: default;
@@ -113,53 +150,115 @@ GameMenu
 				color: $front-heading;
 			}
 		}
+	}
 
-		// Streaming that's on
-		&.on i
+	// What you can do, under the game - real buttons, inset from the card's edges
+	.actions
+	{
+		flex-direction: column;
+		flex-shrink: 0;
+		gap: 8px;
+		padding: 14px;
+	}
+
+	// Resume and leaving, side by side - Resume taking the row, leaving just a square for its glyph
+	.first
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		gap: 8px;
+
+		> .resume
 		{
-			color: linear-gradient( 180deg, #7fb4ff, $front-primary );
+			flex-grow: 1;
 		}
 
-		// One of the game's that can't be pressed right now
-		&.disabled
+		> .leave
 		{
-			opacity: 0.35;
-			cursor: default;
-			pointer-events: none;
-		}
-
-		// Leaving - on the foot, a hairline over it, red so it reads as leaving, stronger under the
-		// pointer like the rail's Quit
-		&.leave
-		{
-			height: 58px;
-			border-top: $front-border-width solid $front-hairline;
-			background-color: rgba( $front-danger, 0.06 );
+			width: 48px;
+			height: 48px;
+			padding: 0;
+			justify-content: center;
 
 			i
 			{
-				color: linear-gradient( 180deg, $front-danger * 1.2, $front-danger * 0.8 );
+				font-size: 20px;
+			}
+		}
+	}
+
+	// A button, at the column's width
+	.action
+	{
+		@include pause-button;
+
+		// Back to the game - the loudest of them, in the menu's blue: deep on the left, brighter to the
+		// right, a blue outline
+		&.resume
+		{
+			height: 48px;
+			border-color: rgba( $front-primary, 0.55 );
+			background-color: #14264a;
+			background-image: linear-gradient( 90deg, #152a52 0%, #1b4488 70%, #2059b3 100% );
+			box-shadow: 0 4px 16px rgba( $front-primary, 0.25 );
+
+			// The old Resume bar's glyph - lit past 1 so it catches the bloom, glowing
+			i
+			{
+				font-size: 24px;
+				color: linear-gradient( 180deg, #9cc6ff * 2.2, $front-primary * 1.8 );
+				text-shadow: 0 0 14px rgba( $front-primary, 0.9 );
 			}
 
+			// White at the top, easing down into the button's blue - the glyph's gradient, softer
 			label
 			{
-				color: $front-danger;
+				font-size: 15px;
+				font-weight: 700;
+				color: linear-gradient( 180deg, #ffffff 30%, #8fbaff 100% );
 			}
 
 			&:hover
 			{
-				background-color: rgba( $front-danger, 0.12 );
-				background-image: linear-gradient( 90deg, rgba( $front-danger, 0 ), rgba( $front-danger, 0.16 ) );
-				border-right: 2px solid rgba( $front-danger, 0.7 );
+				border-color: rgba( $front-primary * 1.6, 0.8 );
+				background-image: linear-gradient( 90deg, #183060 0%, #1f4f9e 70%, #2667cc 100% );
+				box-shadow: 0 4px 20px rgba( $front-primary, 0.45 );
+			}
+		}
+
+		// Leaving - red so it reads as leaving, stronger under the pointer like the rail's Quit
+		&.leave
+		{
+			border-color: rgba( $front-danger, 0.4 );
+			background-color: rgba( $front-danger, 0.08 );
+
+			// Resume's treatment in red, kept quiet - leaving shouldn't shout louder than resuming
+			i
+			{
+				color: linear-gradient( 180deg, $front-danger * 1.25, $front-danger * 0.85 );
+				text-shadow: 0 0 8px rgba( $front-danger, 0.35 );
+			}
+
+			// A touch lighter at the top, easing down into the red
+			label
+			{
+				color: linear-gradient( 180deg, $front-danger * 1.15 30%, $front-danger * 0.9 100% );
+			}
+
+			&:hover
+			{
+				border-color: rgba( $front-danger, 0.75 );
+				background-color: rgba( $front-danger, 0.18 );
 
 				i
 				{
-					color: linear-gradient( 180deg, $front-danger * 1.3, $front-danger );
+					color: linear-gradient( 180deg, $front-danger * 1.4, $front-danger );
+					text-shadow: 0 0 10px rgba( $front-danger, 0.5 );
 				}
 
 				label
 				{
-					color: $front-danger;
+					color: linear-gradient( 180deg, $front-danger * 1.3 30%, $front-danger 100% );
 				}
 			}
 		}

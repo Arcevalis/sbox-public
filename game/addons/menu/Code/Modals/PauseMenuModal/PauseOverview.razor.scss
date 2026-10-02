@@ -1,47 +1,45 @@
 @import "/styles/_theme.scss";
 @import "/styles/_front.scss";
 
-// Straight on the dimmed game, no cards - one block down at the bottom of the page, the game showing
-// above it. A step in from the bar's edges, as there's no card to line up with them
+// The Game info page, in the body (PausePage) - across the top, what's new and its achievements at a
+// glance, a card each; the game's own buttons under them (GameActions). The game itself is down the
+// left (GameSummary)
 PauseOverview
 {
+	// The page's whole height - the game's buttons are placed over it, in the middle of the screen
+	position: relative;
 	flex-direction: column;
 	flex-grow: 1;
-	gap: 40px;
+	flex-shrink: 0;
 	font-family: $front-font;
 
-	// A step in from the bar's edges, as there's no card to line up with them. What it sits on reads
-	// over the game thanks to the pause menu's own shade, across the whole screen (PauseModal)
-	padding: 0 16px 8px 16px;
-
-	// Everything pushed down to the bottom, the game showing above it
-	> .spacer
+	// Blocks side by side across the top, in the middle - a quarter of the row each, as tall as the
+	// taller of them
+	> .tiles
 	{
-		flex-grow: 1;
-	}
-
-	// What's new and the achievements down the right, each in a card of its own, stacked with a gap
-	.extras
-	{
-		flex-direction: column;
+		flex-direction: row;
 		flex-shrink: 0;
 		align-items: stretch;
-		width: 380px;
+		justify-content: center;
 		gap: 16px;
 
-		// Each card opens the whole of it - lifting a touch under the pointer to say so: its outline
-		// brighter, its slab a shade lighter, its shadow deeper
 		> .latest, > .achievements
 		{
 			@include front-card;
 
 			position: relative;
+			flex-grow: 0;
+			flex-shrink: 0;
+			width: calc(25% - 12px);
+			min-width: 0;
 			padding: 16px;
 			box-shadow: 0 16px 40px rgba( 0, 0, 0, 0.55 );
 			cursor: pointer;
 			pointer-events: all;
 			transition: border-color 0.12s ease, background-image 0.12s ease, box-shadow 0.12s ease;
 
+			// Lifting a touch under the pointer to say it opens: its outline brighter, its slab a
+			// shade lighter, its shadow deeper
 			&:hover
 			{
 				sound-in: "ui.button.over";
@@ -61,134 +59,17 @@ PauseOverview
 			}
 		}
 
-		// The post's picture behind the card's right third or so, fading out towards the words on the
-		// left - white shows, black hides. The card clips it to its corners
-		> .latest > .art
+		// How long you've played it - a little one, as wide as it needs, the two one over the other.
+		// Nothing to open
+		> .playtime
 		{
-			position: absolute;
-			top: 0;
-			right: 0;
-			bottom: 0;
-			width: 35%;
-			background-size: cover;
-			background-position: center;
-			mask-image: linear-gradient( 90deg, black 0%, white 100% );
-			pointer-events: none;
-		}
+			@include front-card;
 
-		// The news, a size down to sit in its card
-		.headline .news-title
-		{
-			font-size: 18px;
-		}
-
-		// Its label a little clear of the title - the headline's snug pull-up's for the big title
-		.headline .news-eyebrow
-		{
-			margin-bottom: -3px;
-		}
-
-		// The changelog close under the title, a size smaller again
-		.changelog
-		{
-			margin-top: -4px;
-
-			.changelog-title
-			{
-				font-size: 11px;
-			}
-		}
-
-		// Its heading, its faces and its bar evenly apart
-		> .achievements
-		{
-			gap: 10px;
-
-			.head
-			{
-				margin-bottom: 0;
-			}
-		}
-	}
-
-	// The game down the left
-	> .bottom
-	{
-		flex-direction: row;
-		align-items: flex-end;
-		gap: 48px;
-
-		// A little up off the foot of the page
-		margin-bottom: 16px;
-	}
-
-	.left
-	{
-		flex-direction: column;
-		flex-shrink: 1;
-		min-width: 0;
-	}
-
-	.grow
-	{
-		flex-grow: 1;
-	}
-
-
-	.section-label
-	{
-		@include front-section-label;
-	}
-
-	//
-	// The game
-	//
-
-	.hero
-	{
-		flex-direction: column;
-		gap: 6px;
-
-		// Its big type carries room of its own under the letters - taken back, so the line under it
-		// sits snug on it
-		.name
-		{
-			font-size: 40px;
-			font-weight: 700;
-			color: $front-heading;
-			margin-bottom: -6px;
-
-			// Opens the game's page
-			align-self: flex-start;
-			cursor: pointer;
-			pointer-events: all;
-			transition: color 0.1s ease;
-
-			&:hover
-			{
-				sound-in: "ui.button.over";
-				color: #ffffff;
-			}
-
-			&:active
-			{
-				sound-in: "ui.button.press";
-			}
-		}
-
-		.summary
-		{
-			font-size: 15px;
-			color: $front-body;
-			white-space: normal;
-		}
-
-		// Play time and this session, side by side - labelled like the cards down the right
-		.playtime
-		{
-			flex-direction: row;
-			gap: 28px;
-			margin-top: 8px;
+			flex-shrink: 0;
+			justify-content: center;
+			gap: 14px;
+			padding: 16px 24px 16px 18px;
+			box-shadow: 0 16px 40px rgba( 0, 0, 0, 0.55 );
 
 			.stat
 			{
@@ -209,11 +90,75 @@ PauseOverview
 			}
 		}
 
-		PackageReactions
+		// Its heading, its faces and its bar evenly apart
+		> .achievements
 		{
-			margin-top: 10px;
-			pointer-events: all;
+			gap: 10px;
+
+			.head
+			{
+				margin-bottom: 0;
+			}
 		}
+
+		// The news a good few sizes down from the loading screen's big headline, to sit in its card, its
+		// lines with room between them - scoped here so it wins over the headline's own snug pulls
+		.headline
+		{
+			gap: 8px;
+
+			.news-eyebrow
+			{
+				margin-bottom: 0;
+			}
+
+			.news-title
+			{
+				font-size: 16px;
+			}
+		}
+
+		// Its words fill the card, so the changelog under them sits on its foot
+		> .latest > .latest-text
+		{
+			flex-grow: 1;
+			gap: 12px;
+
+			> .headline
+			{
+				flex-grow: 1;
+			}
+		}
+
+		.changelog
+		{
+			margin-top: 0;
+
+			.changelog-title
+			{
+				font-size: 11.5px;
+			}
+
+			i
+			{
+				font-size: 12px;
+			}
+
+			.go
+			{
+				font-size: 13px;
+			}
+		}
+	}
+
+	.grow
+	{
+		flex-grow: 1;
+	}
+
+	.section-label
+	{
+		@include front-section-label;
 	}
 
 	//
@@ -221,86 +166,10 @@ PauseOverview
 	//
 
 	// Each opens the whole of it
-	.reviews, .achievements
+	.achievements
 	{
 		cursor: pointer;
 		pointer-events: all;
-		transition: opacity 0.1s ease;
-
-		&:hover
-		{
-			sound-in: "ui.button.over";
-		}
-
-		&:active
-		{
-			sound-in: "ui.button.press";
-		}
-	}
-
-	//
-	// How it's reviewed, in a line under the name - the words and score, the split of recommend /
-	// promising / needs work, and how many
-	//
-
-	.reviews
-	{
-		flex-direction: row;
-		align-self: flex-start;
-		align-items: center;
-		gap: 12px;
-	}
-
-	// The words for it, and its score beside them a shade quieter - both in its colour
-	.verdict
-	{
-		flex-direction: row;
-		align-items: center;
-		gap: 6px;
-
-		label
-		{
-			font-size: 14px;
-			font-weight: 700;
-			color: $front-body;
-		}
-
-		.score
-		{
-			opacity: 0.7;
-		}
-
-		&.positive label { color: $front-reward; }
-		&.mixed label { color: $front-trophy; }
-		&.negative label { color: $front-danger; }
-	}
-
-	// The three, side by side at their share - the review window's green, amber and red
-	.split
-	{
-		flex-direction: row;
-		width: 96px;
-		height: 4px;
-		gap: 2px;
-		border-radius: 999px;
-		background-color: $front-track;
-		overflow: hidden;
-
-		.part
-		{
-			flex-basis: 0;
-			height: 100%;
-		}
-
-		.good { background-color: $front-reward; }
-		.meh { background-color: $front-trophy; }
-		.bad { background-color: $front-danger; }
-	}
-
-	.counts
-	{
-		font-size: 12.5px;
-		color: $front-secondary;
 	}
 
 	.achievements
@@ -395,7 +264,7 @@ PauseOverview
 	}
 
 	//
-	// What's new, up top under the bar - its latest post (or with no news, its latest update) in the
+	// What's new, under the game - its latest post (or with no news, its latest update) in the
 	// loading screen's headline (front-headline), the post's picture beside it, and its latest
 	// changelog under it
 	//

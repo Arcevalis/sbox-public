@@ -36,7 +36,10 @@
         <div class="group">
             <div class="pill" onclick=@( () => Game.Overlay.ShowReviewModal( Package ) ) tooltip="@ReviewTooltip">
                 <icon>rate_review</icon>
-                <label>@ReviewText</label>
+                @if ( ReviewText is { } text )
+                {
+                    <label>@text</label>
+                }
             </div>
         </div>
     }
@@ -89,15 +92,15 @@
     [Parameter] public bool ShowReviews { get; set; } = true;
 
     /// <summary>
-    /// The review pill says the score - or, off, "Write a review", for where the score's said already
-    /// (the pause menu's Overview, in its reviews line).
+    /// The review pill says the score - or, off, it's just its glyph ("Write a review" on hover), for
+    /// where the score's said already (the pause menu's game, in its reviews line).
     /// </summary>
     [Parameter] public bool ShowReviewScore { get; set; } = true;
 
     protected override int BuildHash() => HashCode.Combine( Package, Package?.Interaction.Rating, Package?.Interaction.Favourite, Package?.VotesUp, Package?.VotesDown, Package?.Favourited, Package?.Reviews.Total, HashCode.Combine( ShowJam, _nominated, _jamBusy, OnHidden is null, ShowReviews, ShowReviewScore, MenuUtility.Hidden.Revision ) );
 
-    string ReviewText => !ShowReviewScore ? "Write a review" : Package.Reviews.Total > 0 ? Package.Reviews.Score.ToString( "0\\%" ) : "Review";
-    string ReviewTooltip => Package.Reviews.Total > 0 ? $"{Package.Reviews.Score:N0}% from {Package.Reviews.Total} reviews. Write yours" : "Write a review";
+    string ReviewText => !ShowReviewScore ? null : Package.Reviews.Total > 0 ? Package.Reviews.Score.ToString( "0\\%" ) : "Review";
+    string ReviewTooltip => ShowReviewScore && Package.Reviews.Total > 0 ? $"{Package.Reviews.Score:N0}% from {Package.Reviews.Total} reviews. Write yours" : "Write a review";
 
     // Rating: 0 like, 1 dislike, null unrated
     bool Liked => Package.Interaction.Rating == 0;

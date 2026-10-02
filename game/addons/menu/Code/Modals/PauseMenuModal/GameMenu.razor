@@ -6,80 +6,86 @@
 
 @*
     Down the left of the game's page in the pause menu - everything you can do about the game you're
-    in, as a list like the rail's, in groups under little headings: its own buttons (its
-    [PauseAction] methods); the session - another map, streaming, who's here; and its info - its
-    achievements, news and changes, and reporting it (always something there, so the list's never
-    empty). Leaving it on the foot.
-    Getting back to it is the big bar across the top (GameBar); quitting s&box is the rail's.
+    in. Up top the game itself (GameSummary) - its name, play time and the pills to like it.
+    Under it what you can do, as buttons: back to the game, another map, streaming, and leaving it -
+    the game's own are on its Game info (GameActions). Then its pages, a list like the rail's - its
+    Overview, who's here, its achievements, reviews, news and changes - each opening in the body
+    beside it (PauseHome), the one showing lit up. On its foot, reporting it. Quitting s&box is the
+    rail's.
 *@
 <root>
 
-    <div class="entries">
-        @* The game's own, in its order *@
-        @if ( Actions.Count > 0 )
-        {
-            <div class="group"><label>Actions</label></div>
+    @* The game itself, up top - its name, what it is, play time *@
+    @if ( ThisGame is { } summarised )
+    {
+        <GameSummary Package=@summarised />
+    }
 
-            @foreach ( var action in Actions )
-            {
-                <div class="entry @(action.IsEnabled ? "" : "disabled")" tooltip="@action.Tooltip" onclick=@( () => Press( action ) )>
-                    <i>@(action.Icon ?? "radio_button_unchecked")</i>
-                    <label>@action.Title</label>
-                </div>
-            }
+    @* What you can do, under it - back to the game and out of it first, another map and streaming
+       under. The game's own are on its Game info (GameActions) *@
+    <div class="actions">
+        @* Back to the game, and out of it beside - just its glyph, it asks first *@
+        <div class="first">
+            <div class="action resume" onclick=@( () => Modal?.Resume() )>
+                <i>play_arrow</i>
+                <label>Resume game</label>
+            </div>
+
+            <div class="action leave" onclick=@Leave tooltip="Leave game">
+                <i>logout</i>
+            </div>
+        </div>
+
+        @if ( CanChangeMap )
+        {
+            <div class="action" onclick=@ChangeMap>
+                <i>map</i>
+                <label>Change map</label>
+            </div>
         }
 
-        @* This session of it - where you're playing, who with *@
-        @if ( HasSession )
+        @if ( IsStreamerGame )
         {
-            <div class="group"><label>Session</label></div>
+            <div class="action @(Streamer.IsActive ? "on" : "")" onclick=@( () => Game.Overlay.ShowServiceConnector() )>
+                <i>settings_input_antenna</i>
+                <label>Stream</label>
+            </div>
+        }
+    </div>
 
-            @if ( CanChangeMap )
-            {
-                <div class="entry" onclick=@ChangeMap>
-                    <i>map</i>
-                    <label>Change map</label>
-                </div>
-            }
+    @* Its pages, under the buttons - each in the body, in place of the one there *@
+    @if ( ThisGame is { } game )
+    {
+        <div class="pages">
+            <div class="entry @Active( null )" onclick=@( () => PauseHome.Show( null ) )>
+                <i>info</i>
+                <label>Information</label>
+            </div>
 
-            @if ( IsStreamerGame )
+            @if ( PauseHome.ShowPlayers )
             {
-                <div class="entry @(Streamer.IsActive ? "on" : "")" onclick=@( () => Game.Overlay.ShowServiceConnector() )>
-                    <i>settings_input_antenna</i>
-                    <label>Stream</label>
-                </div>
-            }
-
-            @if ( GameInfoModal.ShowPlayers && ThisGame is { } playersGame )
-            {
-                <div class="entry" onclick=@( () => GameInfoModal.Open( playersGame, PackagePage.Players ) )>
+                <div class="entry @Active( PackagePage.Players )" onclick=@( () => PauseHome.Show( PackagePage.Players ) )>
                     <i>group</i>
                     <label>Players</label>
                 </div>
             }
-        }
-
-        @* About the game itself - how far through it you are, what's new, and reporting it *@
-        @if ( ThisGame is { } game )
-        {
-            <div class="group"><label>Info</label></div>
-
-            <div class="entry" onclick=@( () => game.OpenModal() )>
-                <i>info</i>
-                <label>Game info</label>
-            </div>
 
             @if ( HasAchievements )
             {
-                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.Achievements ) )>
+                <div class="entry @Active( PackagePage.Achievements )" onclick=@( () => PauseHome.Show( PackagePage.Achievements ) )>
                     <i>emoji_events</i>
                     <label>Achievements</label>
                 </div>
             }
 
+            <div class="entry @Active( PackagePage.Reviews )" onclick=@( () => PauseHome.Show( PackagePage.Reviews ) )>
+                <i>reviews</i>
+                <label>Reviews</label>
+            </div>
+
             @if ( game.LatestNewsPost is not null )
             {
-                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.News ) )>
+                <div class="entry @Active( PackagePage.News )" onclick=@( () => PauseHome.Show( PackagePage.News ) )>
                     <i>newspaper</i>
                     <label>News</label>
                 </div>
@@ -87,26 +93,24 @@
 
             @if ( game.LatestChangeLists.Length > 0 )
             {
-                <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.Changes ) )>
+                <div class="entry @Active( PackagePage.Changes )" onclick=@( () => PauseHome.Show( PackagePage.Changes ) )>
                     <i>history</i>
                     <label>Changes</label>
                 </div>
             }
+        </div>
 
-            <div class="entry" onclick=@( () => Game.Overlay.ShowReportModal( game.FullIdent ) )>
+        <div class="grow"></div>
+
+        @* Last of all, on the card's foot under a hairline - just a line of text, it's rarely what
+           you're here for *@
+        <div class="footer">
+            <div class="report" onclick=@( () => Game.Overlay.ShowReportModal( game.FullIdent ) )>
                 <i>flag</i>
-                <label>Report</label>
+                <label>Report this game</label>
             </div>
-        }
-    </div>
-
-    <div class="grow"></div>
-
-    @* Out of the game, back to the menu - it asks first *@
-    <div class="entry leave" onclick=@Leave>
-        <i>logout</i>
-        <label>Leave game</label>
-    </div>
+        </div>
+    }
 
 </root>
 
@@ -116,9 +120,14 @@
 
     PauseModal Modal => Ancestors.OfType<PauseModal>().FirstOrDefault();
 
-    static bool IsStreamerGame => ThisGame?.Info.IsStreamerGame ?? false;
+    /// <summary>
+    /// The page showing in the body beside us - null for the Overview.
+    /// </summary>
+    string Page => PackagePage.Find( Ancestors.OfType<PauseHome>().FirstOrDefault()?.Page ).Id;
 
-    static bool HasSession => CanChangeMap || IsStreamerGame || GameInfoModal.ShowPlayers;
+    string Active( string page ) => Page == page ? "active" : "";
+
+    static bool IsStreamerGame => ThisGame?.Info.IsStreamerGame ?? false;
 
     static bool CanChangeMap => (!Networking.IsActive || Networking.IsHost) && (ThisGame?.Info.ShowsChangeMap ?? false);
 
@@ -183,13 +192,6 @@
         }
     }
 
-    //
-    // The game's own buttons - read off it every frame the list's up, so they follow the game
-    //
-
-    readonly List<MenuUtility.PauseAction> Actions = new();
-    int _actionsHash;
-
     public override void Tick()
     {
         base.Tick();
@@ -199,47 +201,7 @@
             _achievementsFor = ThisGame;
             _ = CheckAchievements( ThisGame );
         }
-
-        MenuUtility.GetPauseActions( Actions );
-
-        if ( _mockActions )
-            AddMockActions( Actions );
-
-        var hash = 0;
-        foreach ( var a in Actions )
-            hash = HashCode.Combine( hash, a.Title, a.Icon, a.Tooltip, a.IsEnabled );
-
-        _actionsHash = hash;
     }
 
-    void Press( MenuUtility.PauseAction action )
-    {
-        if ( !action.IsEnabled ) return;
-
-        action.Press?.Invoke();
-
-        if ( action.DismissOnPress )
-            Modal?.Resume();
-    }
-
-    static bool _mockActions;
-
-    /// <summary>
-    /// <c>menu_mock_pause_actions</c> - a few made up game actions in the pause menu, to look at without a
-    /// game that has any. Again to take them off.
-    /// </summary>
-    [MenuConCmd( "menu_mock_pause_actions", Help = "Toggle a few made up game actions in the pause menu" )]
-    public static void MockActions()
-    {
-        _mockActions = !_mockActions;
-    }
-
-    static void AddMockActions( List<MenuUtility.PauseAction> actions )
-    {
-        actions.Add( new( "Vote map", "how_to_vote", "Pick the next map", true, true, () => Log.Info( "menu_mock_pause_actions: Vote map" ) ) );
-        actions.Add( new( "Scoreboard", "leaderboard", null, true, false, () => Log.Info( "menu_mock_pause_actions: Scoreboard" ) ) );
-        actions.Add( new( "Respawn", "restart_alt", "Can't respawn yet", false, true, () => Log.Info( "menu_mock_pause_actions: Respawn" ) ) );
-    }
-
-    protected override int BuildHash() => HashCode.Combine( ThisGame, CanChangeMap, Streamer.IsActive, _actionsHash, GameInfoModal.ShowPlayers, HasAchievements, ThisGame?.LatestNewsPost, ThisGame?.LatestChangeLists.Length );
+    protected override int BuildHash() => HashCode.Combine( ThisGame, CanChangeMap, Streamer.IsActive, PauseHome.ShowPlayers, Page, HasAchievements, ThisGame?.LatestNewsPost, ThisGame?.LatestChangeLists.Length );
 }
