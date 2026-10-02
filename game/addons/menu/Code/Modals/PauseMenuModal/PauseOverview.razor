@@ -237,16 +237,9 @@
     }
 
     /// <summary>
-    /// The backend's total, as of when the pause menu fetched the package - never less than this session.
+    /// The backend's total plus this session, so it climbs while you play.
     /// </summary>
-    TimeSpan TotalPlayTime
-    {
-        get
-        {
-            var total = TimeSpan.FromSeconds( Package.Interaction.Seconds );
-            return total > MenuUtility.SessionTime ? total : MenuUtility.SessionTime;
-        }
-    }
+    TimeSpan TotalPlayTime => TimeSpan.FromSeconds( Package.Interaction.Seconds ) + MenuUtility.SessionTime;
 
     // In minutes under an hour, hours to a decimal place past that - Steam's way
     static string Duration( TimeSpan time )
