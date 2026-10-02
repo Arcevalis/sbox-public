@@ -20,6 +20,12 @@ PauseModal.modal
 	background-color: rgba( 16, 17, 23, 0.75 );
 	backdrop-filter: blur( 8px ) saturate( 0.6 );
 
+	> menushell
+	{
+		max-width: $screen-w-xl;
+		margin: 0 auto;
+	}
+
 	// The overlay doesn't get the main menu's theme, where glyphs get their font
 	i, icon
 	{
