@@ -26,7 +26,13 @@ internal static class Analytics
 
 		timeUntilThink = Random.Shared.Float( 2, 4 );
 
-		gameIdent = Application.GameIdent;
+		// Package identity is available during installation. Only a ready host or activated client
+		// has reached gameplay; failed downloads must never open an activity session.
+		var ready = IGameInstance.Current is { IsLoading: false }
+			&& (!Networking.IsActive || Networking.IsHost || Connection.Local?.State == Connection.ChannelState.Connected);
+		var nextGame = ready ? Application.GameIdent : null;
+		var gameChanged = gameIdent != nextGame;
+		gameIdent = nextGame;
 		gameVersion = Application.GamePackage?.Revision?.VersionId.ToString() ?? "";
 		mapIdent = Application.MapPackage?.FullIdent ?? "";
 
@@ -39,6 +45,7 @@ internal static class Analytics
 		net = SampleNetwork();
 
 		CheckHash();
+		if ( gameChanged ) timeUntilNextUpdate = 0;
 		TryUpdateActivity();
 	}
 
@@ -66,7 +73,15 @@ internal static class Analytics
 
 		timeUntilNextUpdate = 60.0f * 1.0f;
 
-		Task.Run( () => Api.Activity.UpdateActivity( gameIdent, gameVersion, mapIdent, contentIdent, net ) );
+		Api.Activity.QueueUpdate( gameIdent, gameVersion, mapIdent, contentIdent, net );
+	}
+
+	internal static void GameClosed()
+	{
+		if ( Application.IsHeadless || Application.IsEditor || Application.IsDedicatedServer ) return;
+		gameIdent = null;
+		timeUntilThink = 0;
+		Api.Activity.QueueUpdate( null, null, null, null );
 	}
 
 	/// <summary>

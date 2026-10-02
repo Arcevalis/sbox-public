@@ -83,7 +83,7 @@ public static class Discovery
 
 	sealed class Tile
 	{
-		public string Ident;
+		public string Key;
 		public float VisibleFor;
 		public bool Reported;
 	}
@@ -120,10 +120,12 @@ public static class Discovery
 
 		var state = tiles.GetOrCreateValue( tile );
 
-		// Virtualised lists reuse panels for other packages
-		if ( state.Ident != package.FullIdent )
+		var context = Find( tile );
+		var key = ViewKey( context, package.FullIdent );
+		// A panel can retain its package while the query, shelf or recommendation request changes.
+		if ( state.Key != key )
 		{
-			state.Ident = package.FullIdent;
+			state.Key = key;
 			state.VisibleFor = 0;
 			state.Reported = false;
 		}
@@ -151,7 +153,7 @@ public static class Discovery
 		if ( package is null ) return;
 
 		var context = Find( source );
-		if ( !FirstTime( $"hover|{context.Surface}|{context.Shelf}|{package.FullIdent}" ) ) return;
+		if ( !FirstTime( $"hover|{ViewKey( context, package.FullIdent )}" ) ) return;
 
 		Submit( "discovery.hover", Describe( package, context, context.PositionOf( package ) ) );
 	}
@@ -300,16 +302,27 @@ public static class Discovery
 	static void Seen( Panel tile, Package package )
 	{
 		var context = Find( tile );
-		if ( !FirstTime( $"{context.Surface}|{context.Shelf}|{context.List}|{context.Query}|{package.FullIdent}" ) ) return;
+		if ( !FirstTime( ViewKey( context, package.FullIdent ) ) ) return;
 
 		if ( pending.Count == 0 ) sinceFlush = 0;
-		pending.Add( Describe( package, context, context.PositionOf( package ) ) );
+		var data = Describe( package, context, context.PositionOf( package ) );
+		data["at"] = DateTime.UtcNow;
+		pending.Add( data );
 	}
 
 	static bool FirstTime( string key )
 	{
 		if ( seen.Count > 10_000 ) seen.Clear();
 		return seen.Add( key );
+	}
+
+	static string ViewKey( DiscoveryContext context, string ident ) => $"{context.Surface}|{context.Shelf}|{context.List}|{context.Query}|{ident}";
+
+	/// <summary>Close previews and queue the final impressions before the engine flushes its events.</summary>
+	internal static void Shutdown()
+	{
+		foreach ( var preview in previews.ToArray() ) PreviewClosed( preview.Kind, preview.Ident );
+		Flush();
 	}
 
 	static void Flush()

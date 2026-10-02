@@ -89,6 +89,20 @@ internal static partial class Api
 			}
 		}
 
+		internal static Origin PendingRequest
+		{
+			get { lock ( loadLock ) return request; }
+		}
+
+		/// <summary>Clear only the request owned by the operation that failed, never a newer join.</summary>
+		internal static void CancelRequest( Origin expected )
+		{
+			lock ( loadLock )
+			{
+				if ( ReferenceEquals( request, expected ) ) request = null;
+			}
+		}
+
 		/// <summary>
 		/// A game package started loading. <paramref name="remote"/> is a join to someone else's server.
 		/// </summary>
@@ -138,9 +152,9 @@ internal static partial class Api
 		public static void LoadAbandoned( string reason ) => CurrentLoad?.End( reason is null ? "cancel" : "fail", reason );
 
 		/// <summary>
-		/// Taken once by the first heartbeat after a successful load of this game.
+		/// Retained until a heartbeat carrying this exact load has been acknowledged.
 		/// </summary>
-		internal static (Dictionary<string, object> Load, Origin Origin) TakeCompletedLoad( string game )
+		internal static (Dictionary<string, object> Load, Origin Origin) PeekCompletedLoad( string game )
 		{
 			lock ( loadLock )
 			{
@@ -150,10 +164,17 @@ internal static partial class Api
 				if ( completedLoad.GetValueOrDefault( "ident" ) is string ident && !SameGame( ident, game ) )
 					return default;
 
-				var taken = (completedLoad, completedOrigin);
+				return (completedLoad, completedOrigin);
+			}
+		}
+
+		internal static void AcknowledgeCompletedLoad( Dictionary<string, object> load )
+		{
+			lock ( loadLock )
+			{
+				if ( !ReferenceEquals( completedLoad, load ) ) return;
 				completedLoad = null;
 				completedOrigin = null;
-				return taken;
 			}
 		}
 

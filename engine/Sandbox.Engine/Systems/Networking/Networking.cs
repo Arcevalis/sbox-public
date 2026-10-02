@@ -723,6 +723,20 @@ public static partial class Networking
 
 	internal static async Task<bool> TryConnect( string target, int retries = 30, CancellationToken token = default, Action<string> onFailure = null )
 	{
+		var request = Api.Activity.PendingRequest;
+		var success = false;
+		try
+		{
+			return success = await TryConnectInternal( target, retries, token, onFailure );
+		}
+		finally
+		{
+			if ( !success && !IsMatchmaking ) Api.Activity.CancelRequest( request );
+		}
+	}
+
+	static async Task<bool> TryConnectInternal( string target, int retries, CancellationToken token, Action<string> onFailure )
+	{
 		token.ThrowIfCancellationRequested();
 		LeaveCurrentGame();
 
@@ -837,7 +851,19 @@ public static partial class Networking
 		IGameInstanceDll.Current.Disconnect( onFailure is null ? message : null );
 	}
 
-	public static Task<bool> TryConnectSteamId( SteamId steamId, int retries = 30 ) => TryConnectSteamIdInternal( steamId, retries );
+	public static async Task<bool> TryConnectSteamId( SteamId steamId, int retries = 30 )
+	{
+		var request = Api.Activity.PendingRequest;
+		var success = false;
+		try
+		{
+			return success = await TryConnectSteamIdInternal( steamId, retries );
+		}
+		finally
+		{
+			if ( !success && !IsMatchmaking ) Api.Activity.CancelRequest( request );
+		}
+	}
 
 	static async Task<bool> TryConnectSteamIdInternal( SteamId steamId, int retries, CancellationToken token = default, Action<string> onFailure = null )
 	{

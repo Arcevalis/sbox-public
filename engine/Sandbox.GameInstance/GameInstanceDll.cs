@@ -404,6 +404,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	/// </summary>
 	private void LeaveGame( bool disconnect )
 	{
+		Analytics.GameClosed();
 		using var scope = GlobalContext.GameScope();
 
 		if ( gameInstance is not null )
@@ -562,6 +563,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 		}
 
 		Api.Activity.SetExitReason( string.IsNullOrEmpty( message ) ? "leave" : "disconnect", message );
+		Api.Activity.CancelRequest( Api.Activity.PendingRequest );
 		Api.Activity.LoadAbandoned( string.IsNullOrEmpty( message ) ? null : message );
 
 		// cancel any in-progress load right now instead of waiting for tick

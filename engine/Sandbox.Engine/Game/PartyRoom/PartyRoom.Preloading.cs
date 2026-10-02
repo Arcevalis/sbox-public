@@ -94,6 +94,7 @@ public partial class PartyRoom
 
 	static void StopConnecting()
 	{
+		Api.Activity.CancelRequest( Api.Activity.PendingRequest );
 		// CloseGame performs teardown synchronously. Game.Close only schedules it for the next tick.
 		IGameInstanceDll.Current?.CloseGame();
 		Networking.Disconnect();

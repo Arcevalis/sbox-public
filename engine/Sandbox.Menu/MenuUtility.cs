@@ -205,6 +205,7 @@ public static partial class MenuUtility
 	/// </summary>
 	public static void CancelLoading()
 	{
+		Api.Activity.CancelRequest( Api.Activity.PendingRequest );
 		IGameInstanceDll.Current.Disconnect();
 	}
 
@@ -254,7 +255,7 @@ public static partial class MenuUtility
 	public static void Connect( ulong lobbyId )
 	{
 		CloseAllModals();
-		Api.Activity.GameRequested( new( "server" ), replace: false );
+		Api.Activity.GameRequested( new( "server" ) );
 		Networking.Connect( lobbyId );
 	}
 

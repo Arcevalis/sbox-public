@@ -10,7 +10,9 @@ public class ActivityLoadingTest
 	public void Reset()
 	{
 		Api.Activity.CurrentLoad?.End( "superseded" );
-		Api.Activity.TakeCompletedLoad( "any" );
+		Api.Activity.LoadBegin( "reset", false ).End( "success" );
+		Api.Activity.AcknowledgeCompletedLoad( Api.Activity.PeekCompletedLoad( "reset" ).Load );
+		Api.Activity.CancelRequest( Api.Activity.PendingRequest );
 		Api.Activity.LoadBegin( "reset", false ).End( "cancel" );
 	}
 
@@ -71,7 +73,7 @@ public class ActivityLoadingTest
 	}
 
 	[TestMethod]
-	public void SuccessfulLoadGoesOnTheNextHeartbeatForThatGameOnly()
+	public void SuccessfulLoadSurvivesFailedHeartbeatsUntilAcknowledged()
 	{
 		Api.Activity.GameRequested( new( "menu", "org.game", "search" ) );
 		var load = Api.Activity.LoadBegin( "org.game#12", false );
@@ -79,14 +81,16 @@ public class ActivityLoadingTest
 		load.Downloaded( 1000, 4, 1.5 );
 		Api.Activity.LoadFinished();
 
-		Assert.IsNull( Api.Activity.TakeCompletedLoad( "org.other" ).Load );
+		Assert.IsNull( Api.Activity.PeekCompletedLoad( "org.other" ).Load );
 
-		var (data, origin) = Api.Activity.TakeCompletedLoad( "ORG.GAME" );
+		var (data, origin) = Api.Activity.PeekCompletedLoad( "ORG.GAME" );
 		Assert.AreEqual( "success", data["outcome"] );
 		Assert.AreEqual( 1000L, data["bytes"] );
 		Assert.AreEqual( "search", origin.Surface );
 
-		Assert.IsNull( Api.Activity.TakeCompletedLoad( "org.game" ).Load );
+		Assert.AreSame( data, Api.Activity.PeekCompletedLoad( "org.game" ).Load );
+		Api.Activity.AcknowledgeCompletedLoad( data );
+		Assert.IsNull( Api.Activity.PeekCompletedLoad( "org.game" ).Load );
 	}
 
 	[TestMethod]
@@ -109,6 +113,36 @@ public class ActivityLoadingTest
 		Api.Activity.LoadFinished();
 
 		Assert.IsNull( Api.Activity.CurrentLoad );
-		Assert.IsNull( Api.Activity.TakeCompletedLoad( "org.game" ).Load );
+		Assert.IsNull( Api.Activity.PeekCompletedLoad( "org.game" ).Load );
+	}
+
+	[TestMethod]
+	public void FailedConnectionDoesNotAttributeTheNextServerJoinToAFriend()
+	{
+		Api.Activity.GameRequested( new( "friend" ) );
+		Api.Activity.CancelRequest( Api.Activity.PendingRequest );
+		Api.Activity.GameRequested( new( "server" ), replace: false );
+		Assert.AreEqual( "server", Api.Activity.LoadBegin( "org.game", true ).Origin.Kind );
+	}
+
+	[TestMethod]
+	public void AnOlderConnectionFailureDoesNotClearANewerRequest()
+	{
+		Api.Activity.GameRequested( new( "friend" ) );
+		var old = Api.Activity.PendingRequest;
+		Api.Activity.GameRequested( new( "invite" ) );
+		Api.Activity.CancelRequest( old );
+		Assert.AreEqual( "invite", Api.Activity.LoadBegin( "org.game", true ).Origin.Kind );
+	}
+
+	[TestMethod]
+	public void AnOlderHeartbeatDoesNotAcknowledgeANewerLoad()
+	{
+		Api.Activity.LoadBegin( "org.game", false ).End( "success" );
+		var old = Api.Activity.PeekCompletedLoad( "org.game" ).Load;
+		Api.Activity.LoadBegin( "org.game", false ).End( "success" );
+		var latest = Api.Activity.PeekCompletedLoad( "org.game" ).Load;
+		Api.Activity.AcknowledgeCompletedLoad( old );
+		Assert.AreSame( latest, Api.Activity.PeekCompletedLoad( "org.game" ).Load );
 	}
 }
