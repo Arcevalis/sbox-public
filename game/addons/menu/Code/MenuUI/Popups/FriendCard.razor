@@ -121,6 +121,18 @@
 			{
 				@* Nothing to do to yourself but look *@
 			}
+			else if ( CanInviteToGame )
+			{
+				@* Mid-game, into the game you're in - before the party, that's what you're here for *@
+				@if ( _gameInvited )
+				{
+					<div class="button done"><icon>check</icon><label>Game invite sent</label></div>
+				}
+				else
+				{
+					<div class="button primary" onmousedown=@InviteToGame><icon>sports_esports</icon><label>Invite to game</label></div>
+				}
+			}
 			else if ( InMyParty )
 			{
 				<div class="button done"><icon>check</icon><label>In your party</label></div>
@@ -426,7 +438,7 @@
 		return extras;
 	}
 
-	int MainCount => 1 + (CanJoin || (!IsMe && (InMyParty || Invited || MenuUtility.CanInviteToParty( Friend ))) ? 1 : 0);
+	int MainCount => 1 + (CanJoin || (!IsMe && (CanInviteToGame || InMyParty || Invited || MenuUtility.CanInviteToParty( Friend ))) ? 1 : 0);
 
 	/// <summary>
 	/// Two buttons fit a row with their labels - past that, the extras get a row of their own.
@@ -544,6 +556,24 @@
 		Delete();
 	}
 
+	/// <summary>
+	/// In a game others can join - one with a way in for them (its connect presence) - and this isn't you.
+	/// </summary>
+	bool CanInviteToGame => !IsMe && Game.InGame && !string.IsNullOrWhiteSpace( new Friend( Game.SteamId ).GetRichPresence( "connect" ) );
+
+	bool _gameInvited;
+
+	/// <summary>
+	/// Into the game you're in - a Steam invite, with its way in.
+	/// </summary>
+	void InviteToGame()
+	{
+		if ( !CanInviteToGame ) return;
+
+		_gameInvited = MenuUtility.InviteFriendGame( Friend );
+		StateHasChanged();
+	}
+
 	async Task Invite()
 	{
 		// Makes the party if there isn't one, and doesn't send anything real while it's mocked
@@ -600,5 +630,5 @@
 		Delete();
 	}
 
-	protected override int BuildHash() => HashCode.Combine( Friend, AvatarJson, GameThumb, HashCode.Combine( GameTitle, GameArt, _recent, _profileLoaded ), Invited, InMyParty, HashCode.Combine( StateText, CanManage ) );
+	protected override int BuildHash() => HashCode.Combine( Friend, AvatarJson, GameThumb, HashCode.Combine( GameTitle, GameArt, _recent, _profileLoaded ), Invited, InMyParty, HashCode.Combine( StateText, CanManage, CanInviteToGame, _gameInvited ) );
 }

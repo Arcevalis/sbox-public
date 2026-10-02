@@ -6,8 +6,9 @@
 @using System;
 
 @*
-    Everyone in the game with you - the friends list's way: a search along the top and how they're
-    sorted (lowest ping first, to start with), then a heading with how many and a row each in a box
+    Everyone in the game with you - the friends list's way: a search along the top, how they're sorted
+    (lowest ping first, to start with) and a way to ask your friends in, then a heading with how many
+    and a row each in a box
     split by hairlines. Click one for their card, right click for the rest. The player list popup's,
     and the game page's Players tab.
 *@
@@ -33,6 +34,12 @@
 				   shove everything along *@
 				<i class="direction @(Sort == SortBy.Ping ? "" : "unseen")">@(PingDescending ? "arrow_downward" : "arrow_upward")</i>
 			</div>
+		</div>
+
+		@* Your friends, to ask in - the friends list, under the button; a friend's card has the invite *@
+		<div class="invite" @ref="InviteButton" onclick=@OpenFriends>
+			<i>person_add</i>
+			<label>Invite friends</label>
 		</div>
 	</div>
 
@@ -64,6 +71,26 @@
 
 @code
 {
+	Panel InviteButton;
+
+	/// <summary>
+	/// The friends list, under the button - pick someone for their card, and its "Invite to game".
+	/// </summary>
+	void OpenFriends()
+	{
+		ModalSystem.Instance?.FriendsList( new Sandbox.Modals.FriendsListModalOptions
+		{
+			ShowOnlineMembers = true,
+			ShowOfflineMembers = false,
+			Anchor = new()
+			{
+				Panel = InviteButton,
+				Position = Sandbox.Modals.ModalAnchorPosition.BelowRight,
+				Offset = 8,
+			},
+		} );
+	}
+
 	/// <summary>
 	/// With the insets of a tab page round it - its stylesheet's the only one that reaches it there.
 	/// </summary>

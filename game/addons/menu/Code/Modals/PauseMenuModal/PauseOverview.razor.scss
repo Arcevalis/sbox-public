@@ -59,13 +59,14 @@ PauseOverview
 			}
 		}
 
-		// How long you've played it - a little one, as wide as it needs, the two one over the other.
-		// Nothing to open
+		// How long you've played it - a little one, the two one over the other. Wide enough for its
+		// longest ("Under a minute"), so it doesn't grow and shrink as the minutes tick over. Nothing to open
 		> .playtime
 		{
 			@include front-card;
 
 			flex-shrink: 0;
+			min-width: 180px;
 			justify-content: center;
 			gap: 14px;
 			padding: 16px 24px 16px 18px;
@@ -86,6 +87,7 @@ PauseOverview
 			{
 				font-size: 15px;
 				font-weight: 600;
+				font-variant-numeric: tabular-nums;
 				color: $front-body;
 			}
 		}

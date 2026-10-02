@@ -26,10 +26,38 @@ PlayerList
 		flex-direction: row;
 		flex-shrink: 0;
 		align-items: center;
-		gap: 10px;
+		gap: 16px;
 	}
 
 	// The game page footer's split pills - one lit in the menu blue for how it's sorted
+	// Asking friends in - the menu's blue, on the end of the row
+	.invite
+	{
+		@include front-button;
+
+		flex-shrink: 0;
+		height: 40px;
+		padding: 0 16px;
+		border-radius: 999px;
+		cursor: pointer;
+
+		i
+		{
+			font-size: 17px;
+			color: #ffffff;
+		}
+
+		&:hover
+		{
+			sound-in: "ui.button.over";
+		}
+
+		&:active
+		{
+			sound-in: "ui.button.press";
+		}
+	}
+
 	.sort
 	{
 		flex-direction: row;

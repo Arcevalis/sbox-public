@@ -12,7 +12,7 @@
 *@
 <root>
 
-    @* Its art behind, fading out down towards the buttons *@
+    @* A screenshot of it behind, fading out down towards the buttons *@
     <div class="art" style="background-image: url( @GameArt );"></div>
 
     <div class="block about">
@@ -35,7 +35,21 @@
 {
     [Parameter] public Package Package { get; set; }
 
-    string GameArt => !string.IsNullOrEmpty( Package?.ThumbWide ) ? Package.ThumbWide : Package?.Thumb;
+    /// <summary>
+    /// A screenshot of it - a scene from the game, rather than its thumbnail's logo vying with the name
+    /// over it. Without one, its wide thumbnail, then its thumbnail.
+    /// </summary>
+    string GameArt
+    {
+        get
+        {
+            var shot = Package?.Screenshots?.FirstOrDefault( x => !x.IsVideo && (!string.IsNullOrEmpty( x.Thumb ) || !string.IsNullOrEmpty( x.Url )) );
+            if ( shot is not null )
+                return !string.IsNullOrEmpty( shot.Thumb ) ? shot.GetThumbUrl( 1024, 576 ) : shot.Url;
+
+            return !string.IsNullOrEmpty( Package?.ThumbWide ) ? Package.ThumbWide : Package?.Thumb;
+        }
+    }
 
     protected override int BuildHash() => HashCode.Combine( Package );
 }

@@ -86,6 +86,12 @@ PackageChanges
         background-color: transparent;
     }
 
+    // A card swapped for its room or back - gone at once, rather than beside the other for a frame
+    .update > .card:outro
+    {
+        display: none;
+    }
+
     .card
     {
         flex-direction: column;

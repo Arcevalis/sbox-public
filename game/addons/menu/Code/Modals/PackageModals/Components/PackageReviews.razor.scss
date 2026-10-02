@@ -243,6 +243,73 @@ PackageReviews
 		width: 100%;
 	}
 
+	// A review swapped for its room or back - gone at once, rather than beside the other for a frame
+	.review-list > *:outro
+	{
+		display: none;
+	}
+
+	// A review that's off screen - just its card's room, so the list and its scrollbar stay put
+	.review-placeholder
+	{
+		flex-shrink: 0;
+		border-radius: $front-radius;
+		border: $front-border-width solid $front-hairline;
+		background-color: $front-card-deep;
+	}
+
+	// Still coming - a review card's shape: a round avatar, a line for who, a few for what they said
+	.review-skeleton
+	{
+		flex-direction: row;
+		flex-shrink: 0;
+		gap: 14px;
+		padding: 16px 20px 18px 16px;
+		border-radius: $front-radius;
+		border: $front-border-width solid $front-hairline;
+		background-color: $front-card-deep;
+
+		.bone
+		{
+			border-radius: 6px;
+			background-color: rgba( 255, 255, 255, 0.06 );
+			animation: review-bone 1.2s ease-in-out infinite alternate;
+		}
+
+		.avatar
+		{
+			flex-shrink: 0;
+			width: 40px;
+			height: 40px;
+			border-radius: 50%;
+		}
+
+		.lines
+		{
+			flex-direction: column;
+			flex-grow: 1;
+			gap: 10px;
+		}
+
+		.line
+		{
+			height: 12px;
+			width: 92%;
+		}
+
+		.top
+		{
+			width: 30%;
+			height: 14px;
+			margin-bottom: 4px;
+		}
+
+		.short
+		{
+			width: 55%;
+		}
+	}
+
 	.no-reviews
 	{
 		padding: 48px 32px;
@@ -445,5 +512,18 @@ PackageReviews
 			opacity: 0.3;
 			pointer-events: none;
 		}
+	}
+}
+
+@keyframes review-bone
+{
+	0%
+	{
+		opacity: 0.55;
+	}
+
+	100%
+	{
+		opacity: 1;
 	}
 }

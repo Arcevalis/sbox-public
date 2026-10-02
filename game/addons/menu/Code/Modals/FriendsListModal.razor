@@ -48,6 +48,11 @@
     bool IsAnchored => Options.Anchor.HasValue && Options.Anchor.Value.Panel.IsValid();
 
     /// <summary>
+    /// As narrow as it goes, anchored - names and what they're doing still read at this.
+    /// </summary>
+    const float MinWidth = 384;
+
+    /// <summary>
     /// Prefer the requested side, flip when the other side has more room, and constrain the
     /// scrolling list to the available space. All coordinates are local to this modal.
     /// </summary>
@@ -63,7 +68,9 @@
         if ( hash == placementHash ) return;
         placementHash = hash;
 
-        var width = Math.Min( rect.Width > 0 ? rect.Width : 384, Math.Max( 0, bounds.Width - margin * 2 ) );
+        // The anchor's width - the party deck's, so the two line up - but never narrower than a list
+        // wants, off something small like a button
+        var width = Math.Min( Math.Max( rect.Width, MinWidth ), Math.Max( 0, bounds.Width - margin * 2 ) );
         var above = Math.Max( 0, rect.Top - bounds.Top - offset - margin );
         var below = Math.Max( 0, bounds.Bottom - rect.Bottom - offset - margin );
         var preferAbove = position is ModalAnchorPosition.AboveLeft or ModalAnchorPosition.AboveRight;

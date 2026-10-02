@@ -134,26 +134,18 @@
     ImmutableArray<Package.ChangeList> _changeLists = ImmutableArray<Package.ChangeList>.Empty;
     bool _loaded;
 
-    protected override int BuildHash() => System.HashCode.Combine(Package, _loaded, _changeLists.Length, Embedded, _builtHash);
+    protected override int BuildHash() => System.HashCode.Combine(Package, _loaded, _changeLists.Length, Embedded, Near.Hash);
 
     //
     // Only the cards near the screen, built - see the top
     //
 
     Panel Timeline;
+    readonly MenuProject.UI.NearScreen Near = new();
 
-    // Per update: whether its card's built, and its height once it's been measured (0 until then)
-    bool[] _built = Array.Empty<bool>();
-    float[] _heights = Array.Empty<float>();
-    int _builtHash;
+    bool IsBuilt( int i ) => Embedded || Near.IsBuilt( i );
 
-    bool IsBuilt( int i ) => Embedded || (i < _built.Length && _built[i]);
-
-    string HeightOf( int i )
-    {
-        var height = i < _heights.Length && _heights[i] > 0 ? _heights[i] : Estimate( _changeLists[i] );
-        return height.ToString( "0.#", System.Globalization.CultureInfo.InvariantCulture );
-    }
+    string HeightOf( int i ) => Near.HeightOf( i, Estimate( _changeLists[i] ) );
 
     /// <summary>
     /// Near enough a card's height before it's been built - its head, a heading for each kind of change
@@ -178,71 +170,18 @@
     {
         base.Tick();
 
-        if ( Embedded || !_loaded || !Timeline.IsValid() ) return;
+        if ( Embedded || !_loaded ) return;
 
-        var count = _changeLists.Length;
-        if ( _built.Length != count )
-        {
-            _built = new bool[count];
-            _heights = new float[count];
-        }
-
-        // What's on screen - the screen, cut down by everything that scrolls us, ourselves included
-        var top = float.MinValue;
-        var bottom = float.MaxValue;
-        for ( Panel p = this; p is not null; p = p.Parent )
-        {
-            if ( p.Parent is not null && p.ComputedStyle?.OverflowY != OverflowMode.Scroll ) continue;
-
-            top = MathF.Max( top, p.Box.Rect.Top );
-            bottom = MathF.Min( bottom, p.Box.Rect.Bottom );
-        }
-
-        // Not laid out yet - nothing to go on
-        if ( bottom <= top ) return;
-
-        // A screen's worth either side, so a card's there before it scrolls into view
-        var reach = bottom - top;
-        top -= reach;
-        bottom += reach;
-
-        var changed = false;
-        var i = 0;
-
-        foreach ( var row in Timeline.Children )
-        {
-            if ( i >= count ) break;
-
-            // Built and laid out - remember how tall it is, for when it's off screen again
-            if ( row.Children.LastOrDefault() is { } card && card.HasClass( "card" ) && !card.HasClass( "placeholder" ) && card.Box.Rect.Height > 0 )
-                _heights[i] = card.Box.Rect.Height * ScaleFromScreen;
-
-            var near = row.Box.Rect.Bottom >= top && row.Box.Rect.Top <= bottom;
-            if ( near != _built[i] )
-            {
-                _built[i] = near;
-                changed = true;
-            }
-
-            i++;
-        }
-
-        if ( !changed ) return;
-
-        var hash = 0;
-        for ( var k = 0; k < count; k++ )
-            if ( _built[k] ) hash = System.HashCode.Combine( hash, k );
-
-        _builtHash = hash;
-        StateHasChanged();
+        // Its card, once it's a real one rather than its room
+        if ( Near.Update( this, Timeline, _changeLists.Length, row => row.Children.LastOrDefault( x => !x.IsDeleting ) is { } card && card.HasClass( "card" ) && !card.HasClass( "placeholder" ) ? card : null ) )
+            StateHasChanged();
     }
 
     protected override async Task OnParametersSetAsync()
     {
         _loaded = false;
         _changeLists = ImmutableArray<Package.ChangeList>.Empty;
-        _built = Array.Empty<bool>();
-        _heights = Array.Empty<float>();
+        Near.Reset();
         StateHasChanged();
 
         if (Package is null)
