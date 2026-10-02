@@ -15,7 +15,7 @@ internal static partial class Api
 		/// quickplay, server, web, console, reload, game, benchmark, local); the rest is filled in
 		/// when the menu knows which tile was used.
 		/// </summary>
-		public sealed record Origin( string Kind, string Ident = null, string Surface = null, string Shelf = null, int Position = -1, string List = null, string Via = null )
+		public sealed record Origin( string Kind, string Ident = null, string Surface = null, string Shelf = null, int Position = -1, string List = null, string Via = null, string Referrer = null )
 		{
 			public Dictionary<string, object> ToData()
 			{
@@ -26,8 +26,25 @@ internal static partial class Api
 				if ( Position >= 0 ) d["pos"] = Position;
 				if ( List is not null ) d["list"] = List;
 				if ( Via is not null ) d["via"] = Via;
+				if ( (Kind == "web" || Surface == "web") && NormalizeWebReferrer( Referrer ) is { } host ) d["referrer"] = host;
 				return d;
 			}
+		}
+
+		/// <summary>Accept only an external DNS hostname, never a URL or additional launch arguments.</summary>
+		internal static string NormalizeWebReferrer( string value )
+		{
+			if ( string.IsNullOrEmpty( value ) || value.Length > 253 ) return null;
+			var host = value.ToLowerInvariant().TrimEnd( '.' );
+			if ( host.StartsWith( "www.", StringComparison.Ordinal ) ) host = host[4..];
+			var parts = host.Split( '.' );
+			if ( parts.Length < 2 || parts[^1].Length == 0 || parts[^1][0] is < 'a' or > 'z' ) return null;
+			foreach ( var part in parts )
+			{
+				if ( part.Length is < 1 or > 63 || part[0] == '-' || part[^1] == '-' ) return null;
+				if ( part.Any( c => !(c is >= 'a' and <= 'z' or >= '0' and <= '9' or '-') ) ) return null;
+			}
+			return host == "sbox.game" || host.EndsWith( ".sbox.game", StringComparison.Ordinal ) ? null : host;
 		}
 
 		/// <summary>

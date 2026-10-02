@@ -28,6 +28,37 @@ public class ActivityLoadingTest
 	}
 
 	[TestMethod]
+	public void WebsiteReferrerSurvivesLoadingAndHeartbeatRetry()
+	{
+		Api.Activity.GameRequested( new( "web", "org.game", Referrer: "www.youtube.com" ) );
+		Api.Activity.GameRequested( new( "quickplay" ), replace: false );
+		var load = Api.Activity.LoadBegin( "org.game#12", true );
+		Assert.AreEqual( "youtube.com", load.Origin.ToData()["referrer"] );
+		load.End( "success" );
+		var first = Api.Activity.PeekCompletedLoad( "org.game" );
+		Assert.AreEqual( "youtube.com", first.Origin.ToData()["referrer"] );
+		Assert.AreSame( first.Origin, Api.Activity.PeekCompletedLoad( "org.game" ).Origin );
+	}
+
+	[TestMethod]
+	public void WebsiteReferrerDoesNotLeakIntoAnotherGame()
+	{
+		Api.Activity.GameRequested( new( "web", "org.first", Referrer: "youtube.com" ) );
+		Api.Activity.GameRequested( new( "server", "org.second" ), replace: false );
+		Assert.IsFalse( Api.Activity.LoadBegin( "org.second", true ).Origin.ToData().ContainsKey( "referrer" ) );
+	}
+
+	[TestMethod]
+	public void WebsiteReferrersAcceptOnlyExternalHostnames()
+	{
+		Assert.AreEqual( "youtube.com", Api.Activity.NormalizeWebReferrer( "WWW.YouTube.com." ) );
+		foreach ( var value in new[] { null, "", "https://youtube.com/watch?v=secret", "youtube.com -console", "youtube.com/path", "youtube.com?token=secret", "127.0.0.1", "localhost", "sbox.game", "asset.sbox.game", "a..com", "-a.com", "a-.com", new string( 'a', 64 ) + ".com" } )
+			Assert.IsNull( Api.Activity.NormalizeWebReferrer( value ) );
+		Assert.IsFalse( new Api.Activity.Origin( "friend", Referrer: "youtube.com" ).ToData().ContainsKey( "referrer" ) );
+		Assert.IsFalse( new Api.Activity.Origin( "web" ).ToData().ContainsKey( "referrer" ) );
+	}
+
+	[TestMethod]
 	public void GenericRequestDoesNotReplaceTheMenus()
 	{
 		Api.Activity.GameRequested( new( "menu", "org.game", "home" ) );

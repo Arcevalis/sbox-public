@@ -17,6 +17,9 @@ public sealed class DiscoveryContext
 	/// </summary>
 	public string Surface { get; init; }
 
+	/// <summary>External hostname for a website launch, without a URL path or query.</summary>
+	public string Referrer { get; init; }
+
 	/// <summary>
 	/// Which shelf or row within the surface, if it has more than one.
 	/// </summary>
@@ -204,7 +207,7 @@ public static class Discovery
 			context = Find( source );
 			position = context.PositionOf( package );
 		}
-		else if ( clickedIdent == package.FullIdent && clickedAge < ClickLifetime )
+		else if ( ClickedMatches( package.FullIdent ) && clickedAge < ClickLifetime )
 		{
 			context = clickedContext;
 			position = clickedPosition;
@@ -227,7 +230,8 @@ public static class Discovery
 		Flush();
 		Submit( "discovery.play", data );
 
-		Api.Activity.GameRequested( new Api.Activity.Origin( "menu", package.FullIdent, context.Surface, context.Shelf, position, ListId( context ), via ) );
+		Api.Activity.GameRequested( new Api.Activity.Origin( context.Surface == "web" ? "web" : "menu", package.FullIdent, context.Surface, context.Shelf, position, ListId( context ), via,
+			context.Surface == "web" ? Api.Activity.NormalizeWebReferrer( context.Referrer ) : null ) );
 	}
 
 	/// <summary>
@@ -249,7 +253,7 @@ public static class Discovery
 			if ( other.Ident == ident ) other.Then ??= kind;
 		}
 
-		if ( context is null && clickedIdent == ident && clickedAge < ClickLifetime )
+		if ( context is null && ClickedMatches( ident ) && clickedAge < ClickLifetime )
 		{
 			context = clickedContext;
 			position = clickedPosition;
@@ -318,6 +322,11 @@ public static class Discovery
 
 	static string ViewKey( DiscoveryContext context, string ident ) => $"{context.Surface}|{context.Shelf}|{context.List}|{context.Query}|{ident}";
 
+	// Website links name a game without a revision; its downloaded package can have one.
+	static bool ClickedMatches( string ident ) => clickedIdent == ident ||
+		(clickedContext?.Surface == "web" && clickedIdent is not null && ident is not null &&
+		string.Equals( clickedIdent.Split( '#' )[0], ident.Split( '#' )[0], StringComparison.OrdinalIgnoreCase ));
+
 	/// <summary>Close previews and queue the final impressions before the engine flushes its events.</summary>
 	internal static void Shutdown()
 	{
@@ -354,6 +363,7 @@ public static class Discovery
 		};
 
 		if ( context.Shelf is not null ) d["shelf"] = context.Shelf;
+		if ( context.Surface == "web" && Api.Activity.NormalizeWebReferrer( context.Referrer ) is { } host ) d["referrer"] = host;
 		if ( position >= 0 ) d["pos"] = position;
 		if ( ListId( context ) is { } list ) d["list"] = list;
 

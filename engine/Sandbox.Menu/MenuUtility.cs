@@ -199,6 +199,9 @@ public static partial class MenuUtility
 	/// </summary>
 	public static string StartupGameIdent => Utility.CommandLine.GetSwitch( "-rungame", null );
 
+	/// <summary>The external hostname carried by the website's Play button, when the browser supplied one.</summary>
+	public static string StartupWebReferrer => Api.Activity.NormalizeWebReferrer( Utility.CommandLine.GetSwitch( "-webreferrer", null ) );
+
 	/// <summary>
 	/// This is called when the cancel button is pressed when loading. 
 	/// We should disconnect and leave the game.
