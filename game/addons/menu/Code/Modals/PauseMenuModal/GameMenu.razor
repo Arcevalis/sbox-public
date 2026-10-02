@@ -117,21 +117,20 @@
 
     static bool CanChangeMap => (!Networking.IsActive || Networking.IsHost) && (ThisGame?.Info.ShowsChangeMap ?? false);
 
+    /// <summary>
+    /// Straight to the map picker - pick one and the game reloads on it.
+    /// </summary>
     void ChangeMap()
     {
-        Game.Overlay.CreateGame( new CreateGameOptions( ThisGame, OnCreateGame ) );
+        Game.Overlay.ShowMapSelector( OnMapSelected, LaunchArguments.Map );
     }
 
-    void OnCreateGame( CreateGameResults x )
+    void OnMapSelected( string map )
     {
-        if ( Networking.IsActive && !Networking.IsHost )
-            return;
+        if ( string.IsNullOrEmpty( map ) ) return;
+        if ( Networking.IsActive && !Networking.IsHost ) return;
 
-        if ( !string.IsNullOrEmpty( x.Map ) )
-        {
-            LaunchArguments.Map = x.Map;
-        }
-
+        LaunchArguments.Map = map;
         Game.Load( Game.Ident, true );
 
         Modal?.CloseModal( true );
