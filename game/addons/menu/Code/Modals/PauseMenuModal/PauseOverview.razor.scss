@@ -90,6 +90,22 @@ PauseOverview
 			}
 		}
 
+		// What's new as wide as its words need, a quarter at the least and within reason at the most -
+		// so a long title widens it rather than wrapping and pushing the row down. Past that, cut off
+		> .latest
+		{
+			width: auto;
+			min-width: calc(25% - 12px);
+			max-width: 40%;
+
+			.news-title, .news-summary
+			{
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+		}
+
 		// Its heading, its faces and its bar evenly apart
 		> .achievements
 		{
