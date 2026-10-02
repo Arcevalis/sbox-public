@@ -185,7 +185,10 @@ partial class SkinnedModelRenderer
 			var target = _boneMergeTarget?.Model;
 			if ( _anchorModels != (Model, target) )
 			{
-				_anchors = Model.Bones.AllBones.Select( x => new Vector4( HangsFrom( x, target ).LocalTransform.Position, 0 ) ).ToArray();
+				var bones = Model.Bones.AllBones;
+				_anchors = new Vector4[bones.Count];
+				for ( int i = 0; i < bones.Count; i++ )
+					_anchors[i] = new Vector4( HangsFrom( bones[i], target ).LocalTransform.Position, 0 );
 				_anchorModels = (Model, target);
 			}
 
