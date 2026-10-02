@@ -481,12 +481,9 @@ public static partial class Networking
 		}
 
 		//
-		// Did the menu want to override the lobby's privacy mode?
+		// Did the menu ask for a privacy mode? The more private of it and the game's own wins
 		//
-		if ( LaunchArguments.PrivacyOverride is { } privacy )
-		{
-			config.Privacy = privacy;
-		}
+		config.Privacy = LaunchArguments.ResolvePrivacy( config.Privacy );
 
 		_ = CreateLobbyAsync( config, lobbyCts.Token );
 	}
