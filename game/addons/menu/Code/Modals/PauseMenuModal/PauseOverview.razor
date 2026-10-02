@@ -20,7 +20,8 @@
     <div class="bottom">
         <div class="left">
             <div class="hero">
-                <label class="name">@Package.Title</label>
+                @* Its whole page, same as Game info down the left *@
+                <label class="name" onclick=@( () => Package.OpenModal() )>@Package.Title</label>
 
                 @* How it's reviewed, in a line - the words for it and its score, the split of the three
                    ratings a review can give (the review window's colours), how many. Opens the review window too *@

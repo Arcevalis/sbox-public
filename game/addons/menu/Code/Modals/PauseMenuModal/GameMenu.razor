@@ -64,6 +64,11 @@
         {
             <div class="group"><label>Info</label></div>
 
+            <div class="entry" onclick=@( () => game.OpenModal() )>
+                <i>info</i>
+                <label>Game info</label>
+            </div>
+
             @if ( HasAchievements )
             {
                 <div class="entry" onclick=@( () => GameInfoModal.Open( game, PackagePage.Achievements ) )>
