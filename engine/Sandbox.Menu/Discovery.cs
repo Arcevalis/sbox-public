@@ -31,8 +31,8 @@ public sealed class DiscoveryContext
 	public Guid List { get; init; }
 
 	/// <summary>
-	/// The query behind the packages, if any. Only tells apart views from different searches - it's
-	/// never sent, player-typed text stays on the machine.
+	/// The query behind the packages, if any. Search surfaces report it so discovery insights can
+	/// distinguish typed searches from category, sort and filter queries.
 	/// </summary>
 	public string Query { get; init; }
 
@@ -363,6 +363,11 @@ public static class Discovery
 		};
 
 		if ( context.Shelf is not null ) d["shelf"] = context.Shelf;
+		if ( context.Surface == "search" && !string.IsNullOrWhiteSpace( context.Query ) )
+		{
+			var query = context.Query.Trim();
+			d["query"] = query[..Math.Min( query.Length, 512 )];
+		}
 		if ( context.Surface == "web" && Api.Activity.NormalizeWebReferrer( context.Referrer ) is { } host ) d["referrer"] = host;
 		if ( position >= 0 ) d["pos"] = position;
 		if ( ListId( context ) is { } list ) d["list"] = list;
