@@ -102,10 +102,9 @@ internal static partial class InputRouter
 			//
 			PressedButtons.Clear();
 
-			// Window focus loss drops the SDL grab behind our back (WindowInput.SetFocus),
-			// so forget the last requested state - the next captured frame re-asserts it
-			// instead of early-returning on a stale cache and leaving the mouse uncaptured.
-			relativeMouseMode = null;
+			// Window focus loss drops the SDL grab behind our back (WindowInput.SetFocus
+			// resets relative mode itself), so there's no stale cache to forget here - the
+			// next captured frame re-asserts it through WindowInput.
 
 			foreach ( var context in Contexts )
 			{
