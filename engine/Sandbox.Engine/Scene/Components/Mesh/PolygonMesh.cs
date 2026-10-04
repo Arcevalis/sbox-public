@@ -4450,9 +4450,9 @@ public sealed partial class PolygonMesh : IJsonConvert
 	}
 
 	/// <summary>
-	/// Triangulate the polygons into a model
+	/// Triangulate the polygons into a model with the selected collision type.
 	/// </summary>
-	public Model Rebuild()
+	public Model Rebuild( MeshComponent.CollisionType collision = MeshComponent.CollisionType.None )
 	{
 		var faceCount = Topology.FaceCount;
 		var halfEdgeCount = Topology.HalfEdgeCount;
@@ -4474,7 +4474,6 @@ public sealed partial class PolygonMesh : IJsonConvert
 		_meshFaces.EnsureCapacity( faceCount );
 		_faceNormalCache.EnsureCapacity( faceCount );
 
-		var builder = Model.Builder;
 		var submeshes = new Dictionary<int, Submesh>();
 
 		// Prune hidden entries for faces that no longer exist
@@ -4504,8 +4503,6 @@ public sealed partial class PolygonMesh : IJsonConvert
 				};
 
 				submeshes.Add( materialId, submesh );
-
-				builder.AddSurface( material?.Surface );
 			}
 
 			TriangulateFace( hFace, submesh );
@@ -4513,13 +4510,6 @@ public sealed partial class PolygonMesh : IJsonConvert
 
 		_submeshes.Clear();
 		_submeshes.AddRange( submeshes.Values );
-
-		if ( _meshVertices.Count >= 3 && _meshIndices.Count >= 3 )
-		{
-			builder.AddCollisionHull( _meshVertices );
-			builder.AddCollisionMesh( _meshVertices, _meshIndices, _meshTriangleMaterials );
-			builder.AddTraceMesh( _meshVertices, _meshIndices );
-		}
 
 		foreach ( var submesh in submeshes.Values )
 		{
@@ -4546,14 +4536,38 @@ public sealed partial class PolygonMesh : IJsonConvert
 				mesh.UvDensity = uvDensity[2 * (uvDensity.Count - 1) / 10];
 			}
 
-			builder.AddMesh( mesh );
-
 			submesh.Mesh = mesh;
 		}
 
 		IsDirty = false;
 
 		_faceNormalCache.Clear();
+		return CreateModel( collision );
+	}
+
+	internal Model CreateModel( MeshComponent.CollisionType collision )
+	{
+		var builder = Model.Builder;
+		foreach ( var submesh in _submeshes )
+		{
+			builder.AddSurface( submesh.Material?.Surface );
+			builder.AddMesh( submesh.Mesh );
+		}
+
+		if ( _meshVertices.Count >= 3 && _meshIndices.Count >= 3 )
+		{
+			switch ( collision )
+			{
+				case MeshComponent.CollisionType.Hull:
+					builder.AddCollisionHull( _meshVertices );
+					break;
+				case MeshComponent.CollisionType.Mesh:
+					builder.AddCollisionMesh( _meshVertices, _meshIndices, _meshTriangleMaterials );
+					break;
+			}
+			builder.AddTraceMesh( _meshVertices, _meshIndices );
+		}
+
 		return builder.Create();
 	}
 
