@@ -202,6 +202,8 @@ internal static partial class PackageManager
 	/// </summary>
 	internal static async Task PrefetchAsync( Package root, bool includeRoot, bool allowLocalPackages, CancellationToken token )
 	{
+		// Keep upgrades paused across the entire dependency tree, including manifest fetches.
+		using var textureDownload = TextureWebStreaming.BeginDownload();
 		var seen = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
 		bool Unseen( string ident ) { lock ( seen ) return seen.Add( ident ); }
 

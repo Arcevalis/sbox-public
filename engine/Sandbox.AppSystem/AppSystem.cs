@@ -210,6 +210,7 @@ public class AppSystem
 		IToolsDll.Current?.Exiting();
 		IMenuDll.Current?.Exiting();
 		IGameInstanceDll.Current?.Exiting();
+		TextureWebStreaming.ClearPrefetch();
 
 		// Flush API
 		Api.Shutdown();
