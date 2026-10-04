@@ -75,6 +75,11 @@ internal ref struct CameraRenderer
 		// Set clear flags
 		Attributes.Set( "clearFlags", (int)camera.ClearFlags );
 
+		if ( config.Time is float renderTime )
+		{
+			Attributes.Set( "RenderTime", renderTime );
+		}
+
 		Native.ClearSceneWorlds();
 		Native.SetRenderAttributes( Attributes.Get() );
 
