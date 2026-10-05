@@ -1,4 +1,4 @@
-using NativeEngine;
+﻿using NativeEngine;
 using Sandbox.Engine;
 using System.Runtime.InteropServices;
 
@@ -104,7 +104,7 @@ internal class PanelInput
 		return true;
 	}
 
-	internal virtual void Tick( IEnumerable<RootPanel> panels, bool mouseIsActive )
+	internal virtual void Tick( IReadOnlyList<RootPanel> panels, bool mouseIsActive )
 	{
 		bool hoveredAny = false;
 
@@ -126,9 +126,9 @@ internal class PanelInput
 
 		if ( mouseIsActive )
 		{
-			foreach ( var panel in panels )
+			for ( int i = 0; i < panels.Count; i++ )
 			{
-				if ( UpdateMouse( panel, inputData ) )
+				if ( UpdateMouse( panels[i], inputData ) )
 				{
 					hoveredAny = true;
 					break;

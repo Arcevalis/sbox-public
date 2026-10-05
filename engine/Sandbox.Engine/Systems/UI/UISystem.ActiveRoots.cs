@@ -5,6 +5,30 @@ namespace Sandbox;
 
 internal partial class UISystem
 {
+	readonly List<RootPanel> _screenInputRoots = new();
+
+	/// <summary>
+	/// Active screen roots, highest z-index first. Equal z-indices keep root order, like OrderByDescending.
+	/// The list is reused, so it's only valid until the next call.
+	/// </summary>
+	internal List<RootPanel> GetScreenInputRoots()
+	{
+		var roots = _screenInputRoots;
+		roots.Clear();
+
+		foreach ( var root in GetActiveRoots() )
+		{
+			if ( root.IsWorldPanel ) continue;
+
+			var z = root.ComputedStyle?.ZIndex ?? 0;
+			int i = roots.Count;
+			while ( i > 0 && (roots[i - 1].ComputedStyle?.ZIndex ?? 0) < z ) i--;
+			roots.Insert( i, root );
+		}
+
+		return roots;
+	}
+
 	/// <summary>
 	/// Direct foreach iteration doesn't allocate. Keep the live index traversal so root callbacks can
 	/// modify the list, and check activity as each root is visited rather than taking a snapshot.
