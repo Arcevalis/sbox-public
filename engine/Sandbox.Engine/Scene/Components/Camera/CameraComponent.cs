@@ -501,9 +501,25 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		if ( Scene is null )
 			return;
 
-		camera.OnRenderUI = () => OnCameraRenderUI( camera, ScreenPanel.RenderTiming.AfterPostProcess );
-		camera.OnRenderUIBeforePostProcess = () => OnCameraRenderUI( camera, ScreenPanel.RenderTiming.BeforePostProcess );
+		// This runs every frame, so make the callbacks once per scene camera
+		if ( _renderUICamera != camera )
+			CreateRenderUICallbacks( camera );
+
+		camera.OnRenderUI = _renderUI;
+		camera.OnRenderUIBeforePostProcess = _renderUIBeforePostProcess;
 	}
+
+	// Separate so the closure is only allocated here, not on every UpdateSceneCameraUI
+	void CreateRenderUICallbacks( SceneCamera camera )
+	{
+		_renderUICamera = camera;
+		_renderUI = () => OnCameraRenderUI( camera, ScreenPanel.RenderTiming.AfterPostProcess );
+		_renderUIBeforePostProcess = () => OnCameraRenderUI( camera, ScreenPanel.RenderTiming.BeforePostProcess );
+	}
+
+	SceneCamera _renderUICamera;
+	Action _renderUI;
+	Action _renderUIBeforePostProcess;
 
 	[Obsolete( "Use CommandList" )]
 	public IDisposable AddHookAfterOpaque( string debugName, int order, Action<SceneCamera> renderEffect ) => null;
