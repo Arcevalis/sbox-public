@@ -556,7 +556,7 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 
 	internal void InitializeRendering( bool renderUI = true )
 	{
-		using ( Scene.Push() )
+		using ( Scene.PushScope() )
 		{
 			EnsureSceneCameraCreated();
 
@@ -589,7 +589,7 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		if ( Viewport.z <= 0 ) return;
 		if ( Viewport.w <= 0 ) return;
 
-		using ( Scene.Push() )
+		using ( Scene.PushScope() )
 		{
 			InitializeRendering();
 
@@ -899,7 +899,7 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 		if ( !this.IsValid() )
 			return;
 
-		using ( Scene.Push() )
+		using ( Scene.PushScope() )
 		{
 			Scene.PreCameraRender();
 			InitializeRendering( renderUI );

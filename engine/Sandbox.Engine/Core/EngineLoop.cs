@@ -192,7 +192,7 @@ internal static class EngineLoop
 		//
 		if ( !Application.IsHeadless )
 		{
-			using ( IGameInstanceDll.Current?.PushScope() )
+			using ( IGameInstanceDll.Current?.PushScope() ?? default )
 			{
 				VoiceManager.Tick();
 				Sandbox.TextRendering.Tick();
@@ -242,7 +242,7 @@ internal static class EngineLoop
 	{
 		using ( PerformanceStats.Timings.Async.Scope() )
 		{
-			using var sceneScope = IGameInstanceDll.Current?.PushScope();
+			using var sceneScope = IGameInstanceDll.Current?.PushScope() ?? default;
 
 			ThreadSafe.AssertIsMainThread();
 			MainThread.RunQueues();

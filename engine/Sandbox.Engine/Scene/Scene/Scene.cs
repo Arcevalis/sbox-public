@@ -264,6 +264,11 @@ public partial class Scene : GameObject
 	}
 
 	/// <summary>
+	/// <see cref="Push"/> without boxing the scope. Use with <c>using var</c>.
+	/// </summary>
+	internal ScenePushScope PushScope() => new( this );
+
+	/// <summary>
 	/// Collects anything inside into a batch group. A batchgroup is used with GameObject and Components to
 	/// make sure that their OnEnable/OnDisable and other callbacks are called in a deterministic order,
 	/// and that they can find each other during creation. <see cref="GameObject.NetworkSpawn()"/> calls will also be batched.
@@ -462,8 +467,13 @@ internal struct ScenePushScope : IDisposable
 	float _prevDelta;
 	float _prevNow;
 
+	/// <summary>
+	/// A null scene makes a scope that does nothing, so callers don't need a nullable scope.
+	/// </summary>
 	internal ScenePushScope( Scene scene )
 	{
+		if ( scene is null ) return;
+
 		ThreadSafe.AssertIsMainThread();
 		_pushed = scene;
 		_prev = Game.ActiveScene;

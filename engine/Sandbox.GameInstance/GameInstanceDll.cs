@@ -436,7 +436,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	{
 		var scene = Game.ActiveScene;
 
-		using var sceneScope = scene?.Push();
+		using var sceneScope = new ScenePushScope( scene );
 
 		if ( scene is not null )
 		{
@@ -534,7 +534,7 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 			mouseIsAllowed = !IMenuDll.Current.HasOverlayMouseInput();
 		}
 
-		using ( Game.ActiveScene?.Push() )
+		using ( new ScenePushScope( Game.ActiveScene ) )
 		{
 			Game.Language?.Tick();
 			GlobalContext.Current.UISystem.Simulate( mouseIsAllowed );
@@ -895,9 +895,9 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	/// <summary>
 	/// Pushes the game scope. This will push the active scene and the right time.
 	/// </summary>
-	public IDisposable PushScope()
+	public ScenePushScope PushScope()
 	{
-		return Game.ActiveScene?.Push();
+		return new ScenePushScope( Game.ActiveScene );
 	}
 
 	/// <summary>
