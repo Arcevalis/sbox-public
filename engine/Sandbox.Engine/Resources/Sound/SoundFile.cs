@@ -8,6 +8,8 @@ public enum SoundFormat : byte
 	PCM8,
 	MP3,
 	ADPCM,
+	Opus,
+	Vorbis,
 };
 
 /// <summary>

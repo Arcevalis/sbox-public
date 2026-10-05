@@ -8,7 +8,7 @@ public static class Protocol
 	/// <summary>
 	/// We cannot play packages with an Api version higher than this.
 	/// </summary>
-	public static int Api => 29;
+	public static int Api => 30;
 
 	/// <summary>
 	/// We cannot talk to servers or clients with a network protocol different to this.
@@ -17,6 +17,7 @@ public static class Protocol
 }
 
 // Api Versions
+// 30. 05 October 2026 - Compiled sounds support Opus and Vorbis compression
 // 29. 29 August 2026 - Shipped packages run the engine's base, not their embedded copy
 // 28. 08 July 2026 - Map lights become Light components, stops old servers from loading garbage data
 // 27. 29 June 2026 - Failed attempt to switch xxhash3 to System.IO.Hashing
