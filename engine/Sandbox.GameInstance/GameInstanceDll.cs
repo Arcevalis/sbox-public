@@ -906,12 +906,21 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	void TickSceneStats( Scene scene )
 	{
 		var sceneValid = scene.IsValid();
+
+		// Counted with direct queries, this runs every frame
+		int cameraCount = 0, particleCount = 0;
+		if ( sceneValid )
+		{
+			foreach ( var _ in scene.Query<CameraComponent>() ) cameraCount++;
+			foreach ( var effect in scene.Query<ParticleEffect>() ) particleCount += effect.Particles.Count;
+		}
+
 		Api.Performance.CollectStat( "GameObjectCount", sceneValid ? scene.Directory.GameObjectCount : 0 );
 		Api.Performance.CollectStat( "ComponentCount", sceneValid ? scene.Directory.ComponentCount : 0 );
 		Api.Performance.CollectStat( "RootGameObjects", sceneValid ? scene.Children.Count : 0 );
-		Api.Performance.CollectStat( "CameraCount", sceneValid ? scene.GetAllComponents<CameraComponent>().Count() : 0 );
+		Api.Performance.CollectStat( "CameraCount", cameraCount );
 		Api.Performance.CollectStat( "ColliderCount", sceneValid ? scene.PhysicsWorld.BodyCount : 0 );
-		Api.Performance.CollectStat( "Particles", sceneValid ? scene.GetAllComponents<ParticleEffect>().Sum( x => x.Particles.Count ) : 0 );
+		Api.Performance.CollectStat( "Particles", particleCount );
 
 		Api.Performance.CollectStat( "GameObjectsDestroyed", SceneMetrics.GameObjectsDestroyed );
 		Api.Performance.CollectStat( "ParticlesCreated", SceneMetrics.ParticlesCreated );

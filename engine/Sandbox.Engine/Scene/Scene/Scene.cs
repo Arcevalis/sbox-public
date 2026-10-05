@@ -432,7 +432,7 @@ public partial class Scene : GameObject
 			ambientLight += light.SkyColor;
 		}
 
-		foreach ( var light in GetAllComponents<AmbientLight>() )
+		foreach ( var light in Query<AmbientLight>() )
 		{
 			if ( Camera.IsValid() && light.Tags.HasAny( Camera.RenderExcludeTags ) )
 				continue;
