@@ -43,6 +43,10 @@ public partial class SceneDock : Widget
 	{
 		base.OnDestroyed();
 
+		// Stopping the session sends scene.stop, which must not rebuild the view while Qt is tearing us down
+		_sceneView?.Destroy();
+		_sceneView = null;
+
 		_editorSession.Destroy();
 		_editorSession = null;
 	}
