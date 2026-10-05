@@ -328,15 +328,50 @@ public partial class Scene : GameObject
 		PreCameraRender();
 
 		// Get all cameras sorted by render priority
-		var cameras = Cameras.OrderBy( x => x.Priority );
-		foreach ( var cc in cameras )
+		var cameras = RentSortedCameras();
+		try
 		{
-			if ( cc.Active == false ) continue;
-			if ( cc.IsSceneEditorCamera ) continue;
+			foreach ( var cc in cameras )
+			{
+				if ( cc.Active == false ) continue;
+				if ( cc.IsSceneEditorCamera ) continue;
 
-			using var _cam = _cameraRenderTimer.Start( cc.GameObject?.Name );
-			cc.AddToRenderList( swapChain, size );
+				using var _cam = _cameraRenderTimer.Start( cc.GameObject?.Name );
+				cc.AddToRenderList( swapChain, size );
+			}
 		}
+		finally
+		{
+			ReturnSortedCameras( cameras );
+		}
+	}
+
+	List<CameraComponent> _sortedCameraScratch;
+
+	/// <summary>
+	/// <see cref="Cameras"/> by priority, equal priorities in set order like OrderBy. A snapshot, since
+	/// rendering a camera can add or remove cameras. A nested call gets its own list.
+	/// </summary>
+	List<CameraComponent> RentSortedCameras()
+	{
+		var cameras = _sortedCameraScratch ?? new();
+		_sortedCameraScratch = null;
+
+		foreach ( var camera in Cameras )
+		{
+			var priority = camera.Priority;
+			int i = cameras.Count;
+			while ( i > 0 && cameras[i - 1].Priority > priority ) i--;
+			cameras.Insert( i, camera );
+		}
+
+		return cameras;
+	}
+
+	void ReturnSortedCameras( List<CameraComponent> cameras )
+	{
+		cameras.Clear();
+		_sortedCameraScratch = cameras;
 	}
 
 	internal void RenderEnvmaps()
@@ -373,10 +408,17 @@ public partial class Scene : GameObject
 	{
 		// We want to initialize all cameras (enabled & disabled) incase they're used to render manually
 		// we need to make sure the SceneCamera is created etc.
-		var cameras = Cameras.OrderBy( x => x.Priority );
-		foreach ( var cc in cameras )
+		var cameras = RentSortedCameras();
+		try
 		{
-			cc.InitializeRendering();
+			foreach ( var cc in cameras )
+			{
+				cc.InitializeRendering();
+			}
+		}
+		finally
+		{
+			ReturnSortedCameras( cameras );
 		}
 
 		// Alpha is used to lerp between IBL and fixed ambient light

@@ -286,15 +286,28 @@ public sealed partial class CameraComponent : Component, Component.ExecuteInEdit
 	/// </summary>
 	public void ComposeView()
 	{
-		ComposeView( Scene.IsEditor ? null : GatherModifiers( Scene ) );
+		ComposeView( Scene.IsEditor ? null : GatherModifiers( Scene, new() ) );
 	}
 
 	// The scene-wide modifier set, sorted - gathered once per tick and shared by every camera
 	// composing that tick (see Scene.UpdateCameraViews). Null when modifiers don't apply (editor).
-	internal static ICameraModifier[] GatherModifiers( Scene scene )
-		=> scene.GetAll<ICameraModifier>().OrderBy( x => x.CameraOrder ).ToArray();
+	// Equal orders keep scene order, like OrderBy.
+	internal static List<ICameraModifier> GatherModifiers( Scene scene, List<ICameraModifier> modifiers )
+	{
+		modifiers.Clear();
 
-	internal void ComposeView( ICameraModifier[] modifiers )
+		foreach ( var modifier in scene.Query<ICameraModifier>() )
+		{
+			var order = modifier.CameraOrder;
+			int i = modifiers.Count;
+			while ( i > 0 && modifiers[i - 1].CameraOrder > order ) i--;
+			modifiers.Insert( i, modifier );
+		}
+
+		return modifiers;
+	}
+
+	internal void ComposeView( List<ICameraModifier> modifiers )
 	{
 		var view = RawView;
 

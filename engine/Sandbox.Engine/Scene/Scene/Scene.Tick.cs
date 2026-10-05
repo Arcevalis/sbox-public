@@ -106,6 +106,7 @@ public partial class Scene : GameObject
 	}
 
 	List<CameraComponent> _cameraViewScratch = new();
+	List<ICameraModifier> _cameraModifierScratch = new();
 
 	/// <summary>
 	/// Composes every enabled camera's view - the one point in the frame where the camera moves.
@@ -118,7 +119,7 @@ public partial class Scene : GameObject
 		_cameraViewScratch.AddRange( Cameras );
 
 		// One sorted modifier set serves every camera this tick.
-		var modifiers = IsEditor ? null : CameraComponent.GatherModifiers( this );
+		var modifiers = IsEditor ? null : CameraComponent.GatherModifiers( this, _cameraModifierScratch );
 
 		foreach ( var camera in _cameraViewScratch )
 		{
@@ -127,6 +128,8 @@ public partial class Scene : GameObject
 
 			camera.ComposeView( modifiers );
 		}
+
+		_cameraModifierScratch.Clear();
 	}
 
 	List<IRenderThread> renderThreadEventTargets = new();
