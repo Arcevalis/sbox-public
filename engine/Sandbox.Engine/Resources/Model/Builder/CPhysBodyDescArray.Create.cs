@@ -6,6 +6,19 @@ using Sandbox;
 /// </summary>
 internal unsafe readonly partial struct CPhysBodyDescArray
 {
+	internal static List<int> SurfaceIndices( List<Surface> surfaces )
+	{
+		if ( surfaces is null )
+			return null;
+
+		var fallback = Surface.FindByName( "default" );
+		var indices = new List<int>( surfaces.Count );
+		foreach ( var surface in surfaces )
+			indices.Add( (surface ?? fallback ?? throw new InvalidOperationException( "The default physics surface is not loaded." )).Index );
+
+		return indices;
+	}
+
 	/// <summary>
 	/// Populate a native body array from managed builders. The caller owns the result
 	/// and must call <see cref="DeleteThis"/> on it.

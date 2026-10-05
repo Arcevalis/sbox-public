@@ -16,12 +16,12 @@ public sealed class PhysicsGroupDescription : Resource
 
 	internal int CollisionAttributeCount => _native.GetCollisionAttributeCount();
 
-	internal PhysicsGroupDescription( CPhysicsData native )
+	internal PhysicsGroupDescription( CPhysicsData native, string name = null )
 	{
 		if ( native.IsNull ) throw new Exception( "CPhysicsData pointer cannot be null!" );
 
 		_native = native;
-		Name = native.GetResourceName();
+		Name = name ?? native.GetResourceName();
 
 		RegisterWeakResourceId( Name, native.GetGuid() );
 		Refresh();
@@ -66,7 +66,7 @@ public sealed class PhysicsGroupDescription : Resource
 	/// Create from a resource-system strong handle (e.g. from <see cref="NativeGlue.Resources.GetPhysics"/>).
 	/// Uses <see cref="NativeResourceCache"/> exactly like <see cref="Model.FromNative"/>.
 	/// </summary>
-	internal static PhysicsGroupDescription FromNative( CPhysicsData native )
+	internal static PhysicsGroupDescription FromNative( CPhysicsData native, string name = null )
 	{
 		if ( native.IsNull || !native.IsStrongHandleValid() )
 			return null;
@@ -78,9 +78,35 @@ public sealed class PhysicsGroupDescription : Resource
 			return existing;
 		}
 
-		var result = new PhysicsGroupDescription( native );
+		var result = new PhysicsGroupDescription( native, name );
 		NativeResourceCache.Add( instanceId, result );
 		return result;
+	}
+
+	public static PhysicsGroupDescription Create( string name, List<PhysicsBodyBuilder> bodies, List<Surface> surfaces = null )
+	{
+		ThreadSafe.AssertIsMainThread();
+		ArgumentNullException.ThrowIfNull( bodies );
+		if ( bodies.Count == 0 )
+			throw new ArgumentException( "Physics resources require at least one body.", nameof( bodies ) );
+
+		name = Resource.FixPath( name );
+		if ( string.IsNullOrWhiteSpace( name ) )
+			throw new ArgumentException( "Physics resources require a name.", nameof( name ) );
+
+		var descs = CPhysBodyDescArray.Create( bodies, surfaces: CPhysBodyDescArray.SurfaceIndices( surfaces ) );
+		try
+		{
+			var physics = MeshGlue.BuildAggregateData( descs );
+			if ( physics.IsNull || !physics.IsStrongHandleValid() )
+				throw new InvalidOperationException( $"Could not create physics resource '{name}'." );
+
+			return FromNative( physics, name );
+		}
+		finally
+		{
+			descs.DeleteThis();
+		}
 	}
 
 	/// <summary>
@@ -102,6 +128,9 @@ public sealed class PhysicsGroupDescription : Resource
 
 		// The resource system wants the source name, not the compiled one.
 		if ( path?.EndsWith( ".vphys_c", StringComparison.OrdinalIgnoreCase ) == true ) path = path[..^2];
+
+		if ( Game.Resources.TryGet<PhysicsGroupDescription>( path, out var cached ) )
+			return cached;
 
 		return FromNative( NativeGlue.Resources.GetPhysics( path, id.Guid ?? Guid.Empty ) );
 	}
