@@ -65,7 +65,7 @@ public partial class Scene : GameObject
 		TimeNow = timeNow;
 		TimeDelta = timeDelta;
 
-		using var timeScope = Time.Scope( TimeNow, TimeDelta );
+		using var timeScope = Time.PushScope( TimeNow, TimeDelta );
 		using var gizmoScope = gizmoInstance.Push();
 
 		SharedTick();
@@ -314,7 +314,7 @@ public partial class Scene : GameObject
 			UpdateDefaultListener();
 		}
 
-		using var timeScope = Time.Scope( TimeNow, TimeDelta );
+		using var timeScope = Time.PushScope( TimeNow, TimeDelta );
 		using var gizmoScope = gizmoInstance?.Push();
 
 		using ( PerformanceStats.Timings.Async.Scope() )
