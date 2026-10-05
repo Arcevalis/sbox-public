@@ -34,7 +34,7 @@ internal sealed class MenuDll : IMenuDll
 
 	public void Bootstrap()
 	{
-		using var scope = PushScope();
+		using var scope = EnterScope();
 
 		GlobalContext.Current.Reset();
 		GlobalContext.Current.LocalAssembly = GetType().Assembly;
@@ -123,7 +123,7 @@ internal sealed class MenuDll : IMenuDll
 
 	public async Task Initialize()
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		//
 		// LoopEvent.Init
@@ -198,7 +198,7 @@ internal sealed class MenuDll : IMenuDll
 
 	public void Exiting()
 	{
-		using ( PushScope() )
+		using ( EnterScope() )
 		{
 			// Shutdown menu system
 			IMenuSystem.Current?.Shutdown();
@@ -271,20 +271,35 @@ internal sealed class MenuDll : IMenuDll
 	/// </summary>
 	private void OnMessageFromBackend( Messaging.Message message )
 	{
-		using var scope = PushScope();
+		using var scope = EnterScope();
 		BackendMessageDispatcher.Dispatch( message.Data, Event.EventSystem );
 	}
 
-	public IDisposable PushScope()
-	{
-		var contextLocal = GlobalContext.MenuScope();
-		var scene = MenuScene.Scene?.Push();
+	public IDisposable PushScope() => EnterScope();
 
-		return DisposeAction.Create( () =>
+	MenuScope EnterScope() => new( GlobalContext.Menu, MenuScene.Scene );
+
+	/// <summary>
+	/// The menu context and scene, entered together without allocating. Use with <c>using var</c>;
+	/// <see cref="PushScope"/> boxes one.
+	/// </summary>
+	struct MenuScope : IDisposable
+	{
+		GlobalContext.GlobalContextScope _context;
+		ScenePushScope _scene;
+
+		public MenuScope( GlobalContext context, Scene scene )
 		{
-			contextLocal?.Dispose();
-			scene?.Dispose();
-		} );
+			_context = new GlobalContext.GlobalContextScope( context );
+			_scene = new ScenePushScope( scene );
+		}
+
+		public void Dispose()
+		{
+			// Context first, then the scene, as the DisposeAction this replaced did
+			_context.Dispose();
+			_scene.Dispose();
+		}
 	}
 
 	public void Tick()
@@ -294,7 +309,7 @@ internal sealed class MenuDll : IMenuDll
 			menuScene.IsSuspended = !Game.IsMainMenuVisible;
 		}
 
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		try
 		{
@@ -333,7 +348,7 @@ internal sealed class MenuDll : IMenuDll
 
 	void IMenuDll.LateTick()
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		if ( Input.EscapePressed && IGameInstance.Current is not null && !Application.IsEditor )
 		{
@@ -347,16 +362,16 @@ internal sealed class MenuDll : IMenuDll
 		if ( Application.IsEditor )
 			return;
 
-		using var _ = PushScope();
+		using var _ = EnterScope();
 		LoadResources();
 	}
 
 
 	public void SimulateUI()
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
-		using ( MenuScene.Scene?.Push() )
+		using ( new ScenePushScope( MenuScene.Scene ) )
 		{
 			Game.Language.Tick();
 			GlobalContext.Current.UISystem.Simulate( true );
@@ -391,7 +406,7 @@ internal sealed class MenuDll : IMenuDll
 
 	bool IMenuDll.HasOverlayMouseInput()
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		if ( GlobalContext.Current.UISystem.Input.Hovered is null )
 			return false;
@@ -410,7 +425,7 @@ internal sealed class MenuDll : IMenuDll
 
 	public void OnRender( SwapChainHandle_t swapChain )
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		MenuScene.Render( swapChain );
 		CCameraRenderer.RenderOverlay( swapChain );
@@ -418,7 +433,7 @@ internal sealed class MenuDll : IMenuDll
 
 	void SetupFileWatch()
 	{
-		using var _ = PushScope();
+		using var _ = EnterScope();
 
 		var watcher = FileSystem.Mounted.Watch();
 		watcher.OnChanges += x =>
