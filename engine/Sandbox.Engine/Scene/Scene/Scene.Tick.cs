@@ -182,6 +182,8 @@ public partial class Scene : GameObject
 	static Superluminal _signalStarthUpdate = new Superluminal( "Signal.StartUpdate", Color.Cyan );
 	static Superluminal _signalFinishUpdate = new Superluminal( "Signal.FinishUpdate", Color.Cyan );
 
+	Action _internalFixedUpdate;
+
 	private void FixedUpdate()
 	{
 		if ( !ProjectSettings.Physics.UseFixedUpdate )
@@ -193,7 +195,7 @@ public partial class Scene : GameObject
 			fixedUpdate.Frequency = ProjectSettings.Physics.FixedUpdateFrequency;
 
 			IsFixedUpdate = true;
-			fixedUpdate.Run( InternalFixedUpdate, Time.NowDouble, ProjectSettings.Physics.MaxFixedUpdates );
+			fixedUpdate.Run( _internalFixedUpdate ??= InternalFixedUpdate, Time.NowDouble, ProjectSettings.Physics.MaxFixedUpdates );
 			IsFixedUpdate = false;
 		}
 	}

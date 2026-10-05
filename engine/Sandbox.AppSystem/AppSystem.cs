@@ -116,9 +116,11 @@ public class AppSystem
 
 			NativeEngine.EngineGlobal.Plat_SetCurrentFrame( 0 );
 
+			// Made once, the loop would otherwise allocate a closure every frame
+			Action pumpFrame = () => RunFrame();
 			while ( RunFrame() )
 			{
-				BlockingLoopPumper.Run( () => RunFrame() );
+				BlockingLoopPumper.Run( pumpFrame );
 			}
 
 			Shutdown();
