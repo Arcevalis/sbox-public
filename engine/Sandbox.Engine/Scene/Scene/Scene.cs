@@ -346,10 +346,12 @@ public partial class Scene : GameObject
 		}
 
 		// We pre-render envmaps, we dont need to render them parallelly in a frame anymore, this can cause transform buffers and descriptor sets to balloon in complex scenes and cause crashes.
-		const int maxSimultaniousUpdates = 1;
-		foreach ( var envmap in GetAllComponents<EnvmapProbe>().Where( x => x.Dirty ).Take( maxSimultaniousUpdates ) )
+		foreach ( var envmap in Query<EnvmapProbe>() )
 		{
+			if ( !envmap.Dirty ) continue;
+
 			envmap.RenderCubemap();
+			break;
 		}
 	}
 
