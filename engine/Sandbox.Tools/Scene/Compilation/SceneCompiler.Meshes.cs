@@ -9,7 +9,7 @@ partial class SceneCompiler
 	/// <summary>
 	/// Turn the meshes we couldn't weld into the world into models of their own.
 	/// </summary>
-	static async Task<int> ConvertMeshes( Scene compiled, MeshComponent[] meshes, SceneFolder folder, string outputFolder, string resourceFolder, SceneCompileStatistics statistics, Func<int, int, Task> step )
+	static async Task<int> ConvertMeshes( Scene compiled, MeshComponent[] meshes, SceneFolder folder, string outputFolder, string resourceFolder, SceneCompileStatistics statistics, Func<int, int, Task> step, SceneCompileSession session )
 	{
 		var converted = 0;
 
@@ -19,7 +19,7 @@ partial class SceneCompiler
 			// editor, which has no business drawing a frame with someone else's scene pushed.
 			using ( compiled.Push() )
 			{
-				if ( Convert( meshes[i], folder, $"{outputFolder}/mesh_{converted}.vmdl_c", $"{resourceFolder}/mesh_{converted}.vmdl", statistics ) )
+				if ( Convert( meshes[i], folder, $"{outputFolder}/mesh_{converted}.vmdl_c", $"{resourceFolder}/mesh_{converted}.vmdl", statistics, session ) )
 					converted++;
 			}
 
@@ -32,11 +32,11 @@ partial class SceneCompiler
 	/// <summary>
 	/// Replace one mesh with a renderer and a collider drawing the model we build from it.
 	/// </summary>
-	static bool Convert( MeshComponent mesh, SceneFolder folder, string path, string resourcePath, SceneCompileStatistics statistics )
+	static bool Convert( MeshComponent mesh, SceneFolder folder, string path, string resourcePath, SceneCompileStatistics statistics, SceneCompileSession session )
 	{
 		if ( Build( mesh, resourcePath, statistics ) is not { } built )
 		{
-			Log.Warning( $"Mesh '{mesh.GameObject.Name}' has no triangulated geometry. Removing it from the compiled scene." );
+			session.Warn( $"Mesh '{mesh.GameObject.Name}' has no triangulated geometry. Removing it from the compiled scene.", mesh );
 			return false;
 		}
 

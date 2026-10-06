@@ -26,9 +26,9 @@ internal sealed record SceneCompilerSettings
 	public static SceneCompilerSettings Load( Asset asset )
 	{
 		var metadata = asset?.AssetType?.ResourceType == typeof( SceneFile ) && File.Exists( asset.GetSourceFile( true ) )
-			? SceneCompileCache.ReadSetting( asset, MetadataProperty )
+			? asset.MetaData.GetElement( MetadataProperty )
 			: null;
-		var settings = metadata is null ? LoadDefaults() : metadata.Deserialize<SceneCompilerSettings>()
+		var settings = metadata is null ? LoadDefaults() : metadata.Value.Deserialize<SceneCompilerSettings>()
 			?? throw new InvalidDataException( "Invalid scene compile settings." );
 		settings.Validate();
 		return settings;

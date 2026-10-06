@@ -570,10 +570,6 @@ internal class GameInstance : IGameInstance
 			if ( !options.SetScene( startupScene ) )
 				return false;
 
-			using var runtimePreparation = options.RuntimePreparationScope();
-			if ( !options.PrepareRuntime() )
-				return false;
-
 			Game.ActiveScene.RunEvent<ISceneStartup>( x => x.OnHostPreInitialize( options.GetSceneFile() ) );
 
 			if ( !Game.ActiveScene.Load( options ) )

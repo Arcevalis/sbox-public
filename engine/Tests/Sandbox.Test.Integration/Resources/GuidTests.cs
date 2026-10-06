@@ -2,7 +2,6 @@ using Sandbox.Diagnostics;
 using Sandbox.Engine;
 using System;
 using System.IO;
-using System.Reflection;
 using System.Text.Json.Nodes;
 
 namespace ResourceTests;
@@ -239,18 +238,18 @@ public class GuidTests
 	}
 
 	[TestMethod]
-	public void SceneCompilerReloadsNamedModelFromDisk()
+	public void NamedModelReloadsFromDisk()
 	{
 		var folder = Path.GetFileName( _testPath );
 		var path = $"{folder}/named_aggregate.vmdl";
 		var temporary = CreateAggregateModel( 3, path );
 		Assert.AreSame( temporary, Model.Load( path ) );
 
-		var method = typeof( Editor.SceneCompiler ).GetMethod( "WriteModel", BindingFlags.Static | BindingFlags.NonPublic );
-		Assert.IsNotNull( method );
-		var writeModel = method.CreateDelegate<Func<Editor.SceneFolder, string, Model, Model>>();
-		var saved = writeModel( new ModelOutputFolder( _assetsPath, folder ), "named_aggregate.vmdl_c", temporary );
+		File.WriteAllBytes( Path.Combine( _assetsPath, path + "_c" ), temporary.SaveToVmdl() );
+		NativeEngine.g_pResourceSystem.ReloadResource( path );
+		var saved = Model.FromNative( NativeGlue.Resources.GetModel( path, Guid.Empty ) );
 
+		Assert.IsNotNull( saved );
 		Assert.AreNotSame( temporary, saved );
 		Assert.IsFalse( saved.IsProcedural );
 		Assert.AreEqual( path, saved.ResourcePath );
@@ -311,17 +310,6 @@ public class GuidTests
 		NativeResourceCache.Remove( model.native.GetBindingPtr().ToInt64() );
 		model.Destroy();
 	}
-
-	sealed class ModelOutputFolder( string assetsPath, string folder ) : Editor.SceneFolder
-	{
-		public override string WriteFile( string filename, byte[] data )
-		{
-			var path = $"{folder}/{filename}";
-			File.WriteAllBytes( Path.Combine( assetsPath, path ), data );
-			return path;
-		}
-	}
-
 
 	void WriteVmdl( string relativePath, Guid guid )
 	{

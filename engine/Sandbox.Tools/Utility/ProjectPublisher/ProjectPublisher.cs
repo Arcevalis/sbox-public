@@ -444,13 +444,14 @@ public partial class ProjectPublisher
 	{
 		file.SizeUploaded = 1;
 
-		var contents = file.Contents;
-		if ( contents is null && file.AbsolutePath is not null )
-			contents = await System.IO.File.ReadAllBytesAsync( file.AbsolutePath );
-
-		if ( contents is not null )
+		if ( file.Contents is not null )
 		{
-			var r = await Project.Package.UploadFile( contents, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
+			var r = await Project.Package.UploadFile( file.Contents, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
+			if ( r ) file.Skip = true;
+		}
+		else if ( file.AbsolutePath is not null )
+		{
+			var r = await Project.Package.UploadFile( file.AbsolutePath, file.Name, p => { file.SizeUploaded = p.ProgressBytes; TriggerProgessChanged(); } );
 			if ( r ) file.Skip = true;
 		}
 		else

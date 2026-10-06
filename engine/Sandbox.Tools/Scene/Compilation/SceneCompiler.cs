@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json.Nodes;
 using Sandbox;
 
 namespace Editor;
@@ -13,8 +12,6 @@ namespace Editor;
 /// </summary>
 internal static partial class SceneCompiler
 {
-	static bool _running;
-
 	/// <summary>
 	/// What a compile is going to work on, worked out up front so it can be shown before anything
 	/// is built.
@@ -82,18 +79,12 @@ internal static partial class SceneCompiler
 	/// </summary>
 	internal static async Task<string[]> Compile( Sources sources, SceneCompilerSettings settings, SceneCompileSession session )
 	{
-		if ( _running )
-			throw new InvalidOperationException( "A scene compile is already running." );
-
 		ArgumentNullException.ThrowIfNull( settings );
 		settings.Validate();
-		var generation = Guid.NewGuid().ToString( "N" );
 		var sourcePath = sources.Asset.GetSourceFile( true );
 		if ( string.IsNullOrEmpty( sourcePath ) )
 			throw new InvalidOperationException( "Save a local copy of this scene before compiling it." );
 
-		_running = true;
-		string[] result = null;
 		Scene compiled = null;
 
 		try
@@ -105,7 +96,6 @@ internal static partial class SceneCompiler
 			if ( scene.Editor is not SceneEditorSession editor || editor.HasUnsavedChanges )
 				throw new InvalidOperationException( "Save the scene, then use Scene > Compile Scene. Unsaved changes cannot be compiled." );
 
-			var editVersion = editor.EditVersion;
 			session.Cancel.ThrowIfCancellationRequested();
 			var sceneFolder = scene.Editor.GetSceneFolder()
 				?? throw new InvalidOperationException( "This scene has nowhere to write its compiled resources." );
@@ -121,39 +111,18 @@ internal static partial class SceneCompiler
 					throw new InvalidOperationException( "Could not load the editable scene for compilation." );
 			}
 
-			SceneCompileCache.BeginGeneration( sources.Asset, generation );
-			result = await Run( sources.Asset, sceneFolder, compiled, sourceFile.Id, sourcePath, settings, session, generation );
-			var dirty = !scene.IsValid() || editor.EditVersion != editVersion;
-			SceneCompileCache.WriteSetting( sources.Asset, SceneCompileCache.DirtyProperty, JsonValue.Create( dirty ) );
-			editor.CompilationDirty = dirty;
+			return await Run( sources.Asset, sceneFolder, compiled, sourceFile.Id, sourcePath, settings, session );
 		}
 		finally
 		{
-			try
-			{
-				compiled?.Destroy();
-			}
-			finally
-			{
-				try
-				{
-					if ( result is null )
-						SceneCompileCache.DiscardGeneration( sourcePath, generation );
-				}
-				finally
-				{
-					_running = false;
-				}
-			}
+			compiled?.Destroy();
 		}
-
-		return result;
 	}
 
 	static async Task<string[]> Run( Asset sourceAsset, SceneFolder sceneFolder, Scene compiled, Guid sceneId, string sourcePath,
-		SceneCompilerSettings settings, SceneCompileSession session, string generation )
+		SceneCompilerSettings settings, SceneCompileSession session )
 	{
-		var outputFolder = $"/compiled/{generation}";
+		const string outputFolder = "/compiled";
 		var resourceFolder = $"{System.IO.Path.ChangeExtension( sourceAsset.Path, null )}_scene_data{outputFolder}";
 		var discovered = DiscoverSources( compiled ).ToArray();
 		var meshes = Gather<MeshComponent>( discovered ).ToArray();
@@ -219,7 +188,7 @@ internal static partial class SceneCompiler
 			session.Phase( $"Converting {leftovers.Length} meshes" );
 			await Task.Delay( 1, session.Cancel );
 
-			converted = await ConvertMeshes( compiled, leftovers, sceneFolder, outputFolder, resourceFolder, statistics, Step );
+			converted = await ConvertMeshes( compiled, leftovers, sceneFolder, outputFolder, resourceFolder, statistics, Step, session );
 			processed.UnionWith( leftovers.Select( mesh => mesh.Id ) );
 		}
 
@@ -294,7 +263,7 @@ internal static partial class SceneCompiler
 			}
 
 			if ( compiled.Components.GetAll<MeshComponent>( FindMode.EverythingInSelfAndDescendants ).FirstOrDefault() is { } remainingMesh )
-				throw new InvalidOperationException( $"Cannot publish the compiled scene: mesh '{remainingMesh.GameObject.Name}' was not converted. Compiled scenes cannot contain MeshComponents." );
+				throw new InvalidOperationException( $"Cannot compile the scene: mesh '{remainingMesh.GameObject.Name}' was not converted. Compiled scenes cannot contain MeshComponents." );
 
 			file = new SceneFile();
 			compiled.ToSceneFile( file );
@@ -302,7 +271,8 @@ internal static partial class SceneCompiler
 		}
 
 		session.Phase( "Writing runtime scene" );
-		SceneCompileCache.Publish( sourceAsset, sourcePath, generation, file, settings, session.Cancel );
+		session.Cancel.ThrowIfCancellationRequested();
+		WriteScene( sourceAsset, sourcePath, file, settings );
 		settings.SaveDefaults();
 		session.Statistics = statistics;
 
@@ -318,11 +288,14 @@ internal static partial class SceneCompiler
 	}
 
 	/// <summary>
-	/// Write a generated resource into this run's private generation.
+	/// Write a generated resource.
 	/// </summary>
 	static string Write( SceneFolder folder, string path, byte[] data )
 	{
 		var written = folder.WriteFile( path, data );
+
+		if ( AssetSystem.RegisterFile( FileSystem.Mounted.GetFullPath( written ) ) is null )
+			throw new InvalidOperationException( $"Could not register compiled scene resource '{written}'." );
 
 		// The resource system wants the source name, not the compiled one.
 		var name = written.EndsWith( "_c" ) ? written[..^2] : written;
