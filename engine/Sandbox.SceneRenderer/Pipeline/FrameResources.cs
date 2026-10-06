@@ -23,14 +23,10 @@ internal enum FrameResources : ushort
 	QuarterDepth = 1 << 1,
 
 	/// <summary>
-	/// Bloom objects drawn into the bloom target, not blurred yet (<see cref="BloomLayer"/>).
+	/// Bloom objects drawn into the bloom target the bloom effect reads (<see cref="BloomLayer"/>,
+	/// <c>QuarterResEffectsBloomInputTexture</c>).
 	/// </summary>
 	BloomObjects = 1 << 2,
-
-	/// <summary>
-	/// The blurred bloom target the bloom effect reads (<see cref="BloomBlurLayer"/>, <c>QuarterResEffectsBloomInputTexture</c>).
-	/// </summary>
-	BloomInput = 1 << 3,
 
 	/// <summary>
 	/// Glass's depth for the frame copy's mask (<see cref="RefractionStencilLayer"/>).

@@ -29,8 +29,8 @@ internal sealed class StageLayer : RenderLayer
 	public override bool IsNeeded( RenderFrame frame ) => frame.Stages is not null;
 
 	// A camera's command lists and effects read what native's hook layers could: the depth chain (Depth::Get), and bloom's
-	// input (the bloom effect)
-	public override FrameResources Reads( RenderFrame frame ) => FrameResources.DepthChain | FrameResources.BloomInput;
+	// objects (the bloom effect)
+	public override FrameResources Reads( RenderFrame frame ) => FrameResources.DepthChain | FrameResources.BloomObjects;
 
 	public override void Record( RenderFrame frame, RenderContext rc, ref RenderStats stats )
 	{

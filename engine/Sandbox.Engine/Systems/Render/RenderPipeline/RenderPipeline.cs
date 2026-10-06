@@ -25,7 +25,6 @@ internal partial class RenderPipeline
 	ReactiveMaskDebugLayer ReactiveMaskDebugLayer { get; } = new();
 	ClusteredCullingLayer ClusteredCullingLayer { get; } = new();
 	BloomLayer BloomLayer { get; } = new();
-	BloomDownsampleLayer BloomDownsampleLayer { get; } = new();
 	RefractionStencilLayer RefractionStencilLayer { get; } = new();
 	QuarterDepthDownsampleLayer QuarterDepthDownsampleLayer { get; } = new();
 
@@ -123,9 +122,6 @@ internal partial class RenderPipeline
 			BloomLayer.AddToView( view, quarterViewport );
 
 			view.GetRenderAttributesPtr().SetTextureValue( "QuarterResEffectsBloomInputTexture", bloomRt.ColorTarget.native, -1 );
-
-			BloomDownsampleLayer.RT = bloomRt;
-			BloomDownsampleLayer.AddToView( view, quarterViewport );
 		}
 
 		// Refraction stencil layer, used for filtering out depth on Framebuffer copies

@@ -40,7 +40,6 @@ public sealed partial class RenderSystem
 			// Quarter-resolution bloom with scene-depth occlusion.
 			new QuarterDepthDownsampleLayer( bloom ),
 			bloom,
-			new BloomBlurLayer( bloom ),
 
 			// Glass depth for the frame-copy mask.
 			new RefractionStencilLayer(),

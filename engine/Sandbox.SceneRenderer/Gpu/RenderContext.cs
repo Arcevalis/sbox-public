@@ -1034,15 +1034,6 @@ internal sealed class RenderContext : IDisposable
 	}
 
 	/// <summary>
-	/// Blur texture mips using <c>BloomDownsampleLayer</c>.
-	/// </summary>
-	public void BlurMips( Texture texture )
-	{
-		Invalidate();
-		Sandbox.Rendering.BloomDownsampleLayer.Render( context, texture );
-	}
-
-	/// <summary>
 	/// Dispatch thread counts with current attributes; native converts to shader group counts.
 	/// </summary>
 	public void Dispatch( Material computeShader, int x, int y, int z )

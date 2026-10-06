@@ -93,11 +93,6 @@ internal sealed class BloomLayer : MeshLayer
 		if ( start ) rc.Clear( Color.Transparent, clearColor: true, clearDepth: false );
 	}
 
-	/// <summary>
-	/// Release the frame's target reference.
-	/// </summary>
-	internal void EndFrame() => Target = null;
-
 	public override void Dispose()
 	{
 		GraphicsView?.Dispose();
@@ -131,30 +126,5 @@ internal sealed class QuarterDepthDownsampleLayer : RenderLayer
 
 		var hdr = frame.Output.Target;
 		rc.DownsampleQuarterDepth( bloom.GraphicsView, hdr.Depth, hdr.Samples > 1 );
-	}
-}
-
-/// <summary>
-/// Blurs bloom mips using <c>BloomDownsampleLayer.Render</c>; no view constants required.
-/// </summary>
-internal sealed class BloomBlurLayer : RenderLayer
-{
-	readonly BloomLayer bloom;
-
-	public BloomBlurLayer( BloomLayer bloom ) : base( "Bloom Layer Gaussian Blur" )
-	{
-		this.bloom = bloom;
-	}
-
-	public override bool IsNeeded( RenderFrame frame ) => bloom.IsNeeded( frame );
-
-	public override FrameResources Writes => FrameResources.BloomInput;
-
-	public override FrameResources Reads( RenderFrame frame ) => FrameResources.BloomObjects;
-
-	public override void Record( RenderFrame frame, RenderContext rc, ref RenderStats stats )
-	{
-		rc.BlurMips( bloom.Target.ColorTarget );
-		bloom.EndFrame();
 	}
 }

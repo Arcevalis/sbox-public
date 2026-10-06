@@ -25,8 +25,8 @@ internal class BloomLayer : RenderLayer
 	}
 
 	/// <summary>
-	/// The bloom layer's target for a quarter viewport this size: a temporary RGBA1010102 colour with a mip chain for the blur,
-	/// and D32 depth. Also what the managed scene renderer draws its bloom objects into.
+	/// The bloom layer's target for a quarter viewport this size: a temporary RGBA1010102 colour and D32 depth. The bloom
+	/// effect blurs it in its own downsample chain. Also what the managed scene renderer draws its bloom objects into.
 	/// </summary>
 	internal static RenderTarget GetTarget( int width, int height )
 	{
@@ -34,34 +34,7 @@ internal class BloomLayer : RenderLayer
 			width,
 			height,
 			colorFormat: ImageFormat.RGBA1010102,
-			depthFormat: ImageFormat.D32,
-			numMips: (int)Math.Log2( Math.Max( width, height ) ) );
-	}
-}
-
-internal class BloomDownsampleLayer : ProceduralRenderLayer
-{
-	public RenderTarget RT { get; set; }
-	public BloomDownsampleLayer()
-	{
-		Name = "Bloom Layer Gaussian Blur";
-		Flags |= LayerFlags.NeverRemove;
-	}
-
-	// Bit wasteful if we are not rendering anything before, in the future these two layers would only be called if we are rendering something
-	internal override void OnRender()
-	{
-		// Fucked?
-		// Graphics.GenerateMipMaps( rt.ColorTarget, Graphics.DownsampleMethod.GaussianBlur );
-		Render( Graphics.Context, RT.ColorTarget );
-	}
-
-	/// <summary>
-	/// Blur <paramref name="color"/> down its mips. Also what the managed scene renderer runs, into its own frame.
-	/// </summary>
-	internal static void Render( IRenderContext context, Texture color )
-	{
-		NativeEngine.CSceneSystem.DownsampleTexture( context, color.native, (int)Graphics.DownsampleMethod.GaussianBlur );
+			depthFormat: ImageFormat.D32 );
 	}
 }
 internal class QuarterDepthDownsampleLayer : ProceduralRenderLayer
