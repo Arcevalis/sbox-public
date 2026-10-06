@@ -253,6 +253,7 @@ native class CPhysSurfaceProperties as NativeEngine.CPhysSurfaceProperties
 	int m_nIndex; 
 	int	m_nBaseIndex;
 	int	m_AudioSurface;
+	bool m_bHasScrapeSounds;
 
 	bool m_bHidden;
 
