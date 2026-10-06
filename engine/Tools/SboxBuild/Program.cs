@@ -23,6 +23,7 @@ internal class Program
 		AddBuildContentCommand( rootCommand );
 		AddTestCommand( rootCommand );
 		AddBuildShadersCommand( rootCommand );
+		AddShaderStatsCommand( rootCommand );
 		AddGenerateSolutionsCommand( rootCommand );
 		AddSyncPublicRepoCommand( rootCommand );
 		AddWriteVersionCommand( rootCommand );
@@ -147,6 +148,26 @@ internal class Program
 		{
 			Environment.ExitCode = (int)new BuildShaders( forced ).Run();
 		}, forcedOption );
+		rootCommand.Add( cmd );
+	}
+
+	private static void AddShaderStatsCommand( RootCommand rootCommand )
+	{
+		var cmd = new Command( "shader-stats", "Compile every shader combo with AMD's Radeon GPU Analyzer and write register use and occupancy to docs/shaders/shader-stats.md" );
+		var asicOption = new Option<string[]>( "--asic",
+			description: "Target to analyze, repeatable. The first one gets the detailed tables",
+			getDefaultValue: () => ShaderStats.DefaultAsics )
+		{ AllowMultipleArgumentsPerToken = true };
+		var shaderOption = new Option<string[]>( "--shader",
+			description: "Only recompile these .shader files, keeping the stats already gathered for the rest",
+			getDefaultValue: () => [] )
+		{ AllowMultipleArgumentsPerToken = true };
+		cmd.AddOption( asicOption );
+		cmd.AddOption( shaderOption );
+		cmd.SetHandler( ( string[] asics, string[] shaders ) =>
+		{
+			Environment.ExitCode = (int)new ShaderStats( asics, shaders ).Run();
+		}, asicOption, shaderOption );
 		rootCommand.Add( cmd );
 	}
 
