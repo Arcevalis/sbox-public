@@ -138,8 +138,7 @@ internal static class ScreenRecorder
 			}
 
 #if WIN
-			// Blit cursor directly onto the image data
-			if ( Mouse.Active )
+			if ( System.OperatingSystem.IsWindows() && Mouse.Active )
 			{
 				unsafe
 				{
@@ -158,6 +157,15 @@ internal static class ScreenRecorder
 				// Skip frames with mismatched resolution (can happen during resize or with ScenePanels)
 				if ( width == _videoWriter.Width && height == _videoWriter.Height )
 				{
+
+					if ( format is ImageFormat.BGRA8888 or ImageFormat.BGRX8888 )
+					{
+						// GPU readback arrives in the platform backbuffer layout (BGRA-ordered
+						// on Linux/Vulkan) but the encoder expects RGBA, so swap them in place.
+						for ( int i = 0; i + 3 < pData.Length; i += 4 )
+							(pData[i], pData[i + 2]) = (pData[i + 2], pData[i]);
+					}
+
 					_videoWriter.AddFrame( pData, TimeSpan.FromSeconds( timestamp ) );
 				}
 			}
