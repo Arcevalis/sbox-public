@@ -39,7 +39,8 @@ public class Voice : Component
 	[Property] public bool Loopback { get; set; } = false;
 
 	/// <summary>
-	/// Analyze the voice for viseme weights while it plays. See <see cref="Visemes"/>.
+	/// Analyze the voice for viseme weights while it plays. Analysis only runs while a <see cref="Renderer"/>
+	/// is set or <see cref="Visemes"/> / <see cref="LaughterScore"/> have been read recently.
 	/// </summary>
 	[Property, ToggleGroup( "LipSync", Label = "Lip Sync" )]
 	public bool LipSync { get; set; } = true;
@@ -64,11 +65,19 @@ public class Voice : Component
 	/// <summary>
 	/// Laughter score for the current audio frame, between 0 and 1
 	/// </summary>
-	public float LaughterScore => sound.IsValid() ? sound.LipSync.LaughterScore : 0;
+	public float LaughterScore
+	{
+		get
+		{
+			lipSyncRequested = 0;
+			return sound.IsValid() ? sound.LipSync.LaughterScore : 0;
+		}
+	}
 
 	private bool recording = false;
 	private SoundStream soundStream;
 	private SoundHandle sound;
+	private RealTimeSince lipSyncRequested = float.MaxValue;
 
 	private MixerHandle targetMixer;
 
@@ -131,8 +140,16 @@ public class Voice : Component
 
 	/// <summary>
 	/// A list of 15 lipsync viseme weights. Requires <see cref="LipSync"/> to be enabled, doesn't need a <see cref="Renderer"/>.
+	/// Reading this keeps analysis running, so the first read after a pause may be empty.
 	/// </summary>
-	public IReadOnlyList<float> Visemes => sound.IsValid() ? sound.LipSync.Visemes : Array.Empty<float>();
+	public IReadOnlyList<float> Visemes
+	{
+		get
+		{
+			lipSyncRequested = 0;
+			return sound.IsValid() ? sound.LipSync.Visemes : Array.Empty<float>();
+		}
+	}
 
 	internal override void OnEnabledInternal()
 	{
@@ -209,8 +226,9 @@ public class Voice : Component
 		sound.Volume = Volume;
 		sound.Loopback = !IsProxy && !Loopback;
 
-		// Applied every frame so toggling LipSync affects the live voice
-		sound.LipSync.Enabled = LipSync;
+		// Lipsync analysis is expensive, only run it when something consumes the result.
+		// Applied every frame so toggling LipSync or late binding a Renderer affects the live voice.
+		sound.LipSync.Enabled = LipSync && (Renderer.IsValid() || lipSyncRequested < 1.0f);
 
 		if ( WorldspacePlayback )
 		{
@@ -356,7 +374,6 @@ public class Voice : Component
 			sound.TargetMixer = TargetMixer;
 			sound.Distance = Distance;
 			sound.Falloff = Falloff;
-			sound.LipSync.Enabled = LipSync;
 			sound.IsVoice = true;
 		}
 
