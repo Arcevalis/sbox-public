@@ -55,10 +55,10 @@ public partial class SceneDock : Widget
 		{
 			Session.MakeActive();
 
-			// Focus the viewport so keybinds work right away after switching tabs
+			// Focus the viewport for keybinds without activating an editor whose tabs changed in the background.
 			var viewport = _sceneView?.LastSelectedViewportWidget;
 			if ( viewport.IsValid() )
-				viewport.Focus();
+				viewport.Focus( activateWindow: false );
 		}
 	}
 
