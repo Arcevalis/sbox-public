@@ -103,18 +103,78 @@ public class SoundCompressionTests
 		var packet = 27 + segments;
 		Assert.IsTrue( source.AsSpan( packet, 7 ).SequenceEqual( "\x01vorbis"u8 ) );
 		BitConverter.GetBytes( rate ).CopyTo( source, packet + 12 );
-		Array.Clear( source, 22, 4 );
-		var pageSize = packet;
-		for ( var i = 0; i < segments; i++ ) pageSize += source[27 + i];
+		RepairOggPage( source, 0 );
+		return source;
+	}
+
+	static int RepairOggPage( byte[] source, int page )
+	{
+		Array.Clear( source, page + 22, 4 );
+		var segments = source[page + 26];
+		var end = page + 27 + segments;
+		for ( var i = 0; i < segments; i++ ) end += source[page + 27 + i];
 		uint crc = 0;
-		for ( var i = 0; i < pageSize; i++ )
+		for ( var i = page; i < end; i++ )
 		{
 			crc ^= (uint)source[i] << 24;
 			for ( var bit = 0; bit < 8; bit++ )
 				crc = (crc << 1) ^ ((crc & 0x80000000) != 0 ? 0x04c11db7u : 0);
 		}
-		BitConverter.GetBytes( crc ).CopyTo( source, 22 );
-		return source;
+		BitConverter.GetBytes( crc ).CopyTo( source, page + 22 );
+		return end;
+	}
+
+	[TestMethod]
+	[DataRow( 65536 )]
+	[DataRow( 96000 )]
+	[DataRow( 192000 )]
+	public void DecodesHighRateVorbisToPcm( int rate )
+	{
+		var source = File.ReadAllBytes( Path.Combine( AppContext.BaseDirectory, "Resources", "Audio", "tone.ogg" ) );
+		var original = SoundData.FromOGG( source );
+		var decoded = SoundData.FromOGG( VorbisWithRate( source, rate ) );
+		Assert.AreEqual( (uint)rate, decoded.SampleRate );
+		Assert.AreEqual( original.SampleCount, decoded.SampleCount );
+		CollectionAssert.AreEqual( original.PCMData, decoded.PCMData );
+		Assert.AreEqual( (float)decoded.SampleCount / rate, decoded.Duration );
+	}
+
+	[TestMethod]
+	public void DecodesAndMixesMatchingVorbisChains()
+	{
+		using var files = new Fixtures();
+		var source = File.ReadAllBytes( files.Copy( "tone.ogg" ) );
+		var decoded = SoundData.FromOGG( source );
+		var chain = ChainedVorbis( source, (byte[])source.Clone() );
+		var chained = SoundData.FromOGG( chain );
+		Assert.AreEqual( decoded.SampleCount * 2, chained.SampleCount );
+		CollectionAssert.AreEqual( decoded.PCMData.Concat( decoded.PCMData ).ToArray(), chained.PCMData );
+
+		var compiled = files.Compile( files.Write( "chained.ogg", chain ) );
+		Assert.AreEqual( SoundFormat.Vorbis, compiled.Format );
+		CollectionAssert.AreEqual( chain, compiled.Payload );
+		using var sampler = VorbisSampler( compiled.Payload, compiled.Rate, compiled.Channels, compiled.Frames );
+		Assert.IsTrue( sampler.IsReadyToMix );
+		for ( var i = 0; i < 400 && sampler.ShouldContinueMixing; i++ ) sampler.Sample( 1 );
+		Assert.IsTrue( sampler.SamplePosition >= decoded.SampleCount );
+		Assert.IsFalse( sampler.ShouldContinueMixing );
+	}
+
+	[TestMethod]
+	public void RejectsVorbisChainsWithDifferentRates()
+	{
+		var source = File.ReadAllBytes( Path.Combine( AppContext.BaseDirectory, "Resources", "Audio", "tone.ogg" ) );
+		var chain = ChainedVorbis( source, VorbisWithRate( (byte[])source.Clone(), 48000 ) );
+		Assert.ThrowsException<ArgumentException>( () => SoundData.FromOGG( chain ) );
+	}
+
+	static byte[] ChainedVorbis( byte[] first, byte[] second )
+	{
+		// Each logical stream needs a distinct serial number on all of its pages.
+		var serial = BitConverter.GetBytes( BitConverter.ToUInt32( first, 14 ) ^ 1u );
+		for ( var page = 0; page < second.Length; page = RepairOggPage( second, page ) )
+			serial.CopyTo( second, page + 14 );
+		return first.Concat( second ).ToArray();
 	}
 
 	[TestMethod]
