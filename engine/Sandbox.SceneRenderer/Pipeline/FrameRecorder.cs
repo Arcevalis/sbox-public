@@ -601,12 +601,15 @@ internal sealed class FrameRecorder : IDisposable
 				handOff.InheritViewConstants( frame.ConstantsKey );
 				RenderContext.Recording = handOff;
 
+				// The graphics-side handoff lives outside the compute layers' own timing scopes.
+				var handOffScope = handOff.BeginGpuScope( "Async compute handoff" );
 				for ( int l = segment.Index; l < segment.Index + segment.Count; l++ )
 				{
 					frame.UseFrameConstants( handOff );
 					layers[l].Layer.HandOff( frame, handOff );
 					handOff.EndPass();
 				}
+				handOff.EndGpuScope( handOffScope );
 			}
 
 			// Context command memory is thread-owned (CRenderBatchList::Start). Serial recording shares the first context.
@@ -617,9 +620,11 @@ internal sealed class FrameRecorder : IDisposable
 			// What the async layers left for graphics, now they're done
 			if ( segment.Join )
 			{
+				var takeBackScope = rc.BeginGpuScope( "Async compute results" );
 				ref var compute = ref segments[asyncSegment];
 				for ( int l = compute.Index; l < compute.Index + compute.Count; l++ )
 					layers[l].Layer.TakeBack( compute.Frame, rc );
+				rc.EndGpuScope( takeBackScope );
 			}
 
 			RecordSegment( ref segment, rc, frame, ref stats );

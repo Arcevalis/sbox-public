@@ -106,9 +106,6 @@ internal static partial class DebugOverlay
 		}
 
 		// GPU Profiler
-		Diagnostics.GpuProfilerStats.Enabled = overlay_gpu == 1;
-		Diagnostics.GpuProfilerStats.Update();
-
 		if ( overlay_gpu == 1 )
 		{
 			DebugOverlay.GpuProfiler.Draw( painter, ref pos );
