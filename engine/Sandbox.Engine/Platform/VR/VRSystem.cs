@@ -43,7 +43,7 @@ internal static unsafe partial class VRSystem
 		//
 		// Check if we actually want to init VR
 		//
-		if ( CommandLine.HasSwitch( "-novr" ) )
+		if ( !CommandLine.HasSwitch( "-vr" ) || CommandLine.HasSwitch( "-novr" ) )
 			return;
 
 		if ( Application.IsHeadless )
