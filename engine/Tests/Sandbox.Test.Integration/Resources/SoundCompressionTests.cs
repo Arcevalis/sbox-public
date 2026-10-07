@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
+using Sandbox.Audio;
+using NativeEngine;
 
 namespace ResourceTests;
 
@@ -51,6 +54,145 @@ public class SoundCompressionTests
 			File.WriteAllText( processed + ".meta", JsonSerializer.Serialize( new { guid = Guid.NewGuid(), gain = -6 } ) );
 			Assert.AreEqual( SoundFormat.Opus, files.Compile( processed ).Format );
 			CollectionAssert.AreEqual( original, File.ReadAllBytes( processed ) );
+		}
+	}
+
+	[TestMethod]
+	[DataRow( 65536 )]
+	[DataRow( 96000 )]
+	[DataRow( 192000 )]
+	public void ResamplesVorbisRatesThatDoNotFitTheCompiledHeader( int rate )
+	{
+		using var files = new Fixtures();
+		var path = files.Copy( "tone.ogg" );
+		var originalFrames = files.Compile( path ).Frames;
+		var source = VorbisWithRate( File.ReadAllBytes( path ), rate );
+		File.WriteAllBytes( path, source );
+		File.WriteAllText( path + ".meta", JsonSerializer.Serialize( new { guid = Guid.NewGuid(), loop = true, start = 0.05, end = 0.1 } ) );
+
+		var compiled = files.Compile( path );
+		Assert.AreEqual( SoundFormat.Opus, compiled.Format );
+		Assert.AreEqual( 48000, compiled.Rate );
+		Assert.AreEqual( originalFrames * 48000.0 / rate, compiled.Frames, 1.0 );
+		Assert.AreEqual( 2400, compiled.LoopStart, 1 );
+		Assert.AreEqual( 4800, compiled.LoopEnd, 1 );
+		CollectionAssert.AreEqual( source, File.ReadAllBytes( path ) );
+	}
+
+	[TestMethod]
+	[DataRow( 44100 )]
+	[DataRow( 48000 )]
+	[DataRow( 65535 )]
+	public void PreservesVorbisRatesThatFitTheCompiledHeader( int rate )
+	{
+		using var files = new Fixtures();
+		var path = files.Copy( "tone.ogg" );
+		var source = VorbisWithRate( File.ReadAllBytes( path ), rate );
+		File.WriteAllBytes( path, source );
+		var compiled = files.Compile( path );
+		Assert.AreEqual( SoundFormat.Vorbis, compiled.Format );
+		Assert.AreEqual( rate, compiled.Rate );
+		CollectionAssert.AreEqual( source, compiled.Payload );
+	}
+
+	// Change the identification packet's rate and repair its Ogg page checksum.
+	// Vorbis audio packets are independent of this rate, so no encoder is needed.
+	static byte[] VorbisWithRate( byte[] source, int rate )
+	{
+		var segments = source[26];
+		var packet = 27 + segments;
+		Assert.IsTrue( source.AsSpan( packet, 7 ).SequenceEqual( "\x01vorbis"u8 ) );
+		BitConverter.GetBytes( rate ).CopyTo( source, packet + 12 );
+		Array.Clear( source, 22, 4 );
+		var pageSize = packet;
+		for ( var i = 0; i < segments; i++ ) pageSize += source[27 + i];
+		uint crc = 0;
+		for ( var i = 0; i < pageSize; i++ )
+		{
+			crc ^= (uint)source[i] << 24;
+			for ( var bit = 0; bit < 8; bit++ )
+				crc = (crc << 1) ^ ((crc & 0x80000000) != 0 ? 0x04c11db7u : 0);
+		}
+		BitConverter.GetBytes( crc ).CopyTo( source, 22 );
+		return source;
+	}
+
+	[TestMethod]
+	[DataRow( "open" )]
+	[DataRow( "rate" )]
+	[DataRow( "channels" )]
+	[DataRow( "frames" )]
+	[DataRow( "high-rate" )]
+	public void FailedVorbisMixerFinishesInsteadOfRemainingAnActiveVoice( string failure )
+	{
+		using var files = new Fixtures();
+		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		var source = compiled.Payload;
+		var rate = compiled.Rate;
+		var channels = compiled.Channels;
+		var frames = compiled.Frames;
+		switch ( failure )
+		{
+			case "open": source[0] = 0; break;
+			case "rate": rate++; break;
+			case "channels": channels++; break;
+			case "frames": frames++; break;
+			case "high-rate": source = VorbisWithRate( source, 96000 ); rate = 96000 & 0xffff; break;
+		}
+
+		using var sampler = VorbisSampler( source, rate, channels, frames );
+		Assert.IsFalse( sampler.IsReadyToMix );
+		Assert.IsFalse( sampler.ShouldContinueMixing );
+		// A later seek/sample must not reopen a failed decoder or revive the voice.
+		sampler.SamplePosition = 0;
+		sampler.Sample( 1 );
+		Assert.IsFalse( sampler.IsReadyToMix );
+		Assert.IsFalse( sampler.ShouldContinueMixing );
+	}
+
+	[TestMethod]
+	public void ValidVorbisMixerAdvancesAndFinishes()
+	{
+		using var files = new Fixtures();
+		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		using var sampler = VorbisSampler( compiled.Payload, compiled.Rate, compiled.Channels, compiled.Frames );
+		Assert.IsTrue( sampler.IsReadyToMix );
+		for ( var i = 0; i < 200 && sampler.ShouldContinueMixing; i++ ) sampler.Sample( 1 );
+		Assert.IsTrue( sampler.SamplePosition > 0 );
+		Assert.IsFalse( sampler.ShouldContinueMixing );
+	}
+
+	[TestMethod]
+	[DataRow( false )]
+	[DataRow( true )]
+	public async Task FailedVorbisSampleExtractionReturnsPromptly( bool interleaved )
+	{
+		using var files = new Fixtures();
+		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		var source = compiled.Payload;
+		source[0] = 0;
+		var native = VorbisSound( source, compiled.Rate, compiled.Channels, compiled.Frames );
+		// Wrap the in-memory sound without the public factory's headless-mode early return.
+		var sound = (SoundFile)Activator.CreateInstance( typeof( SoundFile ), BindingFlags.Instance | BindingFlags.NonPublic,
+			null, new object[] { native }, null );
+		var timer = Stopwatch.StartNew();
+		var samples = await (interleaved ? sound.GetSamplesInterleavedAsync() : sound.GetSamplesAsync());
+		Assert.IsNull( samples );
+		Assert.IsTrue( timer.Elapsed < TimeSpan.FromSeconds( 1 ), $"Permanent decoder failure took {timer.Elapsed.TotalSeconds:F2} seconds to return" );
+	}
+
+	static AudioSampler VorbisSampler( byte[] source, int rate, int channels, int frames )
+		=> new( VorbisSound( source, rate, channels, frames ).CreateMixer() );
+
+	static unsafe CSfxTable VorbisSound( byte[] source, int rate, int channels, int frames )
+	{
+		fixed ( byte* data = source )
+		{
+			// Use an in-memory native sound so decoder lifecycle tests need no device or async file load.
+			var sound = g_pSoundSystem.CreateSound( $"vorbis_test_{Guid.NewGuid():N}.vsnd", channels, rate,
+				(int)SoundFormat.Vorbis, frames, (float)frames / rate, -1, 0, (IntPtr)data, source.Length );
+			Assert.IsFalse( sound.IsNull );
+			return sound;
 		}
 	}
 
@@ -123,6 +265,8 @@ public class SoundCompressionTests
 			}
 		}
 		public SoundFormat Format => (SoundFormat)bytes[Data + 2];
+		public int Rate => BitConverter.ToUInt16( bytes, Data );
+		public int Channels => bytes[Data + 3];
 		public int Frames => BitConverter.ToInt32( bytes, Data + 8 );
 		public int LoopStart => BitConverter.ToInt32( bytes, Data + 4 );
 		public int LoopEnd => BitConverter.ToInt32( bytes, Data + 44 );
