@@ -132,6 +132,7 @@ native class CModelBuilder as NativeEngine.ModelBuilder
 	void SetViewBounds( Vector3 mins, Vector3 maxs );
 	void SetEyePosition( Vector3 position );
 	void SetMaxEyeDeflection( float degrees );
+	bool SetModelKeyValues( KeyValues3 data );
 	void SetLODSwitchDistance( int lod, float distance );
 	void AddRunTimeMesh( IMesh mesh, CastTo[MeshGroupMask_t] ulong meshGroupMask, CastTo[LODGroupMask_t] int lodGroupMask );
 	void AddRunTimeBone( string boneName, string parentName, Vector3 position, Rotation rotation, BBox bounds );

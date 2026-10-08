@@ -1,12 +1,133 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using Sandbox.ModelEditor.Nodes;
 
 namespace ResourceTests;
 
 [TestClass]
 public class ModelBuilderTests
 {
+	[TestMethod]
+	public void GameDataDrivesPropSettingsAndBreakPieces()
+	{
+		var model = Model.Builder
+			.AddMesh( CreateBoundsMesh() )
+			.WithData( new ModelPropData
+			{
+				Health = 50,
+				Flammable = true,
+				Explosive = true,
+				ExplosionDamage = 80,
+				ExplosionRadius = 256,
+				ExplosionForce = 2,
+				ImpactDamage = 10,
+				MinImpactDamageSpeed = 200
+			} )
+			.WithData<ModelBreakPiece[]>( [
+				new()
+				{
+					PieceName = "piece",
+					Model = "mount://test/models/piece.vmdl",
+					Offset = new Vector3( 4, 8, 16 ),
+					FadeTime = 20,
+					CollisionTags = "debris",
+					IsClientOnly = true,
+					PlacementBone = "root"
+				}
+			] )
+			.Create();
+
+		Assert.IsTrue( model.HasData<ModelPropData>() );
+		Assert.AreEqual( 50f, model.Data.Health );
+		Assert.IsTrue( model.Data.Flammable );
+		Assert.IsTrue( model.Data.Explosive );
+		Assert.AreEqual( 80f, model.Data.ExplosionDamage );
+		Assert.AreEqual( 256f, model.Data.ExplosionRadius );
+		Assert.AreEqual( 2f, model.Data.ExplosionForce );
+		Assert.AreEqual( 10f, model.Data.ImpactDamage );
+		Assert.AreEqual( 200f, model.Data.MinImpactDamageSpeed );
+		Assert.IsTrue( model.HasData<ModelBreakPiece[]>() );
+		var piece = model.GetData<ModelBreakPiece[]>().Single();
+		Assert.AreEqual( "piece", piece.PieceName );
+		Assert.AreEqual( "mount://test/models/piece.vmdl", piece.Model );
+		Assert.AreEqual( new Vector3( 4, 8, 16 ), piece.Offset );
+		Assert.AreEqual( 20f, piece.FadeTime );
+		Assert.AreEqual( "debris", piece.CollisionTags );
+		Assert.IsTrue( piece.IsClientOnly );
+		Assert.AreEqual( "root", piece.PlacementBone );
+	}
+
+	[DataTestMethod]
+	[DataRow( true )]
+	[DataRow( false )]
+	public void GameDataUsesNativeBakeLightingKey( bool bakeLighting )
+	{
+		var model = Model.Builder
+			.AddMesh( CreateBoundsMesh() )
+			.WithData( new ModelPropData { BakeLighting = bakeLighting } )
+			.Create();
+
+		using var data = JsonDocument.Parse( model.GetJson( "prop_data" ) );
+		Assert.AreEqual( bakeLighting, data.RootElement.GetProperty( "bakelighting" ).GetBoolean() );
+		Assert.IsFalse( data.RootElement.TryGetProperty( "bakeLighting", out _ ) );
+		Assert.AreEqual( bakeLighting, model.GetData<ModelPropData>().BakeLighting );
+	}
+
+	[TestMethod]
+	public void GameDataReplacementAndBuilderReuseKeepModelsIndependent()
+	{
+		var data = new ModelPropData { Health = 10 };
+		var builder = Model.Builder.AddMesh( CreateBoundsMesh() ).WithData( data );
+		data.Health = 20;
+		var first = builder.Create();
+		builder.WithData( new ModelPropData { Health = 30 } );
+		var second = builder.Create();
+
+		Assert.AreEqual( 20f, first.GetData<ModelPropData>().Health );
+		Assert.AreEqual( 30f, second.GetData<ModelPropData>().Health );
+	}
+
+	[Sandbox.ModelEditor.GameData( "model_builder_test" )]
+	public struct BuilderGameData
+	{
+		public string Label;
+		public DayOfWeek Day;
+	}
+
+	[TestMethod]
+	public void CustomGameDataPreservesFieldsAndEnums()
+	{
+		var model = Model.Builder
+			.AddMesh( CreateBoundsMesh() )
+			.WithData( new BuilderGameData { Label = "custom", Day = DayOfWeek.Friday } )
+			.Create();
+
+		Assert.IsTrue( model.TryGetData<BuilderGameData>( out var data ) );
+		Assert.AreEqual( "custom", data.Label );
+		Assert.AreEqual( DayOfWeek.Friday, data.Day );
+	}
+
+	[TestMethod]
+	public void EmptyGameDataListsRemainPresent()
+	{
+		var model = Model.Builder.AddMesh( CreateBoundsMesh() ).WithData<ModelBreakPiece[]>( [] ).Create();
+
+		Assert.IsTrue( model.HasData<ModelBreakPiece[]>() );
+		Assert.AreEqual( 0, model.GetData<ModelBreakPiece[]>().Length );
+	}
+
+	[TestMethod]
+	public void GameDataRejectsNullAndInvalidNodeShapes()
+	{
+		Assert.ThrowsException<ArgumentNullException>( () => Model.Builder.WithData<ModelPropData>( null ) );
+		Assert.ThrowsException<ArgumentNullException>( () => Model.Builder.WithData<ModelBreakPiece[]>( null ) );
+		Assert.ThrowsException<ArgumentException>( () => Model.Builder.WithData( 42 ) );
+		Assert.ThrowsException<ArgumentException>( () => Model.Builder.WithData<ModelPropData[]>( [] ) );
+		Assert.ThrowsException<ArgumentException>( () => Model.Builder.WithData( new ModelBreakPiece() ) );
+	}
+
 	[DataTestMethod]
 	[DataRow( null, "sbox_procedural_model.vmdl" )]
 	[DataRow( "", "sbox_procedural_model.vmdl" )]

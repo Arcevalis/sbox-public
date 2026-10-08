@@ -3,6 +3,7 @@ using Sandbox.Engine;
 using System;
 using System.IO;
 using System.Text.Json.Nodes;
+using Sandbox.ModelEditor.Nodes;
 
 namespace ResourceTests;
 
@@ -257,6 +258,38 @@ public class GuidTests
 		UnloadModel( temporary );
 		Assert.AreSame( saved, Model.Load( path ) );
 		AssertAggregateModel( saved, 3 );
+	}
+
+	[TestMethod]
+	public void BuilderGameDataSurvivesSavingAndReloading()
+	{
+		var folder = Path.GetFileName( _testPath );
+		var path = $"{folder}/model_game_data.vmdl";
+		var temporary = Model.Builder.WithName( path )
+			.AddCollisionBox( new Vector3( 8 ) )
+			.WithData( new ModelPropData { Health = 75, Explosive = true, ExplosionDamage = 80, ExplosionRadius = 256 } )
+			.WithData<ModelBreakPiece[]>( [
+				new() { PieceName = "piece", Model = "models/dev/box.vmdl", Offset = new Vector3( 1, 2, 3 ), FadeTime = 20, CollisionTags = "debris" }
+			] )
+			.Create();
+
+		File.WriteAllBytes( Path.Combine( _assetsPath, path + "_c" ), temporary.SaveToVmdl() );
+		NativeEngine.g_pResourceSystem.ReloadResource( path );
+		var saved = Model.FromNative( NativeGlue.Resources.GetModel( path, Guid.Empty ) );
+
+		Assert.IsNotNull( saved );
+		Assert.AreNotSame( temporary, saved );
+		Assert.IsFalse( saved.IsProcedural );
+		Assert.AreEqual( 75f, saved.Data.Health );
+		Assert.IsTrue( saved.Data.Explosive );
+		Assert.AreEqual( 80f, saved.Data.ExplosionDamage );
+		Assert.AreEqual( 256f, saved.Data.ExplosionRadius );
+		var piece = saved.GetData<ModelBreakPiece[]>().Single();
+		Assert.AreEqual( "piece", piece.PieceName );
+		Assert.AreEqual( "models/dev/box.vmdl", piece.Model );
+		Assert.AreEqual( new Vector3( 1, 2, 3 ), piece.Offset );
+		Assert.AreEqual( 20f, piece.FadeTime );
+		Assert.AreEqual( "debris", piece.CollisionTags );
 	}
 
 	static Model CreateAggregateModel( int drawCalls, string name = null )
