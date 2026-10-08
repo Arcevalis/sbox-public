@@ -522,6 +522,35 @@ void CalcBakedLightingForLight( const FinalCombinerInput_t finalCombinerInput, f
 	}
 }
 
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
+void ComputeBakedLighting( inout LightingTerms_t o, const FinalCombinerInput_t f )
+{
+	if ( !LightmappedLight::UsesLightmaps() && !ProbeLight::UsesProbes() )
+		return;
+
+	int4 vLightIndices;
+	float4 vLightStrengths;
+	if ( LightmappedLight::UsesLightmaps() )
+	{
+		float3 vLightmapUVW = float3( f.vLightmapUV, 0 );
+		vLightIndices = int4( Tex2DArrayS( LightMap( 0 ), g_sPointClamp, vLightmapUVW ).rgba * 255.0 );
+		vLightStrengths = Tex2DArrayS( LightMap( 1 ), g_sTrilinearClamp, vLightmapUVW ).rgba;
+		vLightStrengths *= vLightStrengths;
+	}
+	else
+	{
+		SampleLightProbeVolumeIndexedDirectLighting( vLightIndices, vLightStrengths, f.vPositionWs.xyz );
+	}
+
+	// Derivatives must be evaluated before the per-light branch diverges.
+	const float3 vReceiverNormalWs = ComputeShadowReceiverNormal( f.vPositionWs.xyz );
+	for ( int j = 0; j < 4; j++ )
+	{
+		CalcBakedLightingForLight( f, vReceiverNormalWs, vLightIndices[j], vLightStrengths[j],
+			o.vDiffuse, o.vSpecular, o.vTransmissive );
+	}
+}
+
 // https://sms.playstation.com/stories/gdc-2019-indirect-lighting
 float NormalizeCubeBrightness( uint iCubeID, float3 vNormalWs, float flIsotropicRoughness, float flTargetLuminanceOfCubemap )
 {
@@ -542,6 +571,9 @@ float NormalizeCubeBrightness( uint iCubeID, float3 vNormalWs, float flIsotropic
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const FinalCombinerInput_t finalCombinerData )
 {
+	// Finish the baked light loop before indirect lighting results have to stay live.
+	ComputeBakedLighting( lightingTerms, finalCombinerData );
+
 	float3 vNormalTs				= finalCombinerData.vNormalTs;
 	float3 vPositionWs				= finalCombinerData.vPositionWs;
 	float3 vPositionWithOffsetWs	= finalCombinerData.vPositionWithOffsetWs;
@@ -577,14 +609,9 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 	bool bHasBakedLighting = true;
 	bool bHasCubeBrightnessNormalization = true;
 
-	// Shadow receiver normal for the baked light loops below. Derivatives are only defined in uniform
-	// control flow, so take it here rather than inside CalcBakedLightingForLight's per-light branch.
-	const float3 vReceiverNormalWs = ComputeShadowReceiverNormal( vPositionWs.xyz );
-
 	if ( LightmappedLight::UsesLightmaps() )
 	{
 		float3 vLightmapUVW = float3( finalCombinerData.vLightmapUV, 0 );
-		float4 vLightIndexFloats = Tex2DArrayS( LightMap( 0 ), g_sPointClamp, vLightmapUVW ).rgba;
 
 		// Ambient Highlight Direction (directional lightmap) data
 		float3 vIrradiance = Tex2DArrayS( LightMap( 2 ), g_sTrilinearClamp, vLightmapUVW ).rgb;
@@ -618,17 +645,6 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 		flTargetLuminanceOfCubemap = RelativeLuminance( vIrradiance.rgb );
 
 		lightingTerms.vIndirectDiffuse += float3( vIrradiance.xyz );
-
-		// Evaluate indexed baked lights from lightmap
-		float4 vLightStrengths = Tex2DArrayS( LightMap( 1 ), g_sTrilinearClamp, vLightmapUVW ).rgba;
-		vLightStrengths *= vLightStrengths;
-		int4 vLightIndices = int4( vLightIndexFloats.xyzw * 255.0 );
-
-		for ( int j = 0; j < 4; j++ )
-		{
-			CalcBakedLightingForLight( finalCombinerData, vReceiverNormalWs, vLightIndices[j], vLightStrengths[j],
-				lightingTerms.vDiffuse, lightingTerms.vSpecular, lightingTerms.vTransmissive );
-		}
 	}
 	else if ( ProbeLight::UsesProbes() )
 	{
@@ -684,18 +700,6 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 			}
 			#endif
 		}
-
-		// Evaluate indexed baked lights from probe volume
-		int4 vLightIndices;
-		float4 vLightStrengths;
-		SampleLightProbeVolumeIndexedDirectLighting( vLightIndices, vLightStrengths, vPositionWs.xyz );
-
-		for ( int j = 0; j < 4; j++ )
-		{
-			CalcBakedLightingForLight( finalCombinerData, vReceiverNormalWs, vLightIndices[j], vLightStrengths[j],
-				lightingTerms.vDiffuse, lightingTerms.vSpecular, lightingTerms.vTransmissive );
-		}
-
 	}
 	else
 	{

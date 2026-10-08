@@ -424,9 +424,10 @@ internal class ShaderStats( string[] asics, string[] shaders )
 		md.AppendLine( "- **Worst** is the combo with the most VGPRs; the combo is named by the values that differ from the default." );
 		md.AppendLine( "  **Default** is the first combo, every combo at its minimum." );
 		md.AppendLine( $"- **Waves** is VGPR-limited occupancy in waves per SIMD, out of {MaxWaves}, using LLVM's allocation rules for the" );
-		md.AppendLine( "  target and the wave size the compiler picked (**Wave**). Fewer waves means less latency hiding." );
-		md.AppendLine( "- **Scratch** is per-thread scratch memory: register spills, or arrays the compiler couldn't keep in registers." );
-		md.AppendLine( "  It goes through memory, so anything but 0 is worth fixing." );
+		md.AppendLine( "  target and the wave size the compiler picked (**Wave**). Actual occupancy also depends on LDS and workgroup size." );
+		md.AppendLine( "- **Scratch** is the per-thread scratch allocation reported by the compiler. A nonzero allocation does not" );
+		md.AppendLine( "  prove memory traffic: some variants reserve scratch without emitting scratch loads or stores. Inspect the" );
+		md.AppendLine( "  generated ISA before treating this as a bandwidth cost; SGPR spills can also use VGPR lanes." );
 		md.AppendLine( "- **Combos** is how many combos the stage compiles, **Modules** how many distinct SPIR-V modules they produce." );
 		md.AppendLine();
 		md.AppendLine( $"Targets: {string.Join( ", ", asics.Select( x => $"`{x}` {Targets[x].Name}" ) )}." );
