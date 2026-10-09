@@ -8,6 +8,12 @@ internal class DeltaSnapshotSystem
 {
 	private static readonly GuidUlongComparer GuidComparer = new();
 
+	/// <summary>
+	/// How many seconds we wait for a snapshot acknowledgement before sending the values again, until we know the
+	/// connection's round trip time.
+	/// </summary>
+	internal const float DefaultResendTime = 0.25f;
+
 	private GameNetworkSystem System { get; set; }
 
 	public DeltaSnapshotSystem( GameNetworkSystem system )
@@ -28,7 +34,7 @@ internal class DeltaSnapshotSystem
 		}
 	}
 
-	internal readonly record struct SentCluster( DeltaSnapshotCluster Cluster, HashSet<(ushort SnapshotId, Guid ObjectId)> SentSnapshotIds );
+	internal readonly record struct SentCluster( DeltaSnapshotCluster Cluster, HashSet<(ushort SnapshotId, Guid ObjectId)> SentSnapshotIds, float SentTime );
 
 	internal class ConnectionData
 	{
@@ -41,6 +47,49 @@ internal class DeltaSnapshotSystem
 		public ConnectionData( Connection connection )
 		{
 			Connection = connection;
+		}
+
+		// Smoothed round trip time and its variation, like TCP
+		float _roundTrip = -1;
+		float _roundTripVariation;
+
+		/// <summary>
+		/// How long to wait for an acknowledgement before sending values again.
+		/// </summary>
+		public float ResendTime { get; private set; } = DefaultResendTime;
+
+		public void AddRoundTrip( float sample, float minimum )
+		{
+			if ( _roundTrip < 0 )
+			{
+				_roundTrip = sample;
+				_roundTripVariation = sample / 2;
+			}
+			else
+			{
+				_roundTripVariation = 0.75f * _roundTripVariation + 0.25f * MathF.Abs( _roundTrip - sample );
+				_roundTrip = 0.875f * _roundTrip + 0.125f * sample;
+			}
+
+			ResendTime = MathF.Max( minimum, _roundTrip + 4 * _roundTripVariation );
+		}
+
+		double _clockOffset = double.NaN;
+
+		/// <summary>
+		/// The sender's time on our clock. The offset is the quickest delivery seen, so jitter only ever makes a snapshot
+		/// late, never early. It creeps up for slow drift and jumps when the clocks or the route change a lot.
+		/// </summary>
+		public double ToLocalTime( double sentAt )
+		{
+			var sample = Sandbox.Time.NowDouble - sentAt;
+
+			if ( double.IsNaN( _clockOffset ) || sample < _clockOffset || sample - _clockOffset > Networking.InterpolationTime )
+				_clockOffset = sample;
+			else
+				_clockOffset += (sample - _clockOffset) * 0.01;
+
+			return sentAt + _clockOffset;
 		}
 
 		/// <summary>
@@ -237,7 +286,7 @@ internal class DeltaSnapshotSystem
 					dataToSend ??= SnapshotData.Pool.Rent();
 					dataToSend[slot] = value;
 
-					state.AddPredicted( entry, snapshot.SnapshotId, Time );
+					state.AddPredicted( entry, snapshot.SnapshotId, Time, target.ResendTime );
 
 					entry.Connections?.Add( connectionId );
 				}
@@ -255,7 +304,7 @@ internal class DeltaSnapshotSystem
 					var slot = entry.Slot;
 					var value = entry.Value;
 
-					state.AddPredicted( entry, snapshot.SnapshotId, Time );
+					state.AddPredicted( entry, snapshot.SnapshotId, Time, target.ResendTime );
 					dataToSend[slot] = value;
 
 					entry.Connections?.Add( connectionId );
@@ -283,6 +332,7 @@ internal class DeltaSnapshotSystem
 
 		writer.Write( cluster.Id );
 		writer.Write( (ushort)ClusterBuffer.Count );
+		writer.Write( SendTime );
 
 		foreach ( var (snapshot, dataToSend) in ClusterBuffer )
 		{
@@ -310,7 +360,7 @@ internal class DeltaSnapshotSystem
 
 		System.Send( target.Connection, InternalMessageType.DeltaSnapshotCluster, writer.ToSpan(), flags );
 
-		target.SentClusters.Add( new SentCluster( cluster, sentSnapshotIds ) );
+		target.SentClusters.Add( new SentCluster( cluster, sentSnapshotIds, Time ) );
 		cluster.AddReference();
 
 		// For empty connections, we still want to "receive" acknowledgements for benchmarking purposes
@@ -342,7 +392,7 @@ internal class DeltaSnapshotSystem
 				snapshotData ??= SnapshotData.Pool.Rent();
 				snapshotData[slot] = value;
 
-				state.AddPredicted( entry, snapshot.SnapshotId, Time );
+				state.AddPredicted( entry, snapshot.SnapshotId, Time, target.ResendTime );
 
 				entry.Connections?.Add( connectionId );
 			}
@@ -357,7 +407,7 @@ internal class DeltaSnapshotSystem
 				var slot = entry.Slot;
 				var value = entry.Value;
 
-				state.AddPredicted( entry, snapshot.SnapshotId, Time );
+				state.AddPredicted( entry, snapshot.SnapshotId, Time, target.ResendTime );
 				snapshotData[slot] = value;
 
 				entry.Connections?.Add( connectionId );
@@ -380,6 +430,7 @@ internal class DeltaSnapshotSystem
 		writer.Write( snapshot.ObjectId );
 		writer.Write( snapshot.Version );
 		writer.Write( snapshot.SnapshotId );
+		writer.Write( SendTime );
 		writer.Write( (ushort)snapshotData.Count );
 
 		foreach ( var (slot, value) in snapshotData )
@@ -416,6 +467,9 @@ internal class DeltaSnapshotSystem
 
 		var sentCluster = connectionData.SentClusters[sentIndex];
 		var sentSnapshotIds = sentCluster.SentSnapshotIds;
+
+		// Never quicker than our own sends, values only go out on those
+		connectionData.AddRoundTrip( Time - sentCluster.SentTime, scene.NetworkRate );
 		var cluster = sentCluster.Cluster;
 
 		var invalidSnapshotCount = message.Read<ushort>();
@@ -484,6 +538,7 @@ internal class DeltaSnapshotSystem
 		var clusterId = reader.Read<ushort>();
 		var connectionData = GetConnection( source );
 		var count = (int)reader.Read<ushort>();
+		var time = connectionData.ToLocalTime( reader.Read<double>() );
 
 		_invalidSnapshotIds.Clear();
 
@@ -534,6 +589,7 @@ internal class DeltaSnapshotSystem
 			}
 
 			var finalSnapshot = state.ToDeltaSnapshot( snapshotId, version, snapshot.Keys, Time );
+			finalSnapshot.Time = time;
 
 			if ( !snapshotter.OnSnapshot( source, finalSnapshot ) )
 			{
@@ -618,6 +674,7 @@ internal class DeltaSnapshotSystem
 		var objectId = reader.Read<Guid>();
 		var version = reader.Read<ushort>();
 		var snapshotId = reader.Read<ushort>();
+		var time = connectionData.ToLocalTime( reader.Read<double>() );
 		var dataCount = reader.Read<ushort>();
 
 		_dataToProcess.Clear();
@@ -657,6 +714,7 @@ internal class DeltaSnapshotSystem
 		}
 
 		var finalSnapshot = state.ToDeltaSnapshot( snapshot.SnapshotId, version, snapshot.Keys, Time );
+		finalSnapshot.Time = time;
 
 		if ( !snapshotter.OnSnapshot( source, finalSnapshot ) )
 		{
@@ -698,7 +756,13 @@ internal class DeltaSnapshotSystem
 		// We cache the real time here for use within the Delta Snapshot System. This is because
 		// it can be expensive when called a lot of times.
 		Time = RealTime.Now;
+		SendTime = Sandbox.Time.NowDouble;
 	}
+
+	/// <summary>
+	/// Game time written into what we send, see <see cref="ConnectionData.ToLocalTime"/>.
+	/// </summary>
+	internal double SendTime { get; set; }
 
 	private readonly record struct PendingEmptyAck( ConnectionData Target, ushort ClusterId, RealTimeSince TimeSince );
 	private readonly List<PendingEmptyAck> _pendingEmptyAcks = new();
@@ -894,6 +958,7 @@ internal class DeltaSnapshotSystem
 		bs.Write( state.ObjectId );
 		bs.Write( state.Version );
 		bs.Write( state.SnapshotId );
+		bs.Write( SendTime );
 		bs.Write( (ushort)state.Entries.Count );
 
 		foreach ( var entry in state.Entries )

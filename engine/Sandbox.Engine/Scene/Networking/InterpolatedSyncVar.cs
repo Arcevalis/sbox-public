@@ -50,7 +50,9 @@ internal class InterpolatedSyncVar<T>( IInterpolator<T> interpolator ) : IInterp
 	/// </summary>
 	public void Update( T value )
 	{
-		_buffer.Add( value, Time.NowDouble );
+		// When the sender took it if this came in a snapshot
+		var time = double.IsNaN( Network.NetworkTable.ReadTime ) ? Time.NowDouble : Network.NetworkTable.ReadTime;
+		_buffer.Add( value, time );
 		_buffer.CullOlderThan( Time.NowDouble - (Networking.InterpolationTime * 3f) );
 	}
 }

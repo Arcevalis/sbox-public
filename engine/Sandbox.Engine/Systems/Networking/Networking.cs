@@ -145,8 +145,13 @@ public static partial class Networking
 	[ConVar( "net_game_server_token", ConVarFlags.Protected )]
 	internal static string GameServerToken { get; set; } = string.Empty;
 
-	[ConVar( "net_interp_time", ConVarFlags.Protected, Help = "Interpolation time in seconds" )]
-	internal static float InterpolationTime { get; set; } = 0.1f;
+	[ConVar( "net_interp_time", ConVarFlags.Protected, Help = "Interpolation time in seconds, 0 for two network updates" )]
+	internal static float InterpolationTimeOverride { get; set; }
+
+	/// <summary>
+	/// How far behind the latest network update we show things: two updates, so a lost update doesn't stall movement.
+	/// </summary>
+	internal static float InterpolationTime => InterpolationTimeOverride > 0 ? InterpolationTimeOverride : 2f / ProjectSettings.Networking.UpdateRate.Clamp( 1, 500 );
 
 	[ConVar( "net_fakepacketloss", ConVarFlags.Protected | ConVarFlags.Cheat, Help = "Simulate packet loss in %" )]
 	internal static int FakePacketLoss { get; set; } = 0;

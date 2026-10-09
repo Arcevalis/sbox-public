@@ -364,11 +364,11 @@ public partial class GameTransform
 		World = tx;
 	}
 
-	internal void FromNetwork( Transform transform, bool clearInterpolation )
+	internal void FromNetwork( Transform transform, bool clearInterpolation, double time )
 	{
 		if ( !Application.IsHeadless && GameObject.Network.Interpolation && !clearInterpolation )
 		{
-			(_networkTransformBuffer ??= new( TransformState.CreateInterpolator() )).Add( new TransformState( transform ), Time.NowDouble );
+			(_networkTransformBuffer ??= new( TransformState.CreateInterpolator() )).Add( new TransformState( transform ), time );
 			Interpolate = true;
 		}
 		else
