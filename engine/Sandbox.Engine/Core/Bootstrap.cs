@@ -158,7 +158,8 @@ internal static class Bootstrap
 	{
 		try
 		{
-			Material.Preload();
+			using ( var _ = StartupTiming?.ScopeTimer( "Material Preload" ) )
+				Material.Preload();
 			GameWindow.Current?.UpdateStartupProgress( 0.55f );
 
 			IToolsDll.Current?.Spin();
@@ -178,8 +179,11 @@ internal static class Bootstrap
 
 #pragma warning restore CS0612 // Type or member is obsolete
 
-			ReflectionUtility.RunAllStaticConstructors( "Sandbox.System" );
-			ReflectionUtility.RunAllStaticConstructors( "Sandbox.Engine" );
+			using ( var _ = StartupTiming?.ScopeTimer( "Static Constructors" ) )
+			{
+				ReflectionUtility.RunAllStaticConstructors( "Sandbox.System" );
+				ReflectionUtility.RunAllStaticConstructors( "Sandbox.Engine" );
+			}
 			GameWindow.Current?.UpdateStartupProgress( 0.6f );
 
 			//log.Trace( "Bootstrap::Init" );
@@ -225,9 +229,6 @@ internal static class Bootstrap
 
 			if ( !Application.IsHeadless && !Application.IsStandalone )
 			{
-				// we really want the items available before we continue
-				// here we'll wait up to 5 seconds for them, but they're
-				// generally available completely immediately.
 				using var timeout = new CancellationTokenSource( 5000 );
 				SyncContext.RunBlocking( Services.Inventory.WaitForSteamInventoryItems( timeout.Token ) );
 			}
@@ -367,6 +368,14 @@ internal static class Bootstrap
 			StartupTiming.FinishTimer( "Time" );
 			StartupTiming.SetValue( "package.ident", Application.GameIdent );
 			StartupTiming.Submit( true );
+			try
+			{
+				StartupProfiler.Write( StartupTiming );
+			}
+			catch ( Exception ex )
+			{
+				Log.Warning( ex, "Couldn't write startup profile" );
+			}
 		}
 
 		if ( Application.IsBenchmark )

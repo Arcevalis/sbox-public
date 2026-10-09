@@ -1,6 +1,7 @@
 using NativeEngine;
 using Sandbox.UI;
 using System;
+using System.Diagnostics;
 
 namespace Editor;
 
@@ -53,7 +54,14 @@ public partial class PanelWindow
 
 		try
 		{
-			if ( SimulateFrame() )
+			var profile = !IsShown && Sandbox.Utility.CommandLine.HasSwitch( "-startup-profile" ) ? Stopwatch.StartNew() : null;
+			var simulated = SimulateFrame();
+			if ( profile is not null )
+			{
+				Log.Info( $"Startup profile (panel): {Title} layout and commands {profile.Elapsed.TotalMilliseconds:F3} ms" );
+			}
+
+			if ( simulated )
 			{
 				// Scene panels queue their render during simulate - fill them in before we draw,
 				// otherwise a panel that just resized draws a texture with nothing in it yet
@@ -169,10 +177,21 @@ public partial class PanelWindow
 
 	void DrawFrame()
 	{
+		var profile = !IsShown && Sandbox.Utility.CommandLine.HasSwitch( "-startup-profile" ) ? Stopwatch.StartNew() : null;
+
 		OnRenderBackground( Window.SwapChain, Surface.Size );
 		_camera.AddToRenderList( Window.SwapChain, Surface.Size );
+		if ( profile is not null )
+		{
+			Log.Info( $"Startup profile (panel): {Title} render submission {profile.Elapsed.TotalMilliseconds:F3} ms" );
+			profile.Restart();
+		}
 
 		Window.Present();
+		if ( profile is not null )
+		{
+			Log.Info( $"Startup profile (panel): {Title} present call {profile.Elapsed.TotalMilliseconds:F3} ms" );
+		}
 
 		// A window is created hidden so the user never sees it blank at the wrong size - the
 		// first drawn frame is when it appears. Anything asked of it before now, like being

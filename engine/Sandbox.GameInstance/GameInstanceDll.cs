@@ -126,6 +126,8 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 	/// </summary>
 	public void ResetEnvironment()
 	{
+		var hadPreviousEnvironment = gameInstance is not null || AssemblyEnroller is not null || DidMountNetworkedFiles;
+
 		using var scope = GlobalContext.GameScope();
 
 		Log.Trace( "Game Menu - ResetEnvironment" );
@@ -253,12 +255,15 @@ internal partial class GameInstanceDll : Engine.IGameInstanceDll
 
 		IMenuDll.Current?.Reset();
 
-		// Run GC and finalizers to clear any native resources held
-		GC.Collect();
-		GC.WaitForPendingFinalizers();
+		if ( hadPreviousEnvironment )
+		{
+			// Run GC and finalizers to clear any native resources held
+			GC.Collect();
+			GC.WaitForPendingFinalizers();
 
-		// Run the queue one more time, since some finalizers queue tasks
-		MainThread.RunQueues();
+			// Run the queue one more time, since some finalizers queue tasks
+			MainThread.RunQueues();
+		}
 	}
 
 	/// <summary>

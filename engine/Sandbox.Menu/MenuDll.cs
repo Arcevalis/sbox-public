@@ -123,7 +123,7 @@ internal sealed class MenuDll : IMenuDll
 
 	public async Task Initialize()
 	{
-		using var _ = EnterScope();
+		using var scope = EnterScope();
 
 		//
 		// LoopEvent.Init
@@ -155,22 +155,14 @@ internal sealed class MenuDll : IMenuDll
 			FontManager.Instance.LoadAll( FileSystem.Mounted );
 		}
 
-		// We can wait right up until we start the menu scene to want valid account info
-		if ( AccountUpdateTask != null )
+		if ( AccountUpdateTask is not null )
 		{
-			//
-			// TODO - handle not logged in, api down etc
-			//
-
 			using var tx = Sandbox.Engine.Bootstrap.StartupTiming?.ScopeTimer( "Menu - Account Update Task" );
 			await AccountUpdateTask;
 		}
 
-		// If the avatar was found on the backend, replace the cookie one
 		if ( !string.IsNullOrWhiteSpace( AccountInformation.AvatarJson ) )
-		{
 			Avatar.AvatarJson = AccountInformation.AvatarJson;
-		}
 
 		if ( !Application.IsEditor )
 		{

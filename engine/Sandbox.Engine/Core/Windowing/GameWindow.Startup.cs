@@ -32,7 +32,7 @@ internal sealed partial class GameWindow
 		{
 			// A missing splash or failed present should never prevent the game from starting.
 			startupFinished = true;
-			Log.Warning( e, "Couldn't draw the startup image" );
+			Log.Warning( e, "Couldn't draw startup image" );
 		}
 	}
 

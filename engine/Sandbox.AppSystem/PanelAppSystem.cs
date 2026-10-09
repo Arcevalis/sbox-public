@@ -59,10 +59,13 @@ public class PanelAppSystem : AppSystem
 		{
 			throw new Exception( "SourceEnginePreInit failed" );
 		}
+		Phase( "SourceEnginePreInit" );
 
 		WindowInput.Initialize();
+		Phase( "Window input" );
+
 		Graphics.Initialize();
-		Phase( "SourceEnginePreInit" );
+		Phase( "Graphics init" );
 
 		if ( !NativeEngine.EngineGlobal.SourceEnginePanelAppInit( _appSystem, DrawsScenes ) )
 		{
@@ -116,10 +119,10 @@ public class PanelAppSystem : AppSystem
 
 		Diagnostics.Logging.Enabled = true;
 		Diagnostics.Logging.OnException = ErrorReporter.ReportException;
-
 		EngineFileSystem.Initialize( Environment.CurrentDirectory );
 		EngineFileSystem.InitializeConfigFolder();
 		EngineFileSystem.InitializeDataFolder();
+		Phase( "Managed filesystem" );
 
 		// The UI reads files - stylesheets, images - through the context's mount. Core has
 		// the engine styles, and this is an editor app so the editor's assets are part of it
@@ -132,10 +135,12 @@ public class PanelAppSystem : AppSystem
 		Game.TypeLibrary.AddIntrinsicTypes();
 		Game.TypeLibrary.AddAssembly( typeof( Vector3 ).Assembly, false );
 		Game.TypeLibrary.AddAssembly( typeof( Sandbox.UI.Panel ).Assembly, false );
+		Phase( "Managed types" );
 
 		Application.TryLoadVersionInfo( Environment.CurrentDirectory );
 
 		ErrorReporter.Initialize();
+		Phase( "Managed diagnostics" );
 	}
 
 	/// <summary>
