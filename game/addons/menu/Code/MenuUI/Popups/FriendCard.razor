@@ -557,9 +557,9 @@
 	}
 
 	/// <summary>
-	/// In a game others can join - one with a way in for them (its connect presence) - and this isn't you.
+	/// In a game others can join - private ones too, the invite lets them in - and this isn't you.
 	/// </summary>
-	bool CanInviteToGame => !IsMe && Game.InGame && !string.IsNullOrWhiteSpace( new Friend( Game.SteamId ).GetRichPresence( "connect" ) );
+	bool CanInviteToGame => !IsMe && Game.InGame && MenuUtility.CanInviteToGame;
 
 	bool _gameInvited;
 

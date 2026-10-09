@@ -184,12 +184,20 @@ public static partial class MenuUtility
 	}
 
 	/// <summary>
+	/// Are we in a game we can invite friends to?
+	/// </summary>
+	public static bool CanInviteToGame => !string.IsNullOrWhiteSpace( Networking.GetInviteConnectString() );
+
+	/// <summary>
 	/// Invite a friend to the current game.
 	/// </summary>
 	public static bool InviteFriendGame( Friend friend )
 	{
-		var connectString = new Friend( Game.SteamId ).GetRichPresence( "connect" );
+		var connectString = Networking.GetInviteConnectString();
 		if ( string.IsNullOrWhiteSpace( connectString ) ) return false;
+
+		// Private games only let in who they're told to
+		Networking.AllowJoin( friend.Id );
 
 		return friend.InviteToGame( connectString );
 	}

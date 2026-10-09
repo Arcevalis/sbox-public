@@ -110,6 +110,10 @@ public class HostMigrationTest
 		Assert.IsTrue( handoff[0].Snapshot.NetworkObjects.OfType<ObjectCreateMsg>().Any( x => x.Guid == go.Id ), "The handoff snapshot should carry the networked objects" );
 		Assert.IsTrue( handoff[0].Snapshot.SceneData.Contains( hostOnly.Id.ToString() ), "The handoff snapshot should carry objects that are never networked" );
 
+		var payloads = clientAndHost.Client.Messages.Select( m => m.Payload ).ToList();
+		var access = payloads.FindIndex( p => p is HostAccessMsg );
+		Assert.IsTrue( access >= 0 && access < payloads.FindIndex( p => p is HostHandoffMsg ), "The successor gets the join rules before the snapshot" );
+
 		var joinSnapshot = SnapshotMsg.Create();
 		SceneNetworkSystem.Instance.GetSnapshot( clientAndHost.Client, ref joinSnapshot );
 		Assert.IsFalse( joinSnapshot.SceneData.Contains( hostOnly.Id.ToString() ), "A join snapshot still leaves them out" );
