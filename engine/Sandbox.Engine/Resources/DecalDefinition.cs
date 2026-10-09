@@ -74,13 +74,21 @@ public sealed class DecalDefinition : GameResource
 	[Header( "Parameters" )]
 	public Color Tint { get; set; } = Color.White;
 
+	/// <summary>
+	/// How the decal's color blends with the receiving surface. Defaults to <see cref="DecalBlendMode.Alpha"/>.
+	/// </summary>
 	public DecalBlendMode BlendMode { get; set; }
 
+	/// <summary>
+	/// Nonnegative relative chance of selection from a <see cref="Decal.Decals"/> list.
+	/// Defaults to 1 (equal chances); 2 is twice as likely as 1, and 0 excludes this definition.
+	/// At least one definition in the list must have a positive weight.
+	/// </summary>
 	[Range( 0, 100 )]
 	public float SelectionWeight { get; set; } = 1;
 
 	/// <summary>
-	/// Controls the opacity of the decal's color texture without reducing the impact of the normal or rmo texture.
+	/// Controls the strength of color blending without reducing the impact of the normal or rmo texture.
 	/// Set to 0 to create a normal/rmo only decal masked by the color textures alpha.
 	/// </summary>
 	[Range( 0, 1 )]

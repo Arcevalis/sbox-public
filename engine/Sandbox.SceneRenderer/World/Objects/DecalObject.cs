@@ -80,13 +80,11 @@ public sealed class DecalObject : RenderObject
 	public uint SequenceIndex { get; set; }
 
 	/// <summary>
-	/// How much the decal's colour replaces the surface's, 0 to 1.
+	/// Strength of the decal's colour blending, from 0 (no colour effect) to 1 (full effect).
 	/// </summary>
 	public float ColorMix { get; set; } = 1.0f;
 
-	/// <summary>
-	/// How the decal's colour blends with the surface.
-	/// </summary>
+	/// <inheritdoc cref="DecalDefinition.BlendMode"/>
 	public DecalBlendMode BlendMode { get; set; }
 
 	/// <summary>
