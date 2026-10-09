@@ -200,30 +200,9 @@ public sealed partial class Decal : Component, Component.ExecuteInEditor, Compon
 		// re-select every time here, based on the seed.
 		if ( Decals is not null && Decals.Count > 0 )
 		{
-			_def = SelectDefinition( Decals, Rand( 349 ) );
+			var id = (int)(Rand( 349 ) * 64);
+			_def = Decals[id % Decals.Count];
 		}
-	}
-
-	internal static DecalDefinition SelectDefinition( IReadOnlyList<DecalDefinition> definitions, float random )
-	{
-		if ( !float.IsFinite( random ) )
-			throw new ArgumentOutOfRangeException( nameof( random ), "Decal selection requires a finite random value." );
-		double total = 0;
-		foreach ( var definition in definitions )
-		{
-			if ( definition is not null && (!float.IsFinite( definition.SelectionWeight ) || definition.SelectionWeight < 0) )
-				throw new InvalidOperationException( "Decal definitions must have finite, nonnegative selection weights." );
-			total += definition?.SelectionWeight ?? 1;
-		}
-		if ( total <= 0 )
-			throw new InvalidOperationException( "A decal must have at least one definition with a positive selection weight." );
-		var selected = Math.Clamp( random, 0, MathF.BitDecrement( 1 ) ) * total;
-		foreach ( var definition in definitions )
-		{
-			selected -= definition?.SelectionWeight ?? 1;
-			if ( selected < 0 ) return definition;
-		}
-		return definitions.Last( definition => definition is null || definition.SelectionWeight > 0 );
 	}
 
 	void UpdateSceneObject()
