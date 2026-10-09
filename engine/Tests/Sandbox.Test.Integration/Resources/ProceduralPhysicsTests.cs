@@ -6,6 +6,32 @@ namespace ResourceTests;
 [TestClass]
 public class ProceduralPhysicsTests
 {
+	[TestMethod]
+	public void StandalonePhysicsPreservesBodyDampingAndInertia()
+	{
+		var body = new PhysicsBodyBuilder().SetMass( 1 ).SetDamping( 0.01f, 1.5f )
+			.SetInertiaScale( 10 ).AddSphere( new Sphere( Vector3.Zero, 1 ) );
+		var physics = PhysicsGroupDescription.Create( NewPath(), [body] );
+		var part = physics.Parts.Single();
+		Assert.AreEqual( 0.01f, part.LinearDamping );
+		Assert.AreEqual( 1.5f, part.AngularDamping );
+		Assert.AreEqual( 10f, part.InertiaScale );
+	}
+
+	[DataTestMethod]
+	[DataRow( 0f, 0f, 0f )]
+	[DataRow( -1f, 0f, 0f )]
+	[DataRow( 1f, -1f, 0f )]
+	[DataRow( 1f, 0f, -1f )]
+	[DataRow( float.NaN, 0f, 0f )]
+	[DataRow( 1f, float.NaN, 0f )]
+	[DataRow( 1f, 0f, float.PositiveInfinity )]
+	public void InvalidBodyDampingAndInertiaAreRejected( float scale, float linear, float angular )
+	{
+		var body = new PhysicsBodyBuilder().SetInertiaScale( scale ).SetDamping( linear, angular );
+		Assert.ThrowsException<ArgumentOutOfRangeException>( () => PhysicsGroupDescription.Create( NewPath(), [body] ) );
+	}
+
 	static string NewPath() => $"procedural_physics_tests/{Guid.NewGuid():N}.vphys";
 
 	sealed class TestSurface : Surface

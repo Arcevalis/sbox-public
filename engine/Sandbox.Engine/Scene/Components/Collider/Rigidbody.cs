@@ -88,6 +88,26 @@ sealed public partial class Rigidbody : Component, Component.ExecuteInEditor, IG
 	}
 
 	/// <summary>
+	/// Multiplier for the calculated rotational inertia.
+	/// </summary>
+	[Advanced, Property, Group( "Mass" )]
+	public float InertiaScale
+	{
+		get;
+		set
+		{
+			if ( !float.IsFinite( value ) || value <= 0 )
+				throw new ArgumentOutOfRangeException( nameof( value ) );
+			if ( field == value )
+				return;
+
+			field = value;
+			if ( _body.IsValid() )
+				_body.ScaleInertia( field );
+		}
+	} = 1.0f;
+
+	/// <summary>
 	/// Override mass for this body, only when value is more than zero
 	/// </summary>
 	[Property, Title( "Mass Override" ), Group( "Mass" )]
@@ -807,6 +827,7 @@ sealed public partial class Rigidbody : Component, Component.ExecuteInEditor, IG
 			_body.GravityEnabled = Gravity;
 			_body.GravityScale = GravityScale;
 			_body.Mass = MassOverride;
+			_body.ScaleInertia( InertiaScale );
 			_body.OverrideMassCenter = OverrideMassCenter;
 			_body.LocalMassCenter = MassCenterOverride;
 		}
