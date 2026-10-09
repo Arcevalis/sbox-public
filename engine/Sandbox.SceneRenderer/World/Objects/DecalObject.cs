@@ -1,3 +1,5 @@
+using Sandbox.Rendering;
+
 namespace Sandbox.SceneRenderer;
 
 /// <summary>
@@ -81,6 +83,11 @@ public sealed class DecalObject : RenderObject
 	/// How much the decal's colour replaces the surface's, 0 to 1.
 	/// </summary>
 	public float ColorMix { get; set; } = 1.0f;
+
+	/// <summary>
+	/// How the decal's colour blends with the surface.
+	/// </summary>
+	public DecalBlendMode BlendMode { get; set; }
 
 	/// <summary>
 	/// How deep the height map's parallax reaches.

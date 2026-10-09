@@ -163,7 +163,6 @@ public sealed partial class Decal : Component, Component.ExecuteInEditor, Compon
 
 		_seed = Random.Shared.Int( 10000 );
 		_startTime = Time.NowDouble;
-		_def = Random.Shared.FromList( Decals );
 		_isActive = true;
 
 		UpdateSceneObject();
@@ -201,9 +200,30 @@ public sealed partial class Decal : Component, Component.ExecuteInEditor, Compon
 		// re-select every time here, based on the seed.
 		if ( Decals is not null && Decals.Count > 0 )
 		{
-			var id = (int)(Rand( 349 ) * 64);
-			_def = Decals[id % Decals.Count];
+			_def = SelectDefinition( Decals, Rand( 349 ) );
 		}
+	}
+
+	internal static DecalDefinition SelectDefinition( IReadOnlyList<DecalDefinition> definitions, float random )
+	{
+		if ( !float.IsFinite( random ) )
+			throw new ArgumentOutOfRangeException( nameof( random ), "Decal selection requires a finite random value." );
+		double total = 0;
+		foreach ( var definition in definitions )
+		{
+			if ( definition is not null && (!float.IsFinite( definition.SelectionWeight ) || definition.SelectionWeight < 0) )
+				throw new InvalidOperationException( "Decal definitions must have finite, nonnegative selection weights." );
+			total += definition?.SelectionWeight ?? 1;
+		}
+		if ( total <= 0 )
+			throw new InvalidOperationException( "A decal must have at least one definition with a positive selection weight." );
+		var selected = Math.Clamp( random, 0, MathF.BitDecrement( 1 ) ) * total;
+		foreach ( var definition in definitions )
+		{
+			selected -= definition?.SelectionWeight ?? 1;
+			if ( selected < 0 ) return definition;
+		}
+		return definitions.Last( definition => definition is null || definition.SelectionWeight > 0 );
 	}
 
 	void UpdateSceneObject()
@@ -297,6 +317,7 @@ public sealed partial class Decal : Component, Component.ExecuteInEditor, Compon
 		_sceneObject.RenderingEnabled = _isActive;
 		_sceneObject.Color = _def.Tint * ColorTint.Evaluate( delta, Rand( 238 ) );
 		_sceneObject.ColorMix = _def.ColorMix * ColorMix.Evaluate( delta, Rand( 324 ) );
+		_sceneObject.BlendMode = _def.BlendMode;
 		_sceneObject.AttenuationAngle = AttenuationAngle;
 		_sceneObject.CoverageAmount = _def.CoverageAmount * CoverageAmount.Evaluate( delta, Rand( 493 ) );
 		_sceneObject.CoverageRange = CoverageRange;

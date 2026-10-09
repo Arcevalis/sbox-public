@@ -74,6 +74,11 @@ public sealed class DecalDefinition : GameResource
 	[Header( "Parameters" )]
 	public Color Tint { get; set; } = Color.White;
 
+	public DecalBlendMode BlendMode { get; set; }
+
+	[Range( 0, 100 )]
+	public float SelectionWeight { get; set; } = 1;
+
 	/// <summary>
 	/// Controls the opacity of the decal's color texture without reducing the impact of the normal or rmo texture.
 	/// Set to 0 to create a normal/rmo only decal masked by the color textures alpha.
