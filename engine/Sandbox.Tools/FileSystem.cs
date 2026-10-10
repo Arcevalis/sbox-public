@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace Editor;
 
@@ -108,6 +109,17 @@ public static class FileSystem
 	{
 		ThreadSafe.AssertIsMainThread();
 
+		// Retry files that couldn't be registered when they first appeared
+		// (usually because they were still being written to).
+		if ( pendingNewFiles.Count > 0 )
+		{
+			foreach ( var pending in pendingNewFiles.ToArray() )
+			{
+				if ( !string.Equals( pending, filename, StringComparison.OrdinalIgnoreCase ) )
+					TryRegisterNewContentFile( pending );
+			}
+		}
+
 		// Check to see if this asset was deleted from explorer - and mark it as deleted in the asset system.
 		if ( AssetSystem.FindByPath( filename ) is Asset asset )
 		{
@@ -123,8 +135,102 @@ public static class FileSystem
 				asset.Compile( false );
 			}
 		}
+		else
+		{
+			// A file the asset system hasn't seen before. The native asset system only
+			// discovers it on a full UpdateMods scan (i.e. an editor restart), so register
+			// it now - otherwise newly added files stay invisible until then.
+			TryRegisterNewContentFile( filename );
+		}
 
 		EditorEvent.Run( "content.changed", filename );
+	}
+
+	/// <summary>
+	/// New files that couldn't be registered yet (still being written to, ...).
+	/// Retried on the next content change event. Key is the content-relative path.
+	/// </summary>
+	static HashSet<string> pendingNewFiles = new( StringComparer.OrdinalIgnoreCase );
+
+	/// <summary>
+	/// Register a file that appeared under a content path but isn't tracked by the
+	/// asset system yet - e.g. dropped in from the OS while the editor is running.
+	/// </summary>
+	private static void TryRegisterNewContentFile( string filename )
+	{
+		var path = filename;
+
+		// Compiled outputs are owned by their source asset (and by ResourceLoader's *_c
+		// watchers) - never register them directly. If the source sibling exists but
+		// isn't tracked either, fall through and register that instead; compiling it
+		// produces the _c side.
+		if ( path.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) )
+		{
+			path = path.Substring( 0, path.Length - 2 );
+			if ( AssetSystem.FindByPath( path ) is not null )
+				return; // source is tracked - its own change event drives the compile
+		}
+
+		// Re-check: the file may have registered itself since the event fired
+		// (files created by the editor self-register on creation).
+		if ( AssetSystem.FindByPath( path ) is not null )
+		{
+			pendingNewFiles.Remove( path );
+			return;
+		}
+
+		// Only files with a known asset type are worth registering - this also
+		// filters out junk like .meta sidecars, temp files and stray text.
+		if ( AssetType.ResolveFromPath( path ) is null )
+			return;
+
+		var absolutePath = Content.GetFullPath( path );
+		if ( string.IsNullOrWhiteSpace( absolutePath ) || !System.IO.File.Exists( absolutePath ) )
+			return;
+
+		// Anything under .sbox/ (cloud downloads, transient output, caches) is managed
+		// by its own systems - leave it alone.
+		if ( absolutePath.Contains( "/.sbox/", StringComparison.OrdinalIgnoreCase ) )
+			return;
+
+		// Tool addon files (toolimages, styles, ...) are loaded by path, never tracked
+		// as assets - the native side always refuses them, so don't try.
+		if ( IsUnderToolProject( absolutePath ) )
+			return;
+
+		try
+		{
+			var registered = AssetSystem.RegisterFile( absolutePath );
+			if ( registered is null )
+			{
+				// Warn once - retries stay quiet to avoid spamming the console
+				// on every subsequent content change.
+				if ( pendingNewFiles.Add( path ) )
+					Log.Warning( $"Something went wrong when registering {absolutePath}" );
+
+				return;
+			}
+
+			pendingNewFiles.Remove( path );
+			Log.Info( $"Registered new asset {registered.Path} from {filename}" );
+		}
+		catch ( System.Exception e )
+		{
+			// Most likely the file is still being written (locked / half copied).
+			// Park it and retry when the next content change arrives - the follow-up
+			// write events, or any other file activity, will trigger another attempt.
+			pendingNewFiles.Add( path );
+			Log.Trace( $"Couldn't register {absolutePath} yet, will retry ({e.Message})" );
+		}
+	}
+
+	/// <summary>
+	/// Whether an absolute path sits under an active tool project's folder.
+	/// </summary>
+	private static bool IsUnderToolProject( string absolutePath )
+	{
+		return Project.All.Any( x => x.Active && x.Config.Type == "tool" &&
+			absolutePath.StartsWith( x.GetRootPath(), StringComparison.OrdinalIgnoreCase ) );
 	}
 
 	/// <summary>
