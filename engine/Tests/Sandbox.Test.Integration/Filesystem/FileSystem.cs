@@ -18,7 +18,7 @@ public partial class FileSystemTest
 		System.IO.Directory.CreateDirectory( ".source2/TestFolder" );
 
 		Sandbox.EngineFileSystem.Shutdown();
-		Sandbox.EngineFileSystem.Initialize( ".source2/TestFolder", true );
+		Sandbox.EngineFileSystem.Initialize( System.IO.Path.GetFullPath( ".source2/TestFolder" ), true );
 
 		Sandbox.EngineFileSystem.Root.WriteAllText( "root_text_file.txt", "Hello" );
 
