@@ -275,11 +275,30 @@ public static partial class AssetSystem
 
 		var ret = Get( asset.GetAssetIndexInt() );
 
+		// The native side never fires AssetAdded for a live registration, so run
+		// the new record through the normal update queue - otherwise its dependency
+		// data is never computed and anything downstream of it (recompile, compiled
+		// output linking) stays broken until the next full scan.
+		UpdateQueue.Add( ret );
+		HasChanges = true;
+
 		// Make sure the ResoureLibrary has proper loaded version, so that properties that target
 		// GameResources do not break child assets if child asset was not loaded with Asset.CreateUI beforehand.
 		ret.TryLoadGameResource( typeof( GameResource ), out _, true );
 
 		return ret;
+	}
+
+	/// <summary>
+	/// Re-run the mod scan - the same pass an editor restart does. Picks up files
+	/// that landed while the editor was running and prunes records whose files
+	/// are gone.
+	/// </summary>
+	[ConCmd( "asset_rescan", Help = "Re-run the asset scan without restarting" )]
+	public static void Rescan()
+	{
+		Log.Info( "Re-running asset scan.." );
+		IAssetSystem.UpdateMods();
 	}
 
 	/// <summary>
