@@ -7,7 +7,7 @@ using System.Threading;
 namespace MenuProject.MenuUI.Front;
 
 /// <summary>
-/// A little portrait of a citizen - yours, or someone else's dressed from the json their profile shares.
+/// A little portrait using the Human model - yours, or someone else's dressed from the json their profile shares.
 /// Hands on hips, turned a touch to the side. The front page's one can be spun and watches the cursor;
 /// others just stand there.
 /// </summary>
@@ -164,9 +164,7 @@ public sealed class CitizenPreview : Panel
 				body.WorldRotation = Rotation.FromYaw( Yaw );
 
 				var renderer = body.AddComponent<SkinnedModelRenderer>();
-				renderer.Model = Model.Load( clothing.PrefersHuman
-					? "models/citizen_human/citizen_human_male.vmdl"
-					: "models/citizen/citizen.vmdl" );
+				renderer.Model = Model.Load( "models/citizen_human/human.vmdl" );
 
 				// The hands-on-hips pose the garage character used
 				renderer.Set( "special_idle_states", 1 );

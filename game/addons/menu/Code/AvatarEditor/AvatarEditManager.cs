@@ -4,19 +4,11 @@ using static Sandbox.ClothingContainer;
 
 public sealed partial class AvatarEditManager : Component
 {
+	/// <summary>
+	/// The Human body used to preview the edited avatar.
+	/// </summary>
 	[Header( "Bodies" )]
-	[Property] public GameObject Citizen { get; set; }
 	[Property] public GameObject Human { get; set; }
-	[Property]
-	public bool CitizenActive
-	{
-		get => !Container.PrefersHuman;
-		set
-		{
-			Container.PrefersHuman = !value;
-			InvalidateUnsavedChanges();
-		}
-	}
 
 	string lastSaved;
 	string currentAppearance;
@@ -30,10 +22,11 @@ public sealed partial class AvatarEditManager : Component
 		get;
 		set
 		{
+			value.PrefersHuman = true;
 			field = value;
 			InvalidateUnsavedChanges();
 		}
-	} = new ClothingContainer();
+	} = new ClothingContainer { PrefersHuman = true };
 	public ClothingContainer PreviewContainer { get; set; } = new ClothingContainer();
 
 	protected override void OnAwake()
@@ -91,11 +84,7 @@ public sealed partial class AvatarEditManager : Component
 
 	protected override void OnUpdate()
 	{
-		Citizen.Enabled = CitizenActive;
-		Human.Enabled = !CitizenActive;
-
-		var active = CitizenActive ? Citizen : Human;
-		var renderer = active.GetComponent<SkinnedModelRenderer>();
+		var renderer = Human.GetComponent<SkinnedModelRenderer>();
 
 		UpdateEyes( renderer );
 		UpdateCamera( renderer );
@@ -252,6 +241,7 @@ public sealed partial class AvatarEditManager : Component
 	/// </summary>
 	public void ApplyChangesToModel()
 	{
+		Container.PrefersHuman = true;
 		InvalidateUnsavedChanges();
 		ApplyToModels( Container );
 	}
@@ -261,7 +251,6 @@ public sealed partial class AvatarEditManager : Component
 		var token = BeginAppearanceUpdate();
 
 		// We have to run it this way so it'll be in the menu context
-		MenuUtility.RunTask( () => ApplyAsync( container, Citizen, token ) );
 		MenuUtility.RunTask( () => ApplyAsync( container, Human, token ) );
 	}
 
@@ -314,7 +303,6 @@ public sealed partial class AvatarEditManager : Component
 	void ApplyAppearanceChanges()
 	{
 		InvalidateUnsavedChanges();
-		UpdateBody( Citizen );
 		UpdateBody( Human );
 
 		void UpdateBody( GameObject target )

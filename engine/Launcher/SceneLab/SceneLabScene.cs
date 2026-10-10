@@ -202,7 +202,7 @@ internal sealed record SceneLabScene
 			Checker = [(null, 0.5f)] },
 
 		// Skinned: citizens posed from a few sequences, frozen, under the sun's cascades and a spot's shadow
-		new() { Name = "Citizens", Group = "Skinning", Models = ["models/citizen/citizen.vmdl"], Grid = 3, Floor = true, Spot = true, LightShadows = true, Sun = 0.6f, SunDirection = SideSun,
+		new() { Name = "Citizens", Group = "Skinning", Models = ["models/citizen_human/human.vmdl"], Grid = 3, Floor = true, Spot = true, LightShadows = true, Sun = 0.6f, SunDirection = SideSun,
 			Sequences = CitizenSequences },
 
 		// A model whose LODs are different shapes, so LOD choices can be seen and compared with native
@@ -215,7 +215,7 @@ internal sealed record SceneLabScene
 		new() { Name = "10k Boxes, 64 Shadowed Lights", Group = "Stress", Grid = 100, Lights = 64, LightRadius = 0.05f, LightShadows = true },
 		new() { Name = "10k Boxes, 64 Still Shadowed Lights", Group = "Stress", Grid = 100, Lights = 64, LightRadius = 0.05f, LightShadows = true, Orbit = false },
 		new() { Name = "50k LOD Test", Group = "Stress", Models = [LodTestModel.Path], Grid = 224 },
-		new() { Name = "100 Citizens", Group = "Stress", Models = ["models/citizen/citizen.vmdl"], Grid = 10, Floor = true, Sun = 0.6f, SunDirection = SideSun,
+		new() { Name = "100 Citizens", Group = "Stress", Models = ["models/citizen_human/human.vmdl"], Grid = 10, Floor = true, Sun = 0.6f, SunDirection = SideSun,
 			Sequences = CitizenSequences },
 
 		// GameObject scenes, through the managed renderer's GameObject bridge (r_managed_scene) - see GameScenes

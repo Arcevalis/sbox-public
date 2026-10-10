@@ -1208,7 +1208,7 @@ internal static class GameScenes
 		go.WorldRotation = Rotation.FromYaw( 180 );
 
 		var renderer = go.Components.Create<SkinnedModelRenderer>();
-		renderer.Model = Model.Load( "models/citizen/citizen.vmdl" );
+		renderer.Model = Model.Load( "models/citizen_human/human.vmdl" );
 		renderer.UseAnimGraph = false;
 		renderer.Sequence.Name = "AvatarMenu_Entry_Jump";
 		renderer.Sequence.TimeNormalized = 0.4f;

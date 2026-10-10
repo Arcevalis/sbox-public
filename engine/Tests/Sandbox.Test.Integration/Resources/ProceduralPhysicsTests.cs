@@ -140,7 +140,7 @@ public class ProceduralPhysicsTests
 	[TestMethod]
 	public void ModelPhysicsKeepsItsEmbeddedName()
 	{
-		var model = Model.Load( "models/citizen/citizen.vmdl" );
+		var model = Model.Load( "models/citizen_human/human.vmdl" );
 		var physics = model.Physics;
 
 		Assert.IsNotNull( physics );
