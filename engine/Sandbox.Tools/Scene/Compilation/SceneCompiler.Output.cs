@@ -103,7 +103,11 @@ internal static partial class SceneCompiler
 
 		try
 		{
-			if ( !IResourceCompilerSystem.GenerateResourceFileForced( sourcePath, json.ToJsonString( new JsonSerializerOptions( JsonSerializerOptions.Default ) { MaxDepth = 512 } ) ) )
+			// Outputs derive from this path string, so compile through the lowercase
+			// identity: same asset (lookups are case-insensitive), lowercase _c/_d.
+			var compilePath = AssetSystem.LowercaseAssetFileName( sourcePath );
+
+			if ( !IResourceCompilerSystem.GenerateResourceFileForced( compilePath, json.ToJsonString( new JsonSerializerOptions( JsonSerializerOptions.Default ) { MaxDepth = 512 } ) ) )
 				throw new InvalidOperationException( $"Could not write compiled scene '{asset.Path}'." );
 
 			var outputPath = asset.GetCompiledFile( true );
