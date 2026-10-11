@@ -77,19 +77,69 @@ internal class DeltaSnapshotSystem
 		double _clockOffset = double.NaN;
 
 		/// <summary>
-		/// The sender's time on our clock. The offset is the quickest delivery seen, so jitter only ever makes a snapshot
-		/// late, never early. It creeps up for slow drift and jumps when the clocks or the route change a lot.
+		/// The sender's time on our clock, plus this sender's interpolation delay less <see cref="Networking.InterpolationTime"/>.
+		/// The offset is the quickest delivery seen, so jitter only ever makes a snapshot late, never early. It creeps up
+		/// for slow drift and jumps when the clocks or the route change a lot.
 		/// </summary>
 		public double ToLocalTime( double sentAt )
 		{
-			var sample = Sandbox.Time.NowDouble - sentAt;
+			var now = Sandbox.Time.NowDouble;
+			var sample = now - sentAt;
 
 			if ( double.IsNaN( _clockOffset ) || sample < _clockOffset || sample - _clockOffset > Networking.InterpolationTime )
 				_clockOffset = sample;
 			else
 				_clockOffset += (sample - _clockOffset) * 0.01;
 
-			return sentAt + _clockOffset;
+			var time = sentAt + _clockOffset;
+			return time + UpdateDelay( time, now ) - Networking.InterpolationTime;
+		}
+
+		double _newest = double.NaN;
+		double _delay = double.NaN;
+		double _delayTarget;
+		double _holdUntil;
+		double _lastReceived;
+
+		// The longest recent wait for an update after the one before, at most 100 ms or two updates
+		double UpdateDelay( double time, double now )
+		{
+			if ( Networking.InterpolationTimeOverride > 0 )
+				return Networking.InterpolationTime;
+
+			var max = Math.Max( Networking.InterpolationTime, 0.1 );
+			var dt = now - _lastReceived;
+			_lastReceived = now;
+
+			if ( double.IsNaN( _delay ) )
+				_delay = _delayTarget = max;
+
+			if ( !double.IsNaN( _newest ) && time > _newest )
+			{
+				var wait = now - _newest + 0.002;
+
+				// A longer silence is the sender having nothing to send
+				if ( wait < max * 2 )
+				{
+					if ( wait >= _delayTarget )
+					{
+						_delayTarget = wait;
+						_holdUntil = now + 3;
+					}
+					else if ( now >= _holdUntil )
+					{
+						_delayTarget += (wait - _delayTarget) * (1 - Math.Exp( -dt / 1.5 ));
+					}
+				}
+			}
+
+			if ( double.IsNaN( _newest ) || time > _newest )
+				_newest = time;
+
+			var goal = Math.Min( _delayTarget, max );
+			_delay = goal > _delay ? Math.Min( goal, _delay + dt * 0.2 ) : Math.Max( goal, _delay - dt * 0.05 );
+
+			return _delay;
 		}
 
 		/// <summary>
