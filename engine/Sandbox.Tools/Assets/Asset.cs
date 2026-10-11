@@ -181,6 +181,10 @@ public abstract partial class Asset
 		// using the wrong paths
 		if ( IsCloud || IsTransient ) return null;
 
+		// Metadata is engine-owned, like compiled outputs: it lives beside the
+		// lowercase identity, not the source's disk spelling.
+		f = AssetSystem.LowercaseAssetFileName( f );
+
 		// modelname.vmdl_c -> modelname.vmdl
 		if ( f.EndsWith( "_c" ) )
 			f = f.Substring( 0, f.Length - 2 );
