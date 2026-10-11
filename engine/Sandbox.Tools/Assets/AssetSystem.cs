@@ -354,6 +354,20 @@ public static partial class AssetSystem
 	}
 
 	/// <summary>
+	/// Lowercase the file name, keeping directories. Sources keep their case,
+	/// but outputs, references and idents derive from this lowercase identity.
+	/// </summary>
+	internal static string LowercaseAssetFileName( string path )
+	{
+		var directory = System.IO.Path.GetDirectoryName( path );
+		var filename = System.IO.Path.GetFileName( path ).ToLowerInvariant();
+
+		return string.IsNullOrEmpty( directory )
+			? filename
+			: System.IO.Path.Combine( directory, filename );
+	}
+
+	/// <summary>
 	/// Create an empty <see cref="GameResource"/>.
 	/// </summary>
 	/// <param name="type">Asset type extension for our new <see cref="GameResource"/> instance.</param>
@@ -378,14 +392,7 @@ public static partial class AssetSystem
 		// next to "3D Object - Cube.prefab"), and Asset.Name is lower-cased for display on
 		// every platform, so nothing the user sees changes. Directories keep their casing -
 		// those already exist and we don't own them.
-		{
-			var directory = System.IO.Path.GetDirectoryName( absoluteFilename );
-			var filename = System.IO.Path.GetFileName( absoluteFilename ).ToLowerInvariant();
-
-			absoluteFilename = string.IsNullOrEmpty( directory )
-				? filename
-				: System.IO.Path.Combine( directory, filename );
-		}
+		absoluteFilename = LowercaseAssetFileName( absoluteFilename );
 
 		// try to find it first. If we find it, return it.
 		var found = AssetSystem.FindByPath( absoluteFilename );

@@ -178,6 +178,10 @@ public abstract partial class Asset
 		// no metadata for .meta files for fuck sake
 		if ( f.EndsWith( ".meta" ) ) return null;
 
+		// Metadata is engine-owned, like compiled outputs: it lives beside the
+		// lowercase identity, not the source's disk spelling.
+		if ( absolute ) f = AssetSystem.LowercaseAssetFileName( f );
+
 		// modelname.vmdl_c -> modelname.vmdl
 		if ( f.EndsWith( "_c" ) )
 			f = f.Substring( 0, f.Length - 2 );
