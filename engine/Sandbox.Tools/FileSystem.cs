@@ -172,15 +172,28 @@ public static class FileSystem
 		}
 
 		// Re-check: the file may have registered itself since the event fired
-		// (files created by the editor self-register on creation).
-		if ( AssetSystem.FindByPath( path ) is not null )
+		// (files created by the editor self-register on creation). A tracked
+		// record pointing at a different file of the same name is a twin shadow:
+		// where case is unseen the last arrival wins, so fall through and let
+		// the normal registration below replace the record.
+		if ( AssetSystem.FindByPath( path ) is { } existing )
 		{
-			pendingNewFiles.Remove( path );
-			return;
+			// Cached paths only: this runs on every tracked-file event, so no
+			// native round-trips. AbsolutePath carries the disk's spelling.
+			var existingFile = existing.AbsolutePath;
+			var arrivingFile = Content.GetFullPath( path );
+			if ( string.IsNullOrWhiteSpace( existingFile ) || string.IsNullOrWhiteSpace( arrivingFile ) ||
+				string.Equals( existingFile, arrivingFile, StringComparison.Ordinal ) ||
+				!string.Equals( existingFile, arrivingFile, StringComparison.OrdinalIgnoreCase ) )
+			{
+				pendingNewFiles.Remove( path );
+				return;
+			}
 		}
 
 		// Only files with a known asset type are worth registering - this also
 		// filters out junk like .meta sidecars, temp files and stray text.
+		// Sources keep their case; only compiled outputs are lowercased.
 		if ( AssetType.ResolveFromPath( path ) is null )
 			return;
 
