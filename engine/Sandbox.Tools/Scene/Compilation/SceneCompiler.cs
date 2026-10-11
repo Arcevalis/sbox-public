@@ -123,7 +123,8 @@ internal static partial class SceneCompiler
 		SceneCompilerSettings settings, SceneCompileSession session )
 	{
 		const string outputFolder = "/compiled";
-		var resourceFolder = $"{System.IO.Path.ChangeExtension( sourceAsset.Path, null )}_scene_data{outputFolder}";
+		// Fragment folders use the lowercase identity, not the source's disk case.
+		var resourceFolder = $"{System.IO.Path.ChangeExtension( AssetSystem.LowercaseAssetFileName( sourceAsset.Path ), null )}_scene_data{outputFolder}";
 		var discovered = DiscoverSources( compiled ).ToArray();
 		var meshes = Gather<MeshComponent>( discovered ).ToArray();
 		var props = Gather<ModelRenderer>( discovered ).ToArray();
