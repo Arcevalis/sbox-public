@@ -75,7 +75,6 @@ public sealed class BlockEditor( PrimitiveTool tool ) : PrimitiveEditor( tool )
 		}
 
 		_box = null;
-		_dragStarted = false;
 		_rotation = Rotation.Identity;
 	}
 
@@ -113,16 +112,19 @@ public sealed class BlockEditor( PrimitiveTool tool ) : PrimitiveEditor( tool )
 
 		if ( Gizmo.WasLeftMousePressed )
 		{
+			_dragStarted = true;
+
 			if ( _box.HasValue )
 			{
 				Tool.Create();
 			}
 
+			SceneEditorSession.Active.Selection.Clear();
+
 			_rotation = rotation;
 			_dragStartPos = rotation.Inverse * tr.EndPosition;
 
 			_box = null;
-			_dragStarted = true;
 			_undoStartCount = SceneEditorSession.Active.UndoSystem.Back.Count;
 		}
 		else
