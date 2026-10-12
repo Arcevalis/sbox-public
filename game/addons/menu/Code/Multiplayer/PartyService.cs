@@ -38,7 +38,8 @@ internal static class PartyService
 			throw new InvalidOperationException( "Leave your current party before joining another." );
 		}
 
-		await PartyRoom.Join( id );
+		if ( !await PartyRoom.Join( id ) )
+			throw new InvalidOperationException( "Couldn't join the party. It may no longer be available." );
 	} );
 
 	static async Task Run( Func<Task> action )

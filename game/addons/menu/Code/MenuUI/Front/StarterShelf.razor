@@ -46,7 +46,7 @@
                     <div class="step-body">
                         <label class="step-game">@step.Package.Title</label>
                         <label class="step-description">@step.Task</label>
-                        <Button class="step-open" Text="@(done ? "Play again" : "Check it out")" Icon="arrow_forward" onclick=@(() => step.Package.OpenModal()) />
+                        <Button class="step-open" Text="@(done ? "Play again" : "Check it out")" Icon="arrow_forward" onclick=@(() => OpenStep( step )) />
                     </div>
                 </div>
             }
@@ -86,6 +86,12 @@
 
     int DoneCount => steps.Count( x => x.Done );
     bool AllDone => steps.Count > 0 && DoneCount == steps.Count;
+
+    void OpenStep( Step step )
+    {
+        Discovery.Clicked( discovery, step.Package );
+        step.Package.OpenModal();
+    }
 
     bool refreshing;
     float nextRefresh;

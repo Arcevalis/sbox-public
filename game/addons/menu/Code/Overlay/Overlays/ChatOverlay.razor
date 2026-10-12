@@ -8,10 +8,8 @@
 @implements PartyRoom.IEventListener
 @namespace MenuProject.Overlay.Overlays
 
-@if ( !ChatAvailable )
-    return;
+<root style="display: @(ChatAvailable ? "flex" : "none")">
 
-<root>
 	<ChatPanel @ref="Panel" ShowInput="@IsOpen" MessageFadeTime="@(8f)" ShowChannelLabel="@(InGame && InParty)" InputPrefix="@(IsOpen ? Channel : "")" OnSubmit="@OnChatSubmit" OnDismiss="@Close" />
 </root>
 

@@ -11,7 +11,7 @@
     who's asking, and when they're in a party already, whose it is and the faces of who's in it, the
     way the friends list shows one. No thanks and Join on the end, like the list's buttons.
 *@
-<root class="@RootClass()">
+<root class="@RootClass()" style="pointer-events: @(_leaving ? "none" : "all")">
 
     @* A glow rising from the bottom of the screen behind it - the top of a lit sphere sat on the
        screen's edge - so something asking for you is the brightest thing on the page *@
@@ -129,18 +129,21 @@
     void Accept( PanelEvent e )
     {
         e.StopPropagation();
-        OnAccept?.Invoke();
+        if ( _leaving ) return;
 
-        // Taken up rather than turned away - it fizzles out where it is instead of swiping off
+        // Latch the action before user code runs; the leaving card may still receive input.
         _accepted = true;
         Close();
+        OnAccept?.Invoke();
     }
 
     void Decline( PanelEvent e )
     {
         e.StopPropagation();
-        OnDecline?.Invoke();
+        if ( _leaving ) return;
+
         Close();
+        OnDecline?.Invoke();
     }
 
     //

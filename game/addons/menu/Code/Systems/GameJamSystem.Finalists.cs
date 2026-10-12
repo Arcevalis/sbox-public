@@ -30,7 +30,6 @@ public sealed partial class GameJamSystem
 	/// </summary>
 	public bool IsSubmittingFinalistVote { get; private set; }
 
-	readonly List<JamVoteUpdate> pendingFinalistVotes = new();
 	readonly Dictionary<(int Category, int? Round), float> finalistVoteCooldowns = new();
 	JamFinalistSource finalistSource;
 	bool finalistsLoading;
@@ -94,7 +93,6 @@ public sealed partial class GameJamSystem
 		Finalists = null;
 		FinalistsError = null;
 		FinalistVoteError = null;
-		pendingFinalistVotes.Clear();
 		finalistVoteCooldowns.Clear();
 		nextFinalistsRefresh = null;
 		finalistsLoading = false;
@@ -192,7 +190,6 @@ public sealed partial class GameJamSystem
 			if ( IsCurrentFinalists( source ) )
 			{
 				finalistsLoading = false;
-				ApplyPendingFinalistVotes();
 				Version++;
 			}
 		}
@@ -225,27 +222,14 @@ public sealed partial class GameJamSystem
 
 		if ( finalistsLoading || IsSubmittingFinalistVote )
 		{
-			pendingFinalistVotes.Add( update );
+			// Pushes have no revision, so reconcile rather than replaying over a snapshot or vote response.
+			RefreshFinalists();
+			return;
 		}
 
 		var category = Finalists?.FirstOrDefault( x => x.Id == update.CategoryId );
 		if ( category?.Decided != true && (category?.Round is null || category.Round < update.Round) ) RefreshFinalists();
 		if ( category?.Apply( update ) == true ) Version++;
-	}
-
-	/// <summary>
-	/// Preserves live tally messages received while a snapshot or vote response was in flight.
-	/// </summary>
-	void ApplyPendingFinalistVotes()
-	{
-		if ( finalistsLoading || IsSubmittingFinalistVote ) return;
-
-		foreach ( var update in pendingFinalistVotes )
-		{
-			ApplyFinalistVotes( update );
-		}
-
-		pendingFinalistVotes.Clear();
 	}
 
 	/// <summary>
@@ -287,7 +271,6 @@ public sealed partial class GameJamSystem
 			if ( IsCurrentFinalists( source ) )
 			{
 				IsSubmittingFinalistVote = false;
-				ApplyPendingFinalistVotes();
 				Version++;
 			}
 		}

@@ -104,30 +104,30 @@
 							}
 						}
 
-						@* Roomy faces while the party's small, smaller ones that wrap as it fills up *@
-						<div class="members @(SeatsTaken > 5 ? "compact" : "")">
-							<PartyMember Friend="@Me" Status="@StatusOf( Me )" Ready="@PartyView.IsMemberReady( Me )" />
-							@foreach ( var member in Members.Where( x => !x.IsMe ) )
-							{
-								<PartyMember Friend="@member" Status="@StatusOf( member )" Ready="@PartyView.IsMemberReady( member )" />
-							}
-
-							@* Asked in, not here yet - their seat's held, greyed out, until they turn up or it lapses.
-							   Clicking one lets it go (the invite itself is already with them). *@
-							@foreach ( var invited in PartyInvites.Pending )
-							{
-								<div class="pending-seat" tooltip="@PendingTooltip( invited )" onmouseup="@( () => PartyInvites.Dismiss( invited.Id ) )">
-									<Avatar UserId="@((long)invited.Id)" ShowStatus="@false" />
-									<div class="pending-badge"><icon class="waiting">hourglass_top</icon><icon class="dismiss">close</icon></div>
-								</div>
-							}
-
-							@if ( SeatsTaken < MaxMembers )
-							{
-								<div class="open-seat" onmouseup="@OpenFriends" tooltip="Invite a friend"><icon>add</icon></div>
-							}
-						</div>
 					}
+					@* Keep member listeners mounted while settings replace the party roster view. *@
+					<div class="members @(SeatsTaken > 5 ? "compact" : "")" style="display: @(SettingsOpen ? "none" : "flex")">
+						<PartyMember Friend="@Me" Status="@StatusOf( Me )" Ready="@PartyView.IsMemberReady( Me )" />
+						@foreach ( var member in Members.Where( x => !x.IsMe ) )
+						{
+							<PartyMember Friend="@member" Status="@StatusOf( member )" Ready="@PartyView.IsMemberReady( member )" />
+						}
+
+						@* Asked in, not here yet - their seat's held, greyed out, until they turn up or it lapses.
+						   Clicking one lets it go (the invite itself is already with them). *@
+						@foreach ( var invited in PartyInvites.Pending )
+						{
+							<div class="pending-seat" tooltip="@PendingTooltip( invited )" onmouseup="@( () => PartyInvites.Dismiss( invited.Id ) )">
+								<Avatar UserId="@((long)invited.Id)" ShowStatus="@false" />
+								<div class="pending-badge"><icon class="waiting">hourglass_top</icon><icon class="dismiss">close</icon></div>
+							</div>
+						}
+
+						@if ( SeatsTaken < MaxMembers )
+						{
+							<div class="open-seat" onmouseup="@OpenFriends" tooltip="Invite a friend"><icon>add</icon></div>
+						}
+					</div>
 
 					@if ( ShowPlayControls )
 					{
