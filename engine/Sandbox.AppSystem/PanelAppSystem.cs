@@ -184,6 +184,9 @@ public class PanelAppSystem : AppSystem
 
 			System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor( type.TypeHandle );
 		}
+
+		// Native's shadow callback reads its convar mid-render, so its compute shader would be made there otherwise
+		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor( typeof( Sandbox.Rendering.ContactShadows ).TypeHandle );
 	}
 
 	/// <summary>
