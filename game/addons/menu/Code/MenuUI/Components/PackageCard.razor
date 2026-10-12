@@ -27,6 +27,11 @@
 			</div>
 		}
 
+        @if ( ShowSubscribe && Package is not null )
+        {
+            <MenuProject.UI.WorkshopCardActions Package=@Package />
+        }
+
         @* Overlaid on the art as a pull quote - the mark is its own label so it can be set big. *@
         @if ( ShowSummary && !string.IsNullOrWhiteSpace( Package?.Summary ) )
         {
@@ -294,6 +299,11 @@
 
     /// <summary>Open a <see cref="PackageHoverCard"/> after hovering for a moment.</summary>
     [Parameter] public bool HoverPreview { get; set; } = true;
+
+    /// <summary>
+    /// Put Steam Workshop actions on the art - subscribe, and open its page. For picking maps, where you might want to keep one.
+    /// </summary>
+    [Parameter] public bool ShowSubscribe { get; set; }
 
     /// <summary>
     /// Called when the card is clicked

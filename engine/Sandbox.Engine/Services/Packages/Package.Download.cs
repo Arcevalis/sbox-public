@@ -39,12 +39,18 @@ public partial class Package
 	/// </summary>
 	static ManifestSchema.File[] DownloadableFiles( IRevision rev, bool skipAssets )
 	{
-		var entries = (rev.Manifest?.Files ?? Array.Empty<ManifestSchema.File>()).Where( FilterFileDownloads );
+		return DownloadableFiles( rev.Manifest?.Files ?? Array.Empty<ManifestSchema.File>(), skipAssets ).ToArray();
+	}
+
+	/// <inheritdoc cref="DownloadableFiles(IRevision, bool)"/>
+	static IEnumerable<ManifestSchema.File> DownloadableFiles( ManifestSchema.File[] files, bool skipAssets )
+	{
+		var entries = files.Where( FilterFileDownloads );
 
 		if ( skipAssets )
 			entries = entries.Where( x => x.Path.StartsWith( ".bin" ) );
 
-		return entries.ToArray();
+		return entries;
 	}
 
 	/// <summary>
@@ -56,6 +62,13 @@ public partial class Package
 	{
 		if ( Revision is not { } rev )
 			return -1;
+
+		if ( InstallsFromWorkshop )
+		{
+			var state = Workshop.GetState( WorkshopId );
+			if ( state.IsInstalled && !state.NeedsUpdate ) return 0;
+			return state.Total > 0 ? state.Total - state.Downloaded : -1;
+		}
 
 		await rev.DownloadManifestAsync( token );
 		if ( rev.Manifest == null ) return -1;
@@ -102,6 +115,10 @@ public partial class Package
 		var rev = Revision;
 		if ( rev == null ) return false;
 
+		// The files are in a workshop item, the backend just has a manifest of them
+		if ( InstallsFromWorkshop )
+			return await DownloadFromWorkshop( fs, token, options );
+
 		options.Loading?.LoadingProgress( LoadingProgress.Create( $"Fetching '{Title}' Information" ) );
 
 		// make sure manifest is downloaded
@@ -140,6 +157,7 @@ public partial class Package
 		if ( downloadQueue.Count <= 0 )
 		{
 			if ( tracked is not null ) tracked.IsComplete = true;
+			if ( fs is not null ) RememberForOffline();
 
 			options.Loading?.LoadingProgress( new LoadingProgress { Title = $"Download '{Title}' Complete", Fraction = 1 } );
 			Api.Activity.CurrentLoad?.Downloaded( 0, 0, 0 );
@@ -272,6 +290,7 @@ public partial class Package
 		}
 
 		if ( fs is not null ) MountDownloaded();
+		if ( fs is not null ) RememberForOffline();
 
 		progress.Title = $"Download '{Title}' Complete";
 		progress.Fraction = 1;

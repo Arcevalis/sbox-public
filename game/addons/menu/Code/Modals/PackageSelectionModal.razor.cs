@@ -95,7 +95,9 @@ public partial class PackageSelectionModal
 
 	string SearchQuery => $"{string.Join( " ", packageTypes.Select( type => $"type:{type}" ) )} {string.Join( " ", requiredFilters )} sort:{sortOrder} {debouncedSearch} {string.Join( " ", selectedTags.Select( tag => $"+{tag}" ) )} {string.Join( " ", selectedCategories.Select( category => $"{category.Key}:{category.Value}" ) )}".Trim();
 
-	string ResultsTitle => !string.IsNullOrWhiteSpace( debouncedSearch ) ? "#menu.games.search_results" : SortOrders.FirstOrDefault( order => order.Name == sortOrder ).Title ?? Result?.Orders?.FirstOrDefault( order => order.Name == sortOrder ).Title ?? "#menu.games.results";
+	string ResultsTitle => packageSource == PackageSource.Subscribed ? Language.GetPhrase( "menu.workshop.subscribed_packages", new() { ["noun"] = PackageNoun } )
+		: packageSource == PackageSource.Downloaded ? Language.GetPhrase( "menu.workshop.downloaded_packages", new() { ["noun"] = PackageNoun } )
+		: !string.IsNullOrWhiteSpace( debouncedSearch ) ? "#menu.games.search_results" : SortOrders.FirstOrDefault( order => order.Name == sortOrder ).Title ?? Result?.Orders?.FirstOrDefault( order => order.Name == sortOrder ).Title ?? "#menu.games.results";
 
 	void SetQuery( string query )
 	{
@@ -104,6 +106,7 @@ public partial class PackageSelectionModal
 		selectedTags.Clear();
 		selectedCategories.Clear();
 		sortOrder = "trending";
+		packageSource = PackageSource.Browse;
 		searchPending = false;
 		var searchTerms = new List<string>();
 
@@ -201,6 +204,9 @@ public partial class PackageSelectionModal
 			StateHasChanged();
 		}
 
+		if ( IsWorkshopSource )
+			RefreshWorkshopPackages();
+
 		var query = SearchQuery;
 		if ( query == lastReportedQuery ) return;
 
@@ -214,5 +220,5 @@ public partial class PackageSelectionModal
 		OnPackageSelected?.Invoke( package );
 	}
 
-	protected override int BuildHash() => HashCode.Combine( Result, SearchQuery, searchText, packageList?.FoundPackages, ShowMapSources, selectedMount, mountedMaps );
+	protected override int BuildHash() => HashCode.Combine( Result, SearchQuery, searchText, packageList?.FoundPackages, ShowMapSources, selectedMount, mountedMaps, workshopPackages );
 }

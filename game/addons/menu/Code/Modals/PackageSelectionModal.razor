@@ -32,7 +32,9 @@
 				{
 					<div class="filter-section browse-options">
 						<label class="section-title">#menu.games.source</label>
-						<Button class="picker-button browse-option" Active=@(!IsMountedSource) Icon="business_center" Text="#menu.games.workshop" onclick=@(() => SelectSource( null )) />
+						<Button class="picker-button browse-option" Active=@(!IsMountedSource && packageSource == PackageSource.Browse) Icon="business_center" Text="#menu.games.workshop" onclick=@(() => SelectPackageSource( PackageSource.Browse )) />
+						<Button class="picker-button browse-option" Active=@(!IsMountedSource && packageSource == PackageSource.Subscribed) Icon="check_circle" Text="#menu.workshop.subscribed" tooltip="#menu.workshop.subscribed_tooltip" onclick=@(() => SelectPackageSource( PackageSource.Subscribed )) />
+						<Button class="picker-button browse-option" Active=@(!IsMountedSource && packageSource == PackageSource.Downloaded) Icon="download_done" Text="#menu.workshop.downloaded" tooltip="#menu.workshop.downloaded_tooltip" onclick=@(() => SelectPackageSource( PackageSource.Downloaded )) />
 						@foreach ( var mount in MountDirectory.GetAll().Where( mount => mount.Mounted ).OrderBy( mount => mount.Title ) )
 						{
 							var mapCount = GetMountMaps( mount.Ident ).Count();
@@ -47,7 +49,7 @@
 					</div>
 				}
 
-				@if ( !IsMountedSource )
+				@if ( !IsMountedSource && packageSource == PackageSource.Browse )
 				{
 					<div class="filter-section browse-options">
 						<label class="section-title">#menu.games.browse</label>
@@ -89,9 +91,13 @@
 					{
 						<label class="results-count">@mountedMaps.Length.ToString( "N0" ) maps</label>
 					}
-					else if ( packageList?.FoundPackages is not null && Result is not null )
+					else if ( IsWorkshopSource && workshopPackages is not null )
 					{
-						<label class="results-count">@Result.TotalCount.ToString( "N0" ) results</label>
+						<label class="results-count">@Language.GetPhrase( "menu.games.result_count", new() { ["count"] = workshopPackages.Length.ToString( "N0" ) } )</label>
+					}
+					else if ( !IsWorkshopSource && packageList?.FoundPackages is not null && Result is not null )
+					{
+						<label class="results-count">@Language.GetPhrase( "menu.games.result_count", new() { ["count"] = Result.TotalCount.ToString( "N0" ) } )</label>
 					}
 					@if ( IsMountedSource ? !string.IsNullOrEmpty( searchText ) : HasFilters )
 					{
@@ -100,7 +106,7 @@
 				</div>
 				@if ( !IsMountedSource )
 				{
-					<MenuProject.UI.PackageList @ref=packageList Surface="package-picker" Query=@SearchQuery OnSelected=@SelectPackage Take=@(100) ItemSize=@(new Vector2( 250, 190 )) HoverPreview=@false />
+					<MenuProject.UI.PackageList @ref=packageList Surface="package-picker" Query=@SearchQuery Packages=@(IsWorkshopSource ? workshopPackages ?? Array.Empty<Package>() : null) OnSelected=@SelectPackage Take=@(100) ItemSize=@(new Vector2( 250, 190 )) HoverPreview=@false ShowSubscribe=@ShowMapSources />
 				}
 				else if ( mountedMaps.Length == 0 )
 				{

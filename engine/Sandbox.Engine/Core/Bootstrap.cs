@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using Sandbox.Network;
 using Sandbox.Utility;
 using Sandbox.VR;
@@ -238,6 +238,12 @@ internal static class Bootstrap
 			{
 				using var timeout = new CancellationTokenSource( 5000 );
 				SyncContext.RunBlocking( Services.Inventory.WaitForSteamInventoryItems( timeout.Token ) );
+			}
+
+			if ( !Application.IsStandalone )
+			{
+				// Know what's subscribed before the menu or a game asks for a package
+				Services.Ugc.InitializeSubscriptions();
 			}
 
 			GameWindow.Current?.UpdateStartupProgress( 0.8f, "Loading menu" );

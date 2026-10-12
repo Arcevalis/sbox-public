@@ -462,7 +462,7 @@
     /// <summary>
     /// "420 MB", "1.2 GB" - as short as it goes.
     /// </summary>
-    static string Size( double bytes )
+    internal static string Size( double bytes )
     {
         if ( bytes >= 1_000_000_000 ) return $"{bytes / 1_000_000_000:0.#} GB";
         if ( bytes >= 1_000_000 ) return $"{bytes / 1_000_000:0} MB";
@@ -474,7 +474,7 @@
     /// 1.1 GB download reads "0.51 GB", not "510 MB". Gigabytes get a second decimal, so it's seen
     /// going up rather than sitting on the same tenth for ages.
     /// </summary>
-    static string SizeIn( double bytes, double total )
+    internal static string SizeIn( double bytes, double total )
     {
         if ( total >= 1_000_000_000 ) return $"{bytes / 1_000_000_000:0.00} GB";
         if ( total >= 1_000_000 ) return $"{bytes / 1_000_000:0} MB";

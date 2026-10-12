@@ -7,6 +7,12 @@ public partial class MenuOverlay : RootPanel
 {
 	public static MenuOverlay Instance;
 
+	/// <summary>
+	/// The workshop download overlay's own root, so it draws over every modal in this one. Roots are drawn last
+	/// made first (see UISystem.CombineCommandLists), so it's made before this.
+	/// </summary>
+	static RootPanel DownloadsRoot;
+
 	public ToastArea Top;
 	public ToastArea BottomRight;
 	public ToastArea TopLeft;
@@ -26,6 +32,11 @@ public partial class MenuOverlay : RootPanel
 	public static void Init()
 	{
 		Shutdown();
+
+		DownloadsRoot = new RootPanel();
+		DownloadsRoot.Style.PointerEvents = PointerEvents.None;
+		DownloadsRoot.AddChild<WorkshopDownloadOverlay>();
+
 		Instance = new MenuOverlay();
 
 		// After the overlay, so it draws over it - see LoadingRoot
@@ -36,6 +47,9 @@ public partial class MenuOverlay : RootPanel
 	{
 		Instance?.Delete();
 		Instance = null;
+
+		DownloadsRoot?.Delete();
+		DownloadsRoot = null;
 
 		LoadingRoot.Instance?.Delete();
 		LoadingRoot.Instance = null;
