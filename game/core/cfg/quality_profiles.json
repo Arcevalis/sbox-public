@@ -34,20 +34,20 @@
         },
         "Low":
         {
-            "r_ao_quality": "1",
+            "r_ao_quality": "2",
             "r_ao_resolution": "4",
-            "r_ao_denoise_passes": "2"
+            "r_ao_denoise_passes": "3"
         },
         "Medium":
         {
-            "r_ao_quality": "2",
-            "r_ao_resolution": "2",
-            "r_ao_denoise_passes": "2"
+            "r_ao_quality": "3",
+            "r_ao_resolution": "3",
+            "r_ao_denoise_passes": "3"
         },
         "High":
         {
             "r_ao_quality": "3",
-            "r_ao_resolution": "1",
+            "r_ao_resolution": "2",
             "r_ao_denoise_passes": "3"
         }
     },
