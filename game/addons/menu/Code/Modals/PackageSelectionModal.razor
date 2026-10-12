@@ -15,14 +15,14 @@
 				<label class="picker-title">Choose a @PackageNoun</label>
 				<label class="picker-subtitle">Select a @PackageNoun to continue.</label>
 			</div>
-			<Button class="close-button" Icon="close" onclick=@(() => CloseModal( false )) tooltip="Close" />
+			<Button class="close-button" Icon="close" onclick=@(() => CloseModal( false )) tooltip="#menu.common.close" />
 		</div>
 
 		<div class="picker-toolbar">
 			<TextEntry class="package-search" Text=@searchText Placeholder=@($"Search {PackageNoun}s...") OnTextEdited=@OnSearchEdited />
 			@if ( IsGamePicker )
 			{
-				<Button class="picker-button multiplayer-filter" Active=@selectedTags.Contains( "multiplayer" ) Icon="groups" Text="Multiplayer only" onclick=@ToggleMultiplayer />
+				<Button class="picker-button multiplayer-filter" Active=@selectedTags.Contains( "multiplayer" ) Icon="groups" Text="#menu.games.multiplayer_only" onclick=@ToggleMultiplayer />
 			}
 		</div>
 
@@ -31,8 +31,8 @@
 				@if ( ShowMapSources )
 				{
 					<div class="filter-section browse-options">
-						<label class="section-title">Source</label>
-						<Button class="picker-button browse-option" Active=@(!IsMountedSource) Icon="business_center" Text="Workshop" onclick=@(() => SelectSource( null )) />
+						<label class="section-title">#menu.games.source</label>
+						<Button class="picker-button browse-option" Active=@(!IsMountedSource) Icon="business_center" Text="#menu.games.workshop" onclick=@(() => SelectSource( null )) />
 						@foreach ( var mount in MountDirectory.GetAll().Where( mount => mount.Mounted ).OrderBy( mount => mount.Title ) )
 						{
 							var mapCount = GetMountMaps( mount.Ident ).Count();
@@ -50,7 +50,7 @@
 				@if ( !IsMountedSource )
 				{
 					<div class="filter-section browse-options">
-						<label class="section-title">Browse</label>
+						<label class="section-title">#menu.games.browse</label>
 						@foreach ( var order in SortOrders )
 						{
 							<Button class="picker-button browse-option" Active=@(sortOrder == order.Name) Icon=@order.Icon Text=@order.Title onclick=@(() => sortOrder = order.Name) />
@@ -60,7 +60,7 @@
 					@if ( Result?.Properties is { Length: > 0 } )
 					{
 						<div class="filter-section">
-							<label class="section-title">Features</label>
+							<label class="section-title">#menu.games.features</label>
 							<PackagePropertyFilter Result=@Result Selected=@selectedTags />
 						</div>
 					}
@@ -77,7 +77,7 @@
 					}
 
 					<div class="filter-section">
-						<label class="section-title">Tags</label>
+						<label class="section-title">#menu.games.tags</label>
 						<PackageTagFilter Result=@Result Selected=@selectedTags />
 					</div>
 				}
@@ -95,7 +95,7 @@
 					}
 					@if ( IsMountedSource ? !string.IsNullOrEmpty( searchText ) : HasFilters )
 					{
-						<Button class="picker-button clear-filters" Icon="filter_alt_off" Text="Clear filters" onclick=@ClearFilters />
+						<Button class="picker-button clear-filters" Icon="filter_alt_off" Text="#menu.games.clear_filters" onclick=@ClearFilters />
 					}
 				</div>
 				@if ( !IsMountedSource )
@@ -105,7 +105,7 @@
 				else if ( mountedMaps.Length == 0 )
 				{
 					<div class="mounted-maps-empty">
-						<EmptyState Icon="search_off" Title="No maps found" Subtitle="Try a different search or choose another source." />
+						<EmptyState Icon="search_off" Title="#menu.games.no_maps_found" Subtitle="#menu.games.try_a_different_search_or_choose_another_source" />
 					</div>
 				}
 				else

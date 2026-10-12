@@ -26,18 +26,18 @@
 		{
 			@if(GamePackage is null)
 			{
-                <Button icon="sports_esports" onclick=@SelectGame>Select Game</Button>
+                <Button icon="sports_esports" onclick=@SelectGame>#menu.games.select_game</Button>
 			}
 			else
 			{
                 <Button icon="sports_esports" onclick=@SelectGame>@GamePackage.Title</Button>
 			}
 
-			<Button icon="play_arrow" class="play" Disabled=@(GamePackage is null || !MenuHelpers.HasAuthority) onclick=@OnPlay>Launch Map</Button>
+			<Button icon="play_arrow" class="play" Disabled=@(GamePackage is null || !MenuHelpers.HasAuthority) onclick=@OnPlay>#menu.games.launch_map</Button>
 		}
 		else
 		{
-            <Button icon="play_arrow" class="play disabled" onclick=@OnPlay>Launch Map</Button>
+            <Button icon="play_arrow" class="play disabled" onclick=@OnPlay>#menu.games.launch_map</Button>
 		}
 
 

@@ -181,8 +181,8 @@ public sealed partial class GameJamSystem
 			if ( !IsCurrentFinalists( source ) ) return;
 
 			Log.Warning( $"Couldn't refresh jam finalists ({e.Message})" );
-			FinalistsError = Finalists is null ? "Couldn't load finalists. You can still browse all entries."
-				: "Couldn't refresh finalists. Showing the last confirmed slate.";
+			FinalistsError = Finalists is null ? "#menu.jam.couldn_t_load_finalists_you_can_still_browse_all"
+				: "#menu.jam.couldn_t_refresh_finalists_showing_the_last_confirmed_slate";
 			nextFinalistsRefresh = jam.Now.AddSeconds( 15 );
 		}
 		finally
@@ -263,7 +263,7 @@ public sealed partial class GameJamSystem
 		{
 			if ( IsCurrentFinalists( source ) )
 			{
-				FinalistVoteError = e is InvalidOperationException ? e.Message : "Couldn't update your vote. Try again.";
+				FinalistVoteError = e is InvalidOperationException ? e.Message : "#menu.jam.couldn_t_update_your_vote_try_again";
 			}
 		}
 		finally

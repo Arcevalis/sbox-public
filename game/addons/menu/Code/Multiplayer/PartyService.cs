@@ -35,7 +35,7 @@ internal static class PartyService
 		{
 			if ( current.Id.ValueUnsigned == id ) return;
 
-			throw new InvalidOperationException( "Leave your current party before joining another." );
+			throw new InvalidOperationException( Language.GetPhrase( "menu.party.leave_your_current_party_before_joining_another_text" ) );
 		}
 
 		if ( !await PartyRoom.Join( id ) )

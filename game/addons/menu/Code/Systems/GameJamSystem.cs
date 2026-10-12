@@ -192,14 +192,14 @@ public sealed partial class GameJamSystem : GameObjectSystem<GameJamSystem>, IBa
 			// GetActive caches null results, so retry periodically until a published jam is visible.
 			nextRefreshRetry = nextRefresh is null ? RealTime.Now + RefreshRetrySeconds : 0;
 
-			Error = NominationsOpen && nominations is null ? "Couldn't refresh nominations. Try again in a moment." : null;
+			Error = NominationsOpen && nominations is null ? "#menu.jam.couldn_t_refresh_nominations_try_again_in_a_moment" : null;
 			if ( nominations is not null || !NominationsOpen ) Nominations = nominations;
 			Version++;
 		}
 		catch ( Exception e )
 		{
 			Log.Warning( e, "Couldn't refresh the active jam" );
-			Error = "Couldn't refresh the jam. Try again in a moment.";
+			Error = "#menu.jam.couldn_t_refresh_the_jam_try_again_in_a";
 			nextRefresh = null;
 			nextRefreshRetry = RealTime.Now + RefreshRetrySeconds;
 			Version++;

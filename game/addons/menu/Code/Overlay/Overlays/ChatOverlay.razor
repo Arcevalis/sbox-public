@@ -127,7 +127,7 @@
             HintedParty = PartyRoom.Current;
             var key = Input.GetButtonOrigin( "chat" );
             var hint = string.IsNullOrWhiteSpace( key )
-                ? "Set a chat key in Settings to chat with your party."
+                ? "#menu.common.set_a_chat_key_in_settings_to_chat_with"
                 : $"Press {key} to chat to your party";
 
             Panel.AddSystemMessage( "ℹ", hint );
