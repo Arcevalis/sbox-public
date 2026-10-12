@@ -91,7 +91,7 @@ internal static class HookLayers
 		var width = RenderPipelineTools.GetTargetWidth( view, color );
 		var height = RenderPipelineTools.GetTargetHeight( view, color );
 		var uiColor = RenderPipelineTools.FindOrCreateScratchTarget( view, stage == Stage.EarlyUI ? "ui_gamma_early_color" : "ui_gamma_color",
-			width, height, ImageFormat.RGBA16161616F, RenderMultisampleType.RENDER_MULTISAMPLE_NONE );
+			width, height, ImageFormat.RGBA16161616F, RenderMultisampleType.RENDER_MULTISAMPLE_NONE, false );
 
 		var seed = view.AddBlitTextureToTargetLayer( "UI Gamma Seed", color, viewport, viewport, uiColor, RenderColorSpace.RENDER_SRGB );
 		seed.GetRenderAttributesPtr().SetComboValue( SrgbTransfer, 1 );

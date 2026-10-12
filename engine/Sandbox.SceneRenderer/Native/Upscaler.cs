@@ -33,6 +33,11 @@ internal static class Upscaler
 	static readonly StringToken FsrRcasAttenuation = "FsrRcasAttenuation";
 
 	/// <summary>
+	/// The temporal upscalers, which take motion vectors and a reactive mask.
+	/// </summary>
+	public static bool IsTemporal( int mode ) => mode is Fsr3 or Dlss;
+
+	/// <summary>
 	/// Upscale <paramref name="color"/>, rendered into <paramref name="lowResViewport"/>, into the setup's full resolution
 	/// colour.
 	/// </summary>

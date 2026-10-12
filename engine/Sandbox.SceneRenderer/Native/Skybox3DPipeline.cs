@@ -22,6 +22,7 @@ internal sealed class Skybox3DPipeline
 		var color = setup.m_hColor;
 		var depth = setup.m_hDepth;
 
+		ViewSetup.SetSkybox3D( setup );
 		view.GetRenderAttributesPtr().SetBoolValue( "IsSkybox", true );
 
 		NativeLayers.AddLightBinner( view, viewport, setup.m_pAttributes );

@@ -16,6 +16,11 @@ native class CRenderPipelineSetup as NativeEngine.CRenderPipelineSetup
 	HSceneViewRenderTarget m_hColor;
 	HSceneViewRenderTarget m_hDepth;
 	HSceneViewRenderTarget m_hFinalColor;
+	HSceneViewRenderTarget m_hFinalDepth;
+	int m_nWidth;
+	int m_nHeight;
+	RenderMultisampleType_t m_nOutputMSAA;
+	ImageFormat m_nDepthFormat;
 	HSceneViewRenderTarget m_hRefractColor;
 
 	RenderMultisampleType_t m_nMSAA;
@@ -39,6 +44,8 @@ native class CRenderPipelineSetup as NativeEngine.CRenderPipelineSetup
 
 	int m_nUpscalerMode;
 	RenderViewport m_upscaleViewport;
+	int m_nUpscaleRenderWidth;
+	int m_nUpscaleRenderHeight;
 	HSceneViewRenderTarget m_hUpscaleColor;
 	HSceneViewRenderTarget m_hUpscaleDepth;
 	HSceneViewRenderTarget m_hFsr1IntermediateColor;
@@ -46,7 +53,6 @@ native class CRenderPipelineSetup as NativeEngine.CRenderPipelineSetup
 
 	void AddVolumetricFog();
 	bool Add3DSkybox();
-	void AddShaderIDDebug();
 	void AddTemporalUpscale();
 	void AddAutoExposure( HSceneViewRenderTarget hColor, RenderViewport viewport );
 	void SortByRenderOrder( ISceneLayer pLayer );
@@ -64,7 +70,15 @@ native static class RenderPipelineTools as NativeEngine.RenderPipelineTools
 	int GetTargetWidth( ISceneView view, HSceneViewRenderTarget hTarget );
 	int GetTargetHeight( ISceneView view, HSceneViewRenderTarget hTarget );
 	bool TargetSupportsSrgbWrite( ISceneView view, HSceneViewRenderTarget hTarget );
-	HSceneViewRenderTarget FindOrCreateScratchTarget( ISceneView view, string pName, int nWidth, int nHeight, ImageFormat nFormat, RenderMultisampleType_t nMSAA );
+	void ScreenText( ISceneView view, float x, float y, string text, int r, int g, int b, int a );
+	int CollectLoadedShaderNames();
+	string GetLoadedShaderName( int index );
+	Vector4 GetShaderIDColor( string shaderName );
+	void AddTextureDebugLayer( ISceneView view, string name, HSceneViewRenderTarget hColor, RenderViewport viewport, ITexture hTexture );
+	HSceneViewRenderTarget FindOrCreateScratchTarget( ISceneView view, string pName, int nWidth, int nHeight, ImageFormat nFormat, RenderMultisampleType_t nMSAA, bool bUAV );
+	bool IsFloatFormat( ImageFormat nFormat );
+	ImageFormat GetHdrFormat();
+	ImageFormat GetBackBufferFormat();
 }
 
 //

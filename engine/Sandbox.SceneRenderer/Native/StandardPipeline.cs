@@ -39,6 +39,8 @@ internal sealed class StandardPipeline
 
 	public void AddLayersToView( CRenderPipelineSetup setup )
 	{
+		ViewTargets.Create( setup );
+
 		var view = setup.m_pView;
 		var pipelineAttributes = setup.m_pAttributes;
 		var viewAttributes = view.GetRenderAttributesPtr();
@@ -51,6 +53,9 @@ internal sealed class StandardPipeline
 		var multisampled = msaa != RenderMultisampleType.RENDER_MULTISAMPLE_NONE;
 		var dynamicObjects = setup.m_bRenderDynamicObjects;
 		var hooks = setup.m_bManagedHooks;
+
+		ViewSetup.SetStandard( setup );
+		ViewSetup.AddLightmapWarnings( setup );
 
 		//
 		// Clear colour, depth and stencil
@@ -84,8 +89,8 @@ internal sealed class StandardPipeline
 		depthDownsample.Setup( view, viewport, depth, multisampled );
 		depthDownsample.AddToView( view, viewport );
 
-		// Motion vectors, if something wants them (the temporal upscalers)
-		if ( viewAttributes.GetBoolValue( "WantsMotionVectors", false ) )
+		// Motion vectors, for the temporal upscalers (FSR3, DLSS)
+		if ( Upscaler.IsTemporal( setup.m_nUpscalerMode ) )
 		{
 			motionVectors.Setup( view, viewport );
 			motionVectors.AddToView( view, viewport );
@@ -252,7 +257,10 @@ internal sealed class StandardPipeline
 			translucent.AddObjectFlagsExcludedMask( SceneObjectFlags.ExcludeGameLayer );
 		}
 
-		setup.AddShaderIDDebug();
+		if ( viewAttributes.GetIntValue( "ToolsVisMode", 0 ) == (int)SceneCameraDebugMode.ShaderIDColor )
+		{
+			ViewSetup.AddShaderIDLegend( setup, color );
+		}
 
 		//
 		// Upscale to full resolution before post processing: colour, depth and the viewport are the full resolution ones after.
