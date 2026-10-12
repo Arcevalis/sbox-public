@@ -6,7 +6,7 @@ namespace Sandbox.SceneRenderer.Native;
 /// <summary>
 /// The standard pipeline's layers for one view, in the order they render. Native sets up the view's render targets and
 /// attributes first (<c>CRenderingPipelineStandard::AddLayersToView</c>), and the steps that stay native - procedural
-/// renderers, the 3D skybox's view, upscaling and auto exposure - this asks <see cref="CRenderPipelineSetup"/> for.
+/// renderers, the 3D skybox's view, the temporal upscalers and auto exposure - this asks <see cref="CRenderPipelineSetup"/> for.
 /// One per view at a time: its procedural layers keep the view's state until it renders.
 /// </summary>
 internal sealed class StandardPipeline
@@ -50,6 +50,7 @@ internal sealed class StandardPipeline
 		var msaa = setup.m_nMSAA;
 		var multisampled = msaa != RenderMultisampleType.RENDER_MULTISAMPLE_NONE;
 		var dynamicObjects = setup.m_bRenderDynamicObjects;
+		var hooks = setup.m_bManagedHooks;
 
 		//
 		// Clear colour, depth and stencil
@@ -62,7 +63,8 @@ internal sealed class StandardPipeline
 			layer.AddObjectFlagsExcludedMask( NativeLayers.AllObjects );
 		}
 
-		setup.AddClearQuadOverdraw();
+		var quadOverdraw = QuadOverdraw.IsOn( view );
+		if ( quadOverdraw ) QuadOverdraw.AddClear( view, viewport, depth );
 
 		var logicalViewport = view.GetMainViewport().Rect;
 		viewAttributes.SetVector4DValue( "PainterScreenViewport", new Vector4( logicalViewport.Left, logicalViewport.Top, logicalViewport.Width, logicalViewport.Height ) );
@@ -135,7 +137,7 @@ internal sealed class StandardPipeline
 
 		setup.AddVolumetricFog();
 
-		setup.AddHook( "Managed: AfterDepthPrepass", Stage.AfterDepthPrepass, color, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: AfterDepthPrepass", Stage.AfterDepthPrepass, viewport, color, depth );
 
 		//
 		// Opaque: the world, its overlays, then everything else
@@ -163,7 +165,7 @@ internal sealed class StandardPipeline
 			NativeLayers.AddOpaque( setup, "Dynamic Opaque Forward", "Dynamic Opaque Forward Fade", dynamicObjects: true );
 		}
 
-		setup.AddHook( "Managed: AfterOpaque", Stage.AfterOpaque, color, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: AfterOpaque", Stage.AfterOpaque, viewport, color, depth );
 
 		//
 		// Sky: the 3D skybox's view, which draws the 2D sky behind itself, or the 2D sky
@@ -174,7 +176,7 @@ internal sealed class StandardPipeline
 			NativeLayers.Add2DSky( setup, setup.m_skyViewport, color, depth );
 		}
 
-		setup.AddHook( "Managed: AfterSkybox", Stage.AfterSkybox, color, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: AfterSkybox", Stage.AfterSkybox, viewport, color, depth );
 
 		//
 		// Decals, static and dynamic
@@ -238,8 +240,8 @@ internal sealed class StandardPipeline
 			opaque.AddObjectFlagsRequiredMask( SceneObjectFlags.IsOpaque | SceneObjectFlags.GameOverlayLayer );
 			opaque.AddObjectFlagsExcludedMask( SceneObjectFlags.ExcludeGameLayer );
 
-			setup.AddHook( "Managed: AfterTransparent", Stage.AfterTransparent, color, depth );
-			setup.AddHook( "Managed: AfterViewModel", Stage.AfterViewmodel, color, depth );
+			if ( hooks ) HookLayers.Add( view, "Managed: AfterTransparent", Stage.AfterTransparent, viewport, color, depth );
+			if ( hooks ) HookLayers.Add( view, "Managed: AfterViewModel", Stage.AfterViewmodel, viewport, color, depth );
 
 			// Translucent, after the managed hooks: these don't write depth so depth-based effects there (e.g. depth of field)
 			// would composite blurred background over them
@@ -258,34 +260,45 @@ internal sealed class StandardPipeline
 		//
 		var exposureColor = color;
 		var exposureViewport = viewport;
+		var finalColor = setup.m_hFinalColor;
+		var resolveToFinal = setup.m_bResolveToFinal;
+		var presentColor = NativeRenderPipeline.NoTarget;
 
-		setup.AddUpscaler();
-		color = setup.m_hColor;
-		depth = setup.m_hDepth;
-		viewport = setup.m_viewport;
+		var upscaling = setup.m_nUpscalerMode != 0;
+		if ( upscaling )
+		{
+			Upscaler.Add( setup, color, setup.m_skyViewport );
+			color = setup.m_hUpscaleColor;
+			depth = setup.m_hUpscaleDepth;
+			viewport = setup.m_upscaleViewport;
+
+			// Everything after uses the non-MSAA full resolution output as its final colour; it's copied to the real one last
+			presentColor = finalColor;
+			finalColor = color;
+			resolveToFinal = false;
+		}
 
 		// Screen-space UI that wants post-processing applied to it (ScreenPanel.RenderTiming.BeforePostProcess). Costs a seed
 		// and composite pass on the HDR buffer, so the camera says whether it has any.
-		if ( pipelineAttributes.GetBoolValue( "enableEarlyUI", false ) )
+		if ( hooks && pipelineAttributes.GetBoolValue( "enableEarlyUI", false ) )
 		{
-			setup.AddUIHook( "Managed: EarlyUI", Stage.EarlyUI, color );
+			HookLayers.AddUI( view, "Managed: EarlyUI", Stage.EarlyUI, viewport, color );
 		}
 
-		setup.AddHook( "Managed: BeforePostProcessing", Stage.BeforePostProcess, color, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: BeforePostProcessing", Stage.BeforePostProcess, viewport, color, depth );
 
 		setup.AddAutoExposure( exposureColor, exposureViewport );
 
-		setup.AddHook( "Managed: Tonemapping", Stage.Tonemapping, color, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: Tonemapping", Stage.Tonemapping, viewport, color, depth );
 
 		// The rest is SDR for now: if we rendered in HDR, copy to the final output
-		var finalColor = setup.m_hFinalColor;
-		if ( setup.m_bResolveToFinal )
+		if ( resolveToFinal )
 		{
 			var layer = view.AddBlitTextureToTargetLayer( "ResolveHDRToFinalSDR", color, viewport, viewport, finalColor, RenderColorSpace.RENDER_SRGB );
 			layer.m_nClearFlags = (int)(ClearFlags.Color | ClearFlags.Depth | ClearFlags.Stencil);
 		}
 
-		setup.AddHook( "Managed: AfterPostProcessing", Stage.AfterPostProcess, finalColor, depth );
+		if ( hooks ) HookLayers.Add( view, "Managed: AfterPostProcessing", Stage.AfterPostProcess, viewport, finalColor, depth );
 
 		//
 		// Overlays after post processing (gizmos, debug text), with and without depth
@@ -293,13 +306,13 @@ internal sealed class StandardPipeline
 		AddScreenOverlay( view, "OverlayWithDepth", OverlayWithDepthMatch, viewport, shadingMode, finalColor, depth, colorSpace );
 		AddScreenOverlay( view, "OverlayWithoutDepth", OverlayWithoutDepthMatch, viewport, shadingMode, finalColor, NativeRenderPipeline.NoTarget, colorSpace );
 
-		setup.AddVisualizeQuadOverdraw();
+		if ( quadOverdraw ) QuadOverdraw.AddVisualize( view, viewport, finalColor, colorSpace );
 
 		// Screen-space UI (ScreenPanel.RenderTiming.AfterPostProcess)
-		if ( pipelineAttributes.GetBoolValue( "enableUI", true ) )
+		if ( hooks && pipelineAttributes.GetBoolValue( "enableUI", true ) )
 		{
-			setup.AddUIHook( "Managed: UI", Stage.UI, finalColor );
-			setup.AddHook( "Managed: AfterUI", Stage.AfterUI, finalColor, depth );
+			HookLayers.AddUI( view, "Managed: UI", Stage.UI, viewport, finalColor );
+			HookLayers.Add( view, "Managed: AfterUI", Stage.AfterUI, viewport, finalColor, depth );
 		}
 
 		// Objects drawn over the UI
@@ -316,8 +329,11 @@ internal sealed class StandardPipeline
 		}
 
 		// Upscaled: copy the full resolution output into the real one
-		setup.AddUpscalerPresent();
-		finalColor = setup.m_hFinalColor;
+		if ( upscaling && presentColor != NativeRenderPipeline.NoTarget )
+		{
+			view.AddBlitTextureToTargetLayer( "Upscaler Present", finalColor, viewport, viewport, presentColor, RenderColorSpace.RENDER_SRGB );
+			finalColor = presentColor;
+		}
 
 		//
 		// Debug visualizations over the final colour

@@ -39,6 +39,11 @@ native class ISceneLayer as NativeEngine.ISceneLayer
     void SetFadeTargetLayer( ISceneLayer pLayer );
     void SetTonemapOverrideScaleValue( float flScale );
 
+    inline void SetShaderMode( StringToken nShaderMode )
+    {
+        self->m_shaderMode = nShaderMode;
+    }
+
     inline void SetWireframeOverride()
     {
         this->SetWireframeOverride();

@@ -24,6 +24,11 @@ internal sealed class NativeRenderPipeline : INativeRenderPipeline
 	/// </summary>
 	public const uint RenderTargetInput = 1;
 
+	/// <summary>
+	/// A layer attribute bound to a render target the layer writes outside its outputs, like a UAV (<c>SL_RENDER_TARGET_OUTPUT</c>).
+	/// </summary>
+	public const uint RenderTargetOutput = 2;
+
 	readonly ConcurrentQueue<StandardPipeline> standardPool = new();
 	readonly ConcurrentQueue<Skybox3DPipeline> skyboxPool = new();
 	readonly ConcurrentDictionary<IntPtr, object> active = new();
@@ -53,6 +58,9 @@ internal sealed class NativeRenderPipeline : INativeRenderPipeline
 		else if ( pipeline is Skybox3DPipeline skybox ) skyboxPool.Enqueue( skybox );
 	}
 
+	public ISceneLayer AddUIHook( string name, Stage stage, ISceneView view, RenderViewport viewport, SceneViewRenderTargetHandle color )
+		=> HookLayers.AddUI( view, name, stage, viewport, color );
+
 	public void Shutdown()
 	{
 		standardPool.Clear();
@@ -68,9 +76,9 @@ internal sealed class NativeRenderPipeline : INativeRenderPipeline
 	{
 		RuntimeHelpers.RunClassConstructor( typeof( SharedPasses ).TypeHandle );
 
-		foreach ( var type in typeof( NativeProceduralLayer ).Assembly.GetTypes() )
+		foreach ( var type in typeof( NativeRenderPipeline ).Assembly.GetTypes() )
 		{
-			if ( type.IsSubclassOf( typeof( NativeProceduralLayer ) ) )
+			if ( type.Namespace == typeof( NativeRenderPipeline ).Namespace )
 				RuntimeHelpers.RunClassConstructor( type.TypeHandle );
 		}
 	}

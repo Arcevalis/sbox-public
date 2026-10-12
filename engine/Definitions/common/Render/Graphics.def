@@ -3,12 +3,4 @@ native struct ManagedRenderSetup_t;
 
 native enum ManagedRenderHookStage is Sandbox.Rendering.Stage;
 
-managed static class Sandbox.Graphics
-{
-	//
-	// Called multiple times per rendering, for each stage.
-	//
-	void OnLayer( int renderHookStage, ManagedRenderSetup_t setup );
-}
-
 
