@@ -44,6 +44,8 @@ public class AppSystem
 
 	public virtual void Init()
 	{
+		InstallRenderers();
+
 		GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
 		try
 		{
@@ -57,6 +59,15 @@ public class AppSystem
 			}
 			throw;
 		}
+	}
+
+	/// <summary>
+	/// Native's rendering pipeline gets its layers from Sandbox.SceneRenderer, which also renders cameras when
+	/// <c>r_managed_scene</c> is on. It references the engine, so it's registered with it here.
+	/// </summary>
+	protected static void InstallRenderers()
+	{
+		SceneRenderer.EngineHooks.Install();
 	}
 
 	void SetupEnvironment()
@@ -351,6 +362,8 @@ public class AppSystem
 
 	protected void InitGame( AppSystemCreateInfo createInfo, string commandLine = null )
 	{
+		InstallRenderers();
+
 		commandLine ??= System.Environment.CommandLine;
 		commandLine = commandLine.Replace( ".dll", ".exe" ); // uck
 

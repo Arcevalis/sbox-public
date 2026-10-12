@@ -172,18 +172,11 @@ public class PanelAppSystem : AppSystem
 	/// <summary>
 	/// The render pipeline's layers hold shaders and materials in static fields, and creating
 	/// those asserts the main thread - but in an app like this their first touch is on a render
-	/// job. Run every layer's static constructor here, where it's allowed.
+	/// job. Make them here, where it's allowed.
 	/// </summary>
 	static void WarmRenderLayers()
 	{
-		var baseType = typeof( Sandbox.Rendering.ProceduralRenderLayer );
-
-		foreach ( var type in baseType.Assembly.GetTypes() )
-		{
-			if ( !baseType.IsAssignableFrom( type ) ) continue;
-
-			System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor( type.TypeHandle );
-		}
+		Sandbox.Rendering.RenderPipeline.WarmUp();
 
 		// Native's shadow callback reads its convar mid-render, so its compute shader would be made there otherwise
 		System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor( typeof( Sandbox.Rendering.ContactShadows ).TypeHandle );

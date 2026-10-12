@@ -1,0 +1,67 @@
+#include "renderingpipelines/renderpipelinesetup.h"
+
+//
+// One view's standard (or 3D skybox) pipeline: native set up its targets and attributes, and
+// Sandbox.SceneRenderer's NativeRenderPipeline adds its layers
+//
+native class CRenderPipelineSetup as NativeEngine.CRenderPipelineSetup
+{
+	ISceneView m_pView;
+	CRenderAttributes m_pAttributes;
+
+	RenderViewport m_viewport;
+	RenderViewport m_skyViewport;
+	RenderViewport m_screenViewport;
+
+	HSceneViewRenderTarget m_hColor;
+	HSceneViewRenderTarget m_hDepth;
+	HSceneViewRenderTarget m_hFinalColor;
+	HSceneViewRenderTarget m_hRefractColor;
+
+	RenderMultisampleType_t m_nMSAA;
+	RenderColorSpace_t m_colorSpace;
+
+	int m_nClearFlags;
+	Vector4 m_vClearColor;
+
+	bool m_bToolsView;
+	bool m_bRenderSky;
+	bool m_bRenderOpaque;
+	bool m_bRenderDynamicObjects;
+	bool m_bDrawOverlays;
+	bool m_bRenderDecals;
+	bool m_bRenderTranslucent;
+	bool m_bWireframe;
+	bool m_bUpscaling;
+	bool m_bResolveToFinal;
+	bool m_bDepthPrepass;
+	float m_flDepthPrepassCullThreshold;
+
+	void AddClearQuadOverdraw();
+	void AddVisualizeQuadOverdraw();
+	void AddVolumetricFog();
+	bool Add3DSkybox();
+	void AddShaderIDDebug();
+	void AddUpscaler();
+	void AddUpscalerPresent();
+	void AddAutoExposure( HSceneViewRenderTarget hColor, RenderViewport viewport );
+	ISceneLayer AddHook( string pName, ManagedRenderHookStage stage, HSceneViewRenderTarget hColor, HSceneViewRenderTarget hDepth );
+	ISceneLayer AddUIHook( string pName, ManagedRenderHookStage stage, HSceneViewRenderTarget hColor );
+	void SortByRenderOrder( ISceneLayer pLayer );
+	bool RendersTag( StringToken tag );
+
+	inline uint GetShadingMode()
+	{
+		return self->m_shadingMode.GetHashCode();
+	}
+}
+
+//
+// What native's rendering pipelines call. The pipeline itself is in Sandbox.SceneRenderer, which installs it at startup.
+//
+managed static class Sandbox.Rendering.RenderPipeline
+{
+	void AddLayersToView( CRenderPipelineSetup setup );
+	void AddSkybox3DLayersToView( CRenderPipelineSetup setup );
+	void OnSceneViewSubmitted( ISceneView view );
+}

@@ -190,6 +190,7 @@ internal static class Bootstrap
 			{
 				ReflectionUtility.RunAllStaticConstructors( "Sandbox.System" );
 				ReflectionUtility.RunAllStaticConstructors( "Sandbox.Engine" );
+				Rendering.RenderPipeline.WarmUp();
 			}
 			GameWindow.Current?.UpdateStartupProgress( 0.6f, "Loading built-in projects" );
 
