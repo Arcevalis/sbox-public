@@ -3293,6 +3293,7 @@ public sealed partial class PolygonMesh : IJsonConvert
 		{
 			int nNumSubsetLoopEdges = subSetLoopEdges.Count;
 			loopEdges.Clear();
+			index = 0;
 			loopEdges.EnsureCapacity( nNumSubsetLoopEdges );
 			for ( int iEdge = 0; iEdge < nNumSubsetLoopEdges; ++iEdge )
 			{
