@@ -62,6 +62,11 @@ internal static class Bootstrap
 			Logging.OnException = ErrorReporter.ReportException;
 			Logging.PrintToConsole = Application.IsHeadless;
 
+			if ( Application.IsEditor || CommandLine.HasSwitch( "-mcp" ) )
+			{
+				Editor.Mcp.LogBuffer.StartCapture();
+			}
+
 			{
 				using var timerFs = StartupTiming?.ScopeTimer( "FilesystemInit" );
 
@@ -300,6 +305,15 @@ internal static class Bootstrap
 			// Networking bootstrap
 			//
 			Networking.Bootstrap();
+
+			// Local automation uses a separate same-user pipe for every process. Games opt in;
+			// editors follow the project's AI preferences, including when launched with -mcp.
+			if ( Application.IsEditor
+				? Project.Current?.Config.AI?.EnableMcpCommunication != false
+				: CommandLine.HasSwitch( "-mcp" ) )
+			{
+				Editor.Mcp.McpPipeServer.Start();
+			}
 
 			if ( Application.IsJoinLocal )
 			{

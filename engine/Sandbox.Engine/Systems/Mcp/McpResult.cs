@@ -2,6 +2,7 @@ using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 namespace Editor.Mcp;
 
@@ -142,6 +143,24 @@ public sealed class McpResult
 	static string Serialize( object value )
 	{
 		return JsonSerializer.Serialize( value, SerializeOptions );
+	}
+
+	/// <summary>
+	/// Materialize script output without putting collectible anonymous types in the shared
+	/// serializer's metadata cache, which would keep every script assembly alive indefinitely.
+	/// </summary>
+	internal static McpResult ScriptResult( object value )
+	{
+		if ( value is McpResult result ) return result;
+		if ( value is Bitmap bitmap ) return Image( bitmap );
+		if ( value is string text ) return Text( text );
+		if ( value is null ) return Text( "ok" );
+
+		var options = new JsonSerializerOptions( SerializeOptions )
+		{
+			TypeInfoResolver = new DefaultJsonTypeInfoResolver()
+		};
+		return Text( JsonSerializer.Serialize( value, options ) );
 	}
 
 	/// <summary>

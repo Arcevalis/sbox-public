@@ -3,8 +3,8 @@ using System;
 namespace Editor.Mcp;
 
 /// <summary>
-/// Expose a static method as an MCP tool, callable by AI agents connected to the editor's
-/// MCP server. The method name (converted to snake_case) becomes the tool name unless one
+/// Expose a static method as an MCP tool, callable by AI agents connected through sbox-cli.
+/// The method name (converted to snake_case) becomes the tool name unless one
 /// is given here, and the XML summary becomes the tool description the agent reads.
 /// Parameters become the tool's input schema - describe them with [Description]. Tools are
 /// invoked on the main thread and can return a Task to be async. Return values get serialized
@@ -28,10 +28,16 @@ public class McpToolAttribute : Attribute
 	/// </summary>
 	public McpToolHints Hints { get; set; }
 
+	/// <summary>
+	/// Use the method's snake_case name as the tool name.
+	/// </summary>
 	public McpToolAttribute()
 	{
 	}
 
+	/// <summary>
+	/// Expose the method with an explicit tool name.
+	/// </summary>
 	public McpToolAttribute( string name )
 	{
 		Name = name;
@@ -44,6 +50,9 @@ public class McpToolAttribute : Attribute
 [Flags]
 public enum McpToolHints
 {
+	/// <summary>
+	/// No additional promises about the tool's behavior.
+	/// </summary>
 	None = 0,
 
 	/// <summary>
@@ -63,11 +72,17 @@ public static class McpTool
 	/// </summary>
 	public class ReadOnlyAttribute : McpToolAttribute
 	{
+		/// <summary>
+		/// Mark a tool as read-only, using its method name.
+		/// </summary>
 		public ReadOnlyAttribute()
 		{
 			Hints = McpToolHints.ReadOnly;
 		}
 
+		/// <summary>
+		/// Mark a tool as read-only with an explicit tool name.
+		/// </summary>
 		public ReadOnlyAttribute( string name ) : base( name )
 		{
 			Hints = McpToolHints.ReadOnly;
@@ -96,6 +111,9 @@ public class McpToolsetAttribute : Attribute
 	/// </summary>
 	public string Description { get; set; }
 
+	/// <summary>
+	/// Describe a group of related tools for discovery.
+	/// </summary>
 	public McpToolsetAttribute( string name, string description = null )
 	{
 		Name = name;

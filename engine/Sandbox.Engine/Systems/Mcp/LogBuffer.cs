@@ -21,14 +21,17 @@ internal static class LogBuffer
 	/// </summary>
 	public readonly record struct Entry( long Sequence, LogEvent Event );
 
-	public static void StartCapture()
+	/// <summary>
+	/// Subscribe once to engine log messages for local automation.
+	/// </summary>
+	internal static void StartCapture()
 	{
 		if ( capturing )
 			return;
 
 		capturing = true;
 
-		EditorUtility.AddLogger( OnLog );
+		Sandbox.Diagnostics.Logging.OnMessage += OnLog;
 	}
 
 	static void OnLog( LogEvent e )
@@ -53,7 +56,7 @@ internal static class LogBuffer
 	/// <summary>
 	/// Everything buffered so far, oldest first.
 	/// </summary>
-	public static Entry[] Snapshot()
+	internal static Entry[] Snapshot()
 	{
 		lock ( sync )
 		{

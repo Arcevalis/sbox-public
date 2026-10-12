@@ -1,3 +1,5 @@
+using Sandbox.Engine;
+using Sandbox.Internal;
 using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -10,12 +12,24 @@ namespace Editor.Mcp;
 
 /// <summary>
 /// Finds and invokes <see cref="McpToolAttribute"/> methods. Discovery goes through
-/// EditorTypeLibrary, so tools defined in addons and hotloaded assemblies appear and
+/// the editor or game TypeLibrary, so tools defined in addons and hotloaded assemblies appear and
 /// disappear automatically - nothing registers by hand.
 /// </summary>
 internal static class ToolRegistry
 {
 	static readonly Logger log = new( "MCP" );
+
+	// Privileged built-ins must not enter the game's public TypeLibrary: addons can invoke
+	// anything in that library. These descriptions belong exclusively to the local MCP host.
+	// Dynamic descriptions let this private registry invoke internal methods without [Expose].
+	static readonly Lazy<MethodDescription[]> Builtins = new( () =>
+	{
+		var library = new TypeLibrary();
+		return new[] { typeof( TopLevelTools ), typeof( InstanceTools ), typeof( ScriptTools ) }
+			.SelectMany( type => TypeDescription.Create( library, type, true, null ).Methods )
+			.Where( method => method.GetCustomAttribute<McpToolAttribute>() is not null )
+			.ToArray();
+	} );
 
 	/// <summary>
 	/// How long a queued call waits for the main thread to pick it up before reporting the
@@ -26,11 +40,15 @@ internal static class ToolRegistry
 	/// <summary>
 	/// Every available tool, sorted by name. Duplicate names get skipped with a warning.
 	/// </summary>
-	public static IEnumerable<(string Name, MethodDescription Method)> All()
+	internal static IEnumerable<(string Name, MethodDescription Method)> All()
 	{
 		var found = new SortedDictionary<string, MethodDescription>( StringComparer.Ordinal );
 
-		foreach ( var (method, attribute) in EditorTypeLibrary.GetMethodsWithAttribute<McpToolAttribute>() )
+		var dynamicTools = (TypeLibrary.Editor ?? GlobalContext.Game.TypeLibrary)?.GetMethodsWithAttribute<McpToolAttribute>()
+			?? [];
+		var builtins = Builtins.Value.Select( method => (Method: method, Attribute: method.GetCustomAttribute<McpToolAttribute>()) );
+
+		foreach ( var (method, attribute) in builtins.Concat( dynamicTools ) )
 		{
 			var name = attribute.Name ?? ToSnakeCase( method.Name );
 
@@ -48,7 +66,7 @@ internal static class ToolRegistry
 	/// rest of the registry is reached through search_tools and call_tool, so the list never
 	/// goes stale as code hotloads.
 	/// </summary>
-	public static JsonNode ListJson()
+	internal static JsonNode ListJson()
 	{
 		var tools = new JsonArray();
 
@@ -84,7 +102,7 @@ internal static class ToolRegistry
 	/// One tool as it appears in tools/list - name, toolset, description and a json schema
 	/// built from its parameters.
 	/// </summary>
-	public static JsonObject ToolJson( string name, MethodDescription method )
+	internal static JsonObject ToolJson( string name, MethodDescription method )
 	{
 		var properties = new JsonObject();
 		var required = new JsonArray();
@@ -158,7 +176,7 @@ internal static class ToolRegistry
 	/// <summary>
 	/// Invoke a tool on the main thread and shape whatever it returns into an MCP tool result.
 	/// </summary>
-	public static async Task<JsonNode> Call( string name, JsonObject arguments )
+	internal static async Task<JsonNode> Call( string name, JsonObject arguments )
 	{
 		try
 		{
@@ -177,7 +195,7 @@ internal static class ToolRegistry
 	/// Find a tool, bind its arguments and run it on the main thread, returning the method's
 	/// raw return value.
 	/// </summary>
-	public static async Task<object> Invoke( string name, JsonObject arguments )
+	internal static async Task<object> Invoke( string name, JsonObject arguments )
 	{
 		name = name?.Trim() ?? "";
 
@@ -482,10 +500,19 @@ internal static class ToolRegistry
 	{
 		var completion = new TaskCompletionSource<object>( TaskCreationOptions.RunContinuationsAsynchronously );
 		var started = 0;
+		var session = McpSession.Current;
+		var cancellation = session?.Cancellation ?? default;
 
 		MainThread.Queue( () =>
 		{
-			Interlocked.Exchange( ref started, 1 );
+			if ( Interlocked.CompareExchange( ref started, 1, 0 ) != 0 || cancellation.IsCancellationRequested )
+			{
+				completion.TrySetCanceled();
+				return;
+			}
+
+			using var scope = GlobalContext.GameScope();
+			using var sessionScope = McpSession.Enter( session );
 
 			try
 			{
@@ -501,16 +528,12 @@ internal static class ToolRegistry
 			}
 		} );
 
-		// A call the main thread never picks up means the editor is stuck - probably a modal
-		// dialog or a long blocking operation. Saying so beats letting the client time out silently.
-		if ( await Task.WhenAny( completion.Task, Task.Delay( PickupTimeout ) ) != completion.Task
-			&& Interlocked.CompareExchange( ref started, 0, 0 ) == 0 )
+		// Once a request times out or disconnects, never apply its queued mutation later.
+		if ( await Task.WhenAny( completion.Task, Task.Delay( PickupTimeout, cancellation ) ) != completion.Task
+			&& Interlocked.CompareExchange( ref started, 2, 0 ) == 0 )
 		{
-			// The call still runs when the editor unblocks, but nobody is listening for the
-			// result anymore - if it fails, put that in the console where read_console finds it
-			_ = LogLateFailure( name, completion.Task );
-
-			throw new TimeoutException( $"The editor main thread didn't pick this call up within {PickupTimeout.TotalSeconds:0} seconds - it's probably blocked by a modal dialog or a long operation. The call stays queued and runs when the editor unblocks, but its result won't be reported." );
+			cancellation.ThrowIfCancellationRequested();
+			throw new TimeoutException( $"The main thread didn't pick this call up within {PickupTimeout.TotalSeconds:0} seconds. The queued call was cancelled." );
 		}
 
 		var value = await completion.Task;
@@ -525,20 +548,6 @@ internal static class ToolRegistry
 		}
 
 		return value;
-	}
-
-	static async Task LogLateFailure( string name, Task<object> pending )
-	{
-		try
-		{
-			// Async tools hand back a task - their failure happens inside it
-			if ( await pending is Task inner )
-				await inner;
-		}
-		catch ( Exception e )
-		{
-			log.Warning( $"'{name}' ran after the pickup timeout and failed: {e.Message}" );
-		}
 	}
 
 	/// <summary>

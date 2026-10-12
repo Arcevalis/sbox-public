@@ -173,6 +173,8 @@ public class AppSystem
 		startupWindow?.Dispose();
 		startupWindow = null;
 
+		Editor.Mcp.McpPipeServer.Stop();
+
 		// Tag crash reports during shutdown so they can be filtered in Sentry
 		NativeErrorReporter.SetTag( "shutdown_crash", "true" );
 
