@@ -15,18 +15,34 @@ internal partial class Test( bool noBuild = true, string filter = null )
 	/// </summary>
 	public const string PullRequestFilter = "TestCategory!=LiveBackend&TestCategory!=Slow";
 
-	private record TestProject( string Name, bool NeedsEngine );
+	/// <param name="Name">The project under engine/Tests/.</param>
+	/// <param name="NeedsEngine">Whether FACEPUNCH_ENGINE is set for it.</param>
+	/// <param name="Shard">Label for one part of a project split across processes, or null.</param>
+	/// <param name="ShardFilter">Which of the project's tests this part runs.</param>
+	private record TestProject( string Name, bool NeedsEngine, string Shard = null, string ShardFilter = null )
+	{
+		public string DisplayName => Shard is null ? Name : $"{Name} ({Shard})";
+	}
+
+	/// <summary>
+	/// The Integration tests that compile whole addons (~20s together) or export a standalone game
+	/// (~20s, master only). They run in their own process alongside the rest. Each process boots its
+	/// own engine (~10s).
+	/// </summary>
+	private const string IntegrationCompileTests = "FullyQualifiedName~ShaderGraphTests.|FullyQualifiedName~AddonTests.BuiltInTest.|FullyQualifiedName~StandaloneTests.";
+	private const string IntegrationOtherTests = "FullyQualifiedName!~ShaderGraphTests.&FullyQualifiedName!~AddonTests.BuiltInTest.&FullyQualifiedName!~StandaloneTests.";
 
 	/// <summary>
 	/// The test projects. They run at the same time, so the whole run takes as long as the slowest one
-	/// (Sandbox.Test.Integration). Sandbox.Test.Unit and Sandbox.Test.Text run with FACEPUNCH_ENGINE
+	/// (Sandbox.Test.Integration, which is split in two). Sandbox.Test.Unit and Sandbox.Test.Text run with FACEPUNCH_ENGINE
 	/// removed from their environment: those tiers must work without a built native engine, so a test
 	/// that sneaks in a native dependency fails here rather than on someone's bare checkout.
 	/// New test projects under engine/Tests/ need to be added to this list.
 	/// </summary>
 	private static readonly TestProject[] Projects =
 	[
-		new( "Sandbox.Test.Integration", NeedsEngine: true ),
+		new( "Sandbox.Test.Integration", NeedsEngine: true, Shard: "most", ShardFilter: IntegrationOtherTests ),
+		new( "Sandbox.Test.Integration", NeedsEngine: true, Shard: "compiles and exports", ShardFilter: IntegrationCompileTests ),
 		new( "Sandbox.Test.Unit", NeedsEngine: false ),
 		new( "Sandbox.Test.Engine", NeedsEngine: true ),
 		new( "Sandbox.Test.Text", NeedsEngine: false ),
@@ -47,7 +63,7 @@ internal partial class Test( bool noBuild = true, string filter = null )
 			string engineDir = Path.Combine( rootDir, "engine" );
 			string gameDir = Path.Combine( rootDir, "game" );
 
-			Log.Info( $"Running {Projects.Length} test projects at the same time..." );
+			Log.Info( $"Running {Projects.Length} test processes at the same time..." );
 
 			var tasks = Projects
 				.Select( project => Task.Factory.StartNew( () => RunTestProject( project, engineDir, gameDir ), TaskCreationOptions.LongRunning ) )
@@ -69,13 +85,13 @@ internal partial class Test( bool noBuild = true, string filter = null )
 			Log.Info( "Test summary:" );
 			foreach ( var result in results.OrderBy( x => Array.IndexOf( Projects, x.Project ) ) )
 			{
-				Log.Info( $"  {result.Project.Name}: {(result.Success ? "passed" : "FAILED")} in {result.Duration.TotalSeconds:F0}s" );
+				Log.Info( $"  {result.Project.DisplayName}: {(result.Success ? "passed" : "FAILED")} in {result.Duration.TotalSeconds:F0}s" );
 			}
 
 			var failed = results.Where( x => !x.Success ).ToList();
 			foreach ( var result in failed )
 			{
-				Log.Error( $"{result.Project.Name} tests failed!" );
+				Log.Error( $"{result.Project.DisplayName} tests failed!" );
 			}
 
 			if ( failed.Count > 0 )
@@ -101,7 +117,8 @@ internal partial class Test( bool noBuild = true, string filter = null )
 
 		// --no-build: BuildManaged already compiled all projects in Sandbox-Engine.slnx (including test projects).
 		var noBuildFlag = noBuild ? " --no-build" : string.Empty;
-		var filterFlag = string.IsNullOrEmpty( filter ) ? string.Empty : $" --filter \"{filter}\"";
+		var filters = new[] { filter, project.ShardFilter }.Where( x => !string.IsNullOrEmpty( x ) ).Select( x => $"({x})" ).ToArray();
+		var filterFlag = filters.Length == 0 ? string.Empty : $" --filter \"{string.Join( "&", filters )}\"";
 		var testArgs = $"test {csproj} --logger \"console;verbosity=normal;consoleLoggerParameters=ErrorsOnly\" -c Release{noBuildFlag}{filterFlag}";
 
 		var output = new List<string>();
@@ -167,8 +184,8 @@ internal partial class Test( bool noBuild = true, string filter = null )
 
 		Log.Info( "" );
 		Log.Info( project.NeedsEngine
-			? $"===== {project.Name} ({result.Duration.TotalSeconds:F0}s) ====="
-			: $"===== {project.Name} ({result.Duration.TotalSeconds:F0}s, FACEPUNCH_ENGINE removed - this tier must not need the native engine) =====" );
+			? $"===== {project.DisplayName} ({result.Duration.TotalSeconds:F0}s) ====="
+			: $"===== {project.DisplayName} ({result.Duration.TotalSeconds:F0}s, FACEPUNCH_ENGINE removed - this tier must not need the native engine) =====" );
 
 		foreach ( var line in result.Output )
 		{
@@ -178,7 +195,7 @@ internal partial class Test( bool noBuild = true, string filter = null )
 		if ( result.Timings.Count > 0 )
 		{
 			Log.Info( "" );
-			Log.Info( $"Slowest tests ({project.Name}):" );
+			Log.Info( $"Slowest tests ({project.DisplayName}):" );
 			foreach ( var (name, ms) in result.Timings.OrderByDescending( x => x.Ms ).Take( SlowestTestCount ) )
 			{
 				Log.Info( $"  {ms / 1000.0,7:F2}s  {name}" );
@@ -188,7 +205,7 @@ internal partial class Test( bool noBuild = true, string filter = null )
 		if ( !result.Success )
 		{
 			Log.Info( "" );
-			Log.Info( $"Failed Tests Summary ({project.Name}):" );
+			Log.Info( $"Failed Tests Summary ({project.DisplayName}):" );
 			Log.Info( "" );
 
 			foreach ( var failedTest in result.FailedTests )
