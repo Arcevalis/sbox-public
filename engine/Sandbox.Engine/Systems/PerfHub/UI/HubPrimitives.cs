@@ -678,7 +678,7 @@ internal sealed class HubHistogram : Panel
 		Array.Clear( _counts );
 		var n = Math.Min( summary.Frames, frames.Count );
 		for ( int i = 0; i < n; i++ )
-			_counts[Math.Clamp( (int)(frames.FrameMs( i ) / range * Buckets ), 0, Buckets - 1 )]++;
+			_counts[Math.Clamp( (int)(frames.FrameMs( i ) / range * Buckets), 0, Buckets - 1 )]++;
 
 		var most = 1;
 		foreach ( var c in _counts ) most = Math.Max( most, c );
