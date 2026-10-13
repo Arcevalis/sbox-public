@@ -22,13 +22,13 @@ public class ShutdownTest
 	}
 
 	/// <summary>
-	/// Shutdown and re-init twice. Other tests still need the engine, so it ends initialized.
+	/// Shut down and re-init. The engine was already booted once by AssemblyInitialize and is shut
+	/// down again by AssemblyCleanup, so this covers repeated cycles; each extra one costs ~8s.
+	/// Other tests still need the engine, so it ends initialized.
 	/// </summary>
 	[TestMethod]
-	public void Multiple()
+	public void ShutdownAndReinit()
 	{
-		TestInit.TestAppSystem.Shutdown();
-		Reinit();
 		TestInit.TestAppSystem.Shutdown();
 		Reinit();
 	}
