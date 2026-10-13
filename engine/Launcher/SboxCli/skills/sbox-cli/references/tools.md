@@ -25,10 +25,20 @@ Found through search, but always present:
 | `run_csharp` | Compile and run a C# method body inside the process. See [run-csharp.md](run-csharp.md) |
 | `instance_console_command` | Run one engine console command with local-console privileges (can quit the instance) |
 
+## Performance (editor and game)
+
+**`perf`** — the numbers the performance hub (`perf_hub`) shows, as data, with the hub closed.
+Don't open the hub and screenshot it. Times are ms, memory MiB.
+`perf_overview` (start here: frame stats, what limits the frame rate, hitches, flagged issues,
+top CPU and GPU costs), `perf_frames`, `perf_cpu`, `perf_gpu`, `perf_memory` (`allocationSeconds`
+tracks allocations by type), `perf_rendering`, `perf_network` (`seconds` records messages),
+`perf_ui`. The first GPU read takes about a second while timings warm up.
+
 ## Editor toolsets
 
 These ship with the editor (the built-in `tools` addon and Hammer) and are present in any editor
-session. Games only have the entry points above plus whatever their own code registers.
+session. Games only have the entry points above, the `perf` tools, and whatever their own code
+registers.
 
 **`scene`** — open scenes, hierarchy, objects and components, editor camera.
 `list_scenes`, `scene_tree`, `find_game_objects`, `get_game_object`, `create_game_object`,
