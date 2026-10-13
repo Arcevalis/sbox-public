@@ -32,7 +32,11 @@ public partial class PanelWindow : IDisposable
 		if ( core is null ) return null;
 		if ( core.Facade is PanelWindow window ) return window;
 
-		return new PanelWindow( core );
+		// The engine window owns its facade, which lives exactly as long as it does - handing it over here is what
+		// tells callers they aren't the ones to dispose it
+		window = new PanelWindow( core );
+		core.Facade = window;
+		return window;
 	}
 
 	/// <summary>
@@ -41,7 +45,6 @@ public partial class PanelWindow : IDisposable
 	PanelWindow( SurfaceWindow core )
 	{
 		Core = core;
-		Core.Facade = this;
 	}
 
 	/// <summary>
