@@ -79,6 +79,20 @@ client disconnects. Restart the client's server after the editor restarts.
 Editors accept connections unless **Project Settings > AI > Enable MCP Communication** is off.
 If the user has the project open, attach to it — never launch a second copy.
 
+### New projects
+
+Don't write a `.sbproj` by hand. Create the project from a template, the same way the launcher
+does, then open it:
+
+```bash
+sbox-cli --templates                                   # names, titles and descriptions
+sbox-cli --new "My Game" --template game.minimal --in C:/projects
+sbox-cli --project C:/projects/my_game                 # opens the editor; it closes when the CLI exits
+```
+
+`--new` makes a folder named after the project's ident (`my_game`) and prints the `.sbproj` path.
+Without `--template` it uses the launcher's default; without `--in`, the current directory.
+
 ## 3. Work loop
 
 1. **Orient.** Call `editor_status` (editor) or `instance_status` (game). Confirm the project, the

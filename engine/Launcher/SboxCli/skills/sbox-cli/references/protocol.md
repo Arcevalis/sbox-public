@@ -11,6 +11,8 @@ sbox-cli --project [project]        Attach to the project's editor, or open and 
 sbox-cli --game <project|ident>     Start a game and own its lifetime
 sbox-cli --call <tool> [json]       Call one tool on a running instance, print the result, exit
 sbox-cli --list                     Print running instances as JSON and exit
+sbox-cli --new <title>              Create a project from a template [--template <name>] [--in <folder>]
+sbox-cli --templates                List the project templates as JSON
 sbox-cli --skill [name[/file]]      List the agent skills for this installation, or print one
 sbox-cli --skill-install [target]   Install the s&box bootstrap skill for your agents
 sbox-cli --skill-uninstall [target] Remove it again

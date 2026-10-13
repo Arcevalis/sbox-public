@@ -20,6 +20,11 @@ internal static class Program
 		sbox-cli --call <tool> [json]       Call one tool on a running instance, print the result, exit
 		sbox-cli --list                     Print running instances as JSON and exit
 
+		sbox-cli --new <title>              Create a project in a new folder named after its ident
+		         [--template <name>]        Template to start from (default: the launcher's first)
+		         [--in <folder>]            Where to create it (default: the current directory)
+		sbox-cli --templates                List the project templates as JSON
+
 		sbox-cli --skill [name[/file]]      List the agent skills for this installation, or print one
 		sbox-cli --skill-install [target]   Install the s&box bootstrap skill for your agents
 		sbox-cli --skill-uninstall [target] Remove it again
@@ -68,6 +73,8 @@ internal static class Program
 				case "--skill-status": return Skills.Status();
 				case "--skill-install": return Skills.Install( options.Target );
 				case "--skill-uninstall": return Skills.Uninstall( options.Target );
+				case "--new": return Projects.Create( options );
+				case "--templates": return Projects.ListTemplates( options );
 			}
 
 			if ( options.Mode == "--list" )

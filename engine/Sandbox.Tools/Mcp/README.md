@@ -33,6 +33,10 @@ game/bin/managed/sbox-cli.exe --connect 12345
 # Attach to the project's editor if it's open, otherwise launch and own one.
 game/bin/managed/sbox-cli.exe --project C:/projects/my-game
 
+# Create a project from a template, like the launcher does. Prints the new .sbproj path.
+game/bin/managed/sbox-cli.exe --templates
+game/bin/managed/sbox-cli.exe --new "My Game" --template game.minimal --in C:/projects
+
 # Launch and own a game.
 game/bin/managed/sbox-cli.exe --game C:/projects/my-game/my-game.sbproj
 game/bin/managed/sbox-cli.exe --game facepunch.sandbox
