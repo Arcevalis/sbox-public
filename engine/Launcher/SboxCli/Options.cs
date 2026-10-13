@@ -57,13 +57,17 @@ internal sealed class Options
 				case "--connect":
 				case "--list":
 				case "--help":
+				case "--skill":
+				case "--skill-status":
+				case "--skill-install":
+				case "--skill-uninstall":
 					if ( options.Mode is not null )
-						throw new ArgumentException( "Choose exactly one of --project, --game, --connect, --list or --help." );
+						throw new ArgumentException( "Choose one of --project, --game, --connect, --list, --skill, --skill-status, --skill-install, --skill-uninstall or --help." );
 
 					options.Mode = argument;
 					if ( argument == "--game" )
 						options.Target = Value();
-					else if ( argument is "--project" or "--connect" )
+					else if ( argument is "--project" or "--connect" or "--skill" or "--skill-install" or "--skill-uninstall" )
 						options.Target = OptionalValue();
 					break;
 				case "--call":

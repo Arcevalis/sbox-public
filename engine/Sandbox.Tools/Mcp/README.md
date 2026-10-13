@@ -1,7 +1,10 @@
 # MCP tools and sbox-cli
 
-For the agent-facing usage guide shipped beside the executable, see
-[`sbox-cli.md`](../../Launcher/SboxCli/sbox-cli.md). Run `sbox-cli --help` to find its installed path.
+For agent-facing usage, see the [`sbox-cli` skill](../../Launcher/SboxCli/skills/sbox-cli/SKILL.md),
+which ships beside the executable and is printed by `sbox-cli --skill sbox-cli`. Agents find it
+through a small bootstrap skill ([`bootstrap/sbox`](../../Launcher/SboxCli/bootstrap/sbox/SKILL.md),
+also published as `Facepunch/sbox-skills`), installed for the user. The editor offers it once when
+it finds Claude Code or Codex; Editor Preferences › AI Agents and `sbox-cli --skill-install` manage it.
 
 `game/bin/managed/sbox-cli.exe` is a .NET 10 console application that keeps one MCP connection
 open over stdin/stdout, or makes a single call with `--call`. It has no engine dependencies of its own. Editors expose a local

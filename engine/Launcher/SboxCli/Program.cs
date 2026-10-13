@@ -20,6 +20,16 @@ internal static class Program
 		sbox-cli --call <tool> [json]       Call one tool on a running instance, print the result, exit
 		sbox-cli --list                     Print running instances as JSON and exit
 
+		sbox-cli --skill [name[/file]]      List the agent skills for this installation, or print one
+		sbox-cli --skill-install [target]   Install the s&box bootstrap skill for your agents
+		sbox-cli --skill-uninstall [target] Remove it again
+		sbox-cli --skill-status             Show where it's installed, as JSON
+
+		Skill targets: claude (~/.claude/skills), agents (~/.agents/skills, used by Codex and
+		others). Without one, install covers the agents found on this machine and uninstall
+		covers all. The bootstrap tells agents to read --skill, so it never goes out of date;
+		only copies carrying its marker are replaced or removed.
+
 		A project is a .sbproj file or its directory. Without one, --connect, --project and --call
 		use the project containing the current directory; outside any project, --connect and --call
 		attach to the only running instance. --call can be combined with --connect <pid|project>.
@@ -38,7 +48,7 @@ internal static class Program
 		""";
 
 	// Output is for people and agents to read, so keep paths like s&box unescaped.
-	static readonly JsonSerializerOptions Readable = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+	internal static readonly JsonSerializerOptions Readable = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
 	static async Task<int> Main( string[] args )
 	{
@@ -48,8 +58,16 @@ internal static class Program
 			if ( options.Mode == "--help" )
 			{
 				Console.WriteLine( Help );
-				Console.WriteLine( $"\nUsage guide: {Path.Combine( AppContext.BaseDirectory, "sbox-cli.md" )}" );
+				Console.WriteLine( $"\nAgent skill: {Path.Combine( AppContext.BaseDirectory, "skills", "sbox-cli", "SKILL.md" )}" );
 				return 0;
+			}
+
+			switch ( options.Mode )
+			{
+				case "--skill": return Skills.Print( options.Target );
+				case "--skill-status": return Skills.Status();
+				case "--skill-install": return Skills.Install( options.Target );
+				case "--skill-uninstall": return Skills.Uninstall( options.Target );
 			}
 
 			if ( options.Mode == "--list" )
