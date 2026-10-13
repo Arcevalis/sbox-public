@@ -11,6 +11,20 @@ namespace ResourceTests;
 [TestClass]
 public class SoundCompressionTests
 {
+	static Compiled _toneOgg;
+
+	/// <summary>
+	/// The unmodified tone.ogg, compiled once and shared. Each compile spawns resourcecompiler.
+	/// Payload returns a copy, so tests can modify it.
+	/// </summary>
+	static Compiled ToneOgg()
+	{
+		if ( _toneOgg is not null ) return _toneOgg;
+
+		using var files = new Fixtures();
+		return _toneOgg = files.Compile( files.Copy( "tone.ogg" ) );
+	}
+
 	[TestMethod]
 	public void CompressesPcmAndFlacByDefaultWithoutChangingSources()
 	{
@@ -65,7 +79,7 @@ public class SoundCompressionTests
 	{
 		using var files = new Fixtures();
 		var path = files.Copy( "tone.ogg" );
-		var originalFrames = files.Compile( path ).Frames;
+		var originalFrames = ToneOgg().Frames;
 		var source = VorbisWithRate( File.ReadAllBytes( path ), rate );
 		File.WriteAllBytes( path, source );
 		File.WriteAllText( path + ".meta", JsonSerializer.Serialize( new { guid = Guid.NewGuid(), loop = true, start = 0.05, end = 0.1 } ) );
@@ -185,8 +199,7 @@ public class SoundCompressionTests
 	[DataRow( "high-rate" )]
 	public void FailedVorbisMixerFinishesInsteadOfRemainingAnActiveVoice( string failure )
 	{
-		using var files = new Fixtures();
-		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		var compiled = ToneOgg();
 		var source = compiled.Payload;
 		var rate = compiled.Rate;
 		var channels = compiled.Channels;
@@ -213,8 +226,7 @@ public class SoundCompressionTests
 	[TestMethod]
 	public void ValidVorbisMixerAdvancesAndFinishes()
 	{
-		using var files = new Fixtures();
-		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		var compiled = ToneOgg();
 		using var sampler = VorbisSampler( compiled.Payload, compiled.Rate, compiled.Channels, compiled.Frames );
 		Assert.IsTrue( sampler.IsReadyToMix );
 		for ( var i = 0; i < 200 && sampler.ShouldContinueMixing; i++ ) sampler.Sample( 1 );
@@ -227,8 +239,7 @@ public class SoundCompressionTests
 	[DataRow( true )]
 	public async Task FailedVorbisSampleExtractionReturnsPromptly( bool interleaved )
 	{
-		using var files = new Fixtures();
-		var compiled = files.Compile( files.Copy( "tone.ogg" ) );
+		var compiled = ToneOgg();
 		var source = compiled.Payload;
 		source[0] = 0;
 		var native = VorbisSound( source, compiled.Rate, compiled.Channels, compiled.Frames );

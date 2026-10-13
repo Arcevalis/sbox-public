@@ -18,10 +18,7 @@ public class RigidbodyNetworkingTest
 	{
 		_oldTypeLibrary = Game.TypeLibrary;
 
-		Game.TypeLibrary = new Sandbox.Internal.TypeLibrary();
-		Game.TypeLibrary.AddAssembly( typeof( PrefabFile ).Assembly, false );
-		Game.TypeLibrary.AddAssembly( typeof( ModelRenderer ).Assembly, false );
-		Game.TypeLibrary.AddAssembly( typeof( VelocityDriver ).Assembly, false );
+		Game.TypeLibrary = SharedTypeLibrary.EngineAndTests;
 
 		JsonUpgrader.UpdateUpgraders( Game.TypeLibrary );
 	}

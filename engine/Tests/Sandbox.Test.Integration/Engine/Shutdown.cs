@@ -12,22 +12,18 @@ public class ShutdownTest
 	{
 		TestInit.TestAppSystem.Init();
 
+		// Type libraries built before the shutdown belong to the old engine, build fresh ones
+		SharedTypeLibrary.Reset();
+
 		if ( Surface.All.Count == 0 )
 		{
 			Surface.All[0] = new Surface();
 		}
 	}
 
-	[TestMethod]
-	public void Single()
-	{
-		// We already initialized the app for testing, so we can directly shutdown
-		TestInit.TestAppSystem.Shutdown();
-
-		// We need to re-init because other tests still need it
-		Reinit();
-	}
-
+	/// <summary>
+	/// Shutdown and re-init twice. Other tests still need the engine, so it ends initialized.
+	/// </summary>
 	[TestMethod]
 	public void Multiple()
 	{
