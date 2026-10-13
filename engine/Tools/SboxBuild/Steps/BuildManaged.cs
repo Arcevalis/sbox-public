@@ -59,6 +59,10 @@ internal class BuildManaged( bool clean = false )
 			if ( !Utility.RunDotnetCommand( engineDir, "build -c Release Sandbox-Engine.slnx -p:TreatWarningsAsErrors=true" ) )
 				return ExitCode.Failure;
 
+			Log.Info( "Step 5a: Precompile Roslyn" );
+			BuildDisplay.Status( "Precompile Roslyn" );
+			ReadyToRunRoslyn.Run( rootDir );
+
 			var launcherRid = OperatingSystem.IsWindows() ? "win-x64"
 				: OperatingSystem.IsLinux() ? "linux-x64"
 				: null;
