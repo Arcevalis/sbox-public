@@ -12,6 +12,7 @@ public sealed class Win64 : NativePlatform
 	public const string MinimumVisualStudio = "18.9";
 
 	public const int MpCount = 8;
+	public const int MaxMpCount = 32;
 
 	public override string Name => "win64";
 	public override bool IsWindows => true;
@@ -250,7 +251,13 @@ public sealed class Win64 : NativePlatform
 		config.Include( "common", "public", "public/tier0", "thirdparty/sdl3/include" );
 
 		if ( !module.Msvc.MultiProcessor ) Set( config.Cl, "MultiProcessorCompilation", "false" );
-		else config.Option( $"/MP{MpCount}" );
+		else
+		{
+			// More at once for big projects. Eight each starved the largest ones, which the rest of the build
+			// tends to wait on: mapdoclib's 170 files held back hammer, toolframework2 and resourcecompiler.
+			var sources = module.ResolvedFiles.Count( f => f.Kind == FileKind.Compile );
+			config.Option( $"/MP{Math.Clamp( sources / 8, MpCount, MaxMpCount )}" );
+		}
 
 		if ( !module.Msvc.Rtti ) Set( config.Cl, "RuntimeTypeInfo", "false" );
 		if ( module.CompileAsC ) config.Cl["CompileAs"] = "CompileAsC";
