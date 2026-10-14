@@ -199,11 +199,17 @@ internal sealed class GameStartupWindow : IDisposable
 		}
 
 		var handle = Handle;
+		Detach();
+		return handle;
+	}
+
+	/// <summary>Stop using the SDL window without destroying it. Its new owner is responsible for it.</summary>
+	internal void Detach()
+	{
 		Handle = IntPtr.Zero;
 		isOpen = false;
 		softwareSurfaceAvailable = false;
 		DisposeImages();
-		return handle;
 	}
 
 	unsafe void PumpEvents()
