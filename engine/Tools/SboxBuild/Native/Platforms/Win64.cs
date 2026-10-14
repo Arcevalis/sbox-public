@@ -77,8 +77,8 @@ public sealed class Win64 : NativePlatform
 
 	public override IEnumerable<(string Name, bool AlwaysRebuild)> Solutions( Options options )
 	{
-		// The schema compiler has to exist before anything that uses schema can build.
-		yield return (SchemaCompilerSolution, false);
+		// No separate schema compiler pass first: modules that run it depend on it in the everything solution
+		// (SchemaCompiler.Order), and building it on its own kept most of the machine idle while it did.
 		yield return (EverythingSolution( options ), false);
 
 		// Tools are never built incrementally in Retail.
