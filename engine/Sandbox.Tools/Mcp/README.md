@@ -6,7 +6,7 @@ through a small bootstrap skill ([`bootstrap/sbox`](../../Launcher/SboxCli/boots
 also published as `Facepunch/sbox-skills`), installed for the user. The editor offers it once when
 it finds Claude Code or Codex; Editor Preferences › AI Agents and `sbox-cli --skill-install` manage it.
 
-`game/bin/managed/sbox-cli.exe` is a .NET 10 console application that keeps one MCP connection
+`game/bin/managed/sbox-cli` (`sbox-cli.exe` on Windows) is a .NET 10 console application that keeps one MCP connection
 open over stdin/stdout, or makes a single call with `--call`. It has no engine dependencies of its own. Editors expose a local
 named pipe by default, controlled by **Project Settings > AI > Enable MCP Communication**;
 games expose one when launched with `-mcp`. The pipe is restricted to the current
@@ -18,28 +18,29 @@ immediately closes connected transports and cancels pending work; already runnin
 cooperate with cancellation.
 
 ```powershell
+# sbox-cli on Linux/macOS, sbox-cli.exe on Windows.
 # Discover running instances that support the new transport.
-game/bin/managed/sbox-cli.exe --list
+game/bin/managed/sbox-cli --list
 
 # One call against the editor for the project in the current directory, then exit.
-game/bin/managed/sbox-cli.exe --call editor_status
-game/bin/managed/sbox-cli.exe --call search_tools '{"query":"scene"}'
+game/bin/managed/sbox-cli --call editor_status
+game/bin/managed/sbox-cli --call search_tools '{"query":"scene"}'
 
 # Attach; closing the CLI leaves the process running. Takes a PID, a project, or nothing for
 # the project containing the current directory (or the only instance, outside any project).
-game/bin/managed/sbox-cli.exe --connect
-game/bin/managed/sbox-cli.exe --connect 12345
+game/bin/managed/sbox-cli --connect
+game/bin/managed/sbox-cli --connect 12345
 
 # Attach to the project's editor if it's open, otherwise launch and own one.
-game/bin/managed/sbox-cli.exe --project C:/projects/my-game
+game/bin/managed/sbox-cli --project C:/projects/my-game
 
 # Create a project from a template, like the launcher does. Prints the new .sbproj path.
-game/bin/managed/sbox-cli.exe --templates
-game/bin/managed/sbox-cli.exe --new "My Game" --template game.minimal --in C:/projects
+game/bin/managed/sbox-cli --templates
+game/bin/managed/sbox-cli --new "My Game" --template game.minimal --in C:/projects
 
 # Launch and own a game.
-game/bin/managed/sbox-cli.exe --game C:/projects/my-game/my-game.sbproj
-game/bin/managed/sbox-cli.exe --game facepunch.sandbox
+game/bin/managed/sbox-cli --game C:/projects/my-game/my-game.sbproj
+game/bin/managed/sbox-cli --game facepunch.sandbox
 ```
 
 A project is a `.sbproj` or the directory containing it. Inside a project, the CLI only ever

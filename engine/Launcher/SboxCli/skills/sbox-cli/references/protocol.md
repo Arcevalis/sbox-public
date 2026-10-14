@@ -19,7 +19,8 @@ sbox-cli --skill-uninstall [target] Remove it again
 sbox-cli --skill-status             Show where it's installed, as JSON
 sbox-cli --help                     Print usage and the path of this skill
 
-Options: --engine <game-directory>      installation containing sbox.exe / sbox-dev.exe
+Options: --engine <game-directory>      installation containing sbox / sbox-dev
+                                         (.exe on Windows)
          --startup-timeout <seconds>    default 180
          --idle-timeout <seconds>       default 600
          --request-timeout <seconds>    default 300
@@ -38,8 +39,9 @@ Options: --engine <game-directory>      installation containing sbox.exe / sbox-
 - `--game` takes a `.sbproj` path or a published package ident such as `facepunch.sandbox`.
 - `--engine` defaults to two folders above the CLI (`<engine>/bin/managed/../..`); it's only needed
   for a CLI copied elsewhere.
-- Launches (`--project`, `--game`) currently require Windows. They start `sbox-dev.exe -mcp
-  -project <path>` or `sbox.exe -mcp +game <target>` with normal visible windows.
+- Launches (`--project`, `--game`) currently require Windows. They start `sbox-dev -mcp
+  -project <path>` or `sbox -mcp +game <target>` with normal visible windows
+  (`.exe` on Windows).
 - Timeouts are 1–86400 seconds. The idle timeout only counts time with no outstanding request;
   log output doesn't renew it. On any timeout the connection closes.
 - Exit codes: `0` success; `1` error (message on stderr prefixed `sbox-cli:`); `2` for `--call`
