@@ -65,7 +65,7 @@ public partial class Scene : GameObject
 
 		foreach ( var n in networkedObjects )
 		{
-			if ( n.LocalSnapshotState.UpdatedConnections.Count == 0 )
+			if ( n.LocalSnapshotState.AckedByConnections < 0 )
 				_dirtySnapshotObjects.Add( n );
 			else
 				_cleanSnapshotObjects.Add( n );
@@ -159,32 +159,53 @@ public partial class Scene : GameObject
 		var userCommand = UserCommand.Create();
 		localConnection.BuildUserCommand( ref userCommand );
 
+		// Everyone we're connected to gets our visibility origins, the host also gets our user command. The message for
+		// everyone else is the same, so it's encoded once.
+		NetPacket shared = null;
+
 		foreach ( var connection in system.GetFilteredConnections() )
 		{
-			var msg = ByteStream.Create( 256 );
-			msg.Write( InternalMessageType.ClientTick );
-
-			// Broadcast our visibility origins to everyone
-			{
-				msg.Write( (char)localConnection.VisibilityOrigins.Length );
-
-				for ( var i = 0; i < localConnection.VisibilityOrigins.Length; i++ )
-				{
-					var source = localConnection.VisibilityOrigins[i];
-					msg.Write( source.x );
-					msg.Write( source.y );
-					msg.Write( source.z );
-				}
-			}
+			// Not to peers behind the host: only the host gets to know where everyone looks from
+			if ( connection is MockConnection )
+				continue;
 
 			if ( connection.IsHost )
 			{
+				var msg = WriteClientTick( localConnection );
 				userCommand.Serialize( ref msg );
+				connection.SendStream( msg, NetFlags.UnreliableNoDelay );
+				msg.Dispose();
+				continue;
 			}
 
-			connection.SendStream( msg, NetFlags.UnreliableNoDelay );
-			msg.Dispose();
+			if ( shared is null )
+			{
+				var msg = WriteClientTick( localConnection );
+				shared = Connection.EncodePacket( msg );
+				msg.Dispose();
+			}
+
+			connection.Send( shared, NetFlags.UnreliableNoDelay );
 		}
+
+		shared?.Release();
+	}
+
+	static ByteStream WriteClientTick( Connection localConnection )
+	{
+		var msg = ByteStream.Create( 256 );
+		msg.Write( InternalMessageType.ClientTick );
+		msg.Write( (char)localConnection.VisibilityOrigins.Length );
+
+		for ( var i = 0; i < localConnection.VisibilityOrigins.Length; i++ )
+		{
+			var source = localConnection.VisibilityOrigins[i];
+			msg.Write( source.x );
+			msg.Write( source.y );
+			msg.Write( source.z );
+		}
+
+		return msg;
 	}
 
 	/// <summary>

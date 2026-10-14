@@ -35,6 +35,7 @@ internal class NetworkTable : IDisposable
 		public byte[] Serialized;
 		public bool Initialized;
 		public int Slot;
+		public ListHasher ListHasher;
 
 		bool INetworkProxy.IsProxy => !HasControl( Connection.Local );
 
@@ -67,6 +68,48 @@ internal class NetworkTable : IDisposable
 			IsSerializerType = TargetType.IsAssignableTo( typeof( INetworkSerializer ) );
 			NeedsQuery |= (isListType || isDictionaryType || IsSerializerType);
 			Slot = slot;
+
+			var elementType = TargetType.IsArray ? TargetType.GetElementType()
+				: TargetType.IsGenericType && TargetType.GetGenericTypeDefinition() == typeof( List<> ) ? TargetType.GetGenericArguments()[0]
+				: null;
+
+			if ( elementType is { IsValueType: true } )
+				ListHasher = (ListHasher)Activator.CreateInstance( typeof( ListHasher<> ).MakeGenericType( elementType ) );
+		}
+	}
+
+	/// <summary>
+	/// Hashes lists and arrays of value types without boxing every element.
+	/// </summary>
+	internal abstract class ListHasher
+	{
+		public abstract bool TryHash( object value, out int hash );
+	}
+
+	internal sealed class ListHasher<T> : ListHasher
+	{
+		public override bool TryHash( object value, out int hash )
+		{
+			ReadOnlySpan<T> items;
+
+			if ( value is List<T> list )
+				items = global::System.Runtime.InteropServices.CollectionsMarshal.AsSpan( list );
+			else if ( value is T[] array )
+				items = array;
+			else
+			{
+				hash = default;
+				return false;
+			}
+
+			HashCode hc = default;
+			hc.Add( items.Length );
+
+			foreach ( var item in items )
+				hc.Add( item );
+
+			hash = hc.ToHashCode();
+			return true;
 		}
 	}
 
@@ -188,8 +231,14 @@ internal class NetworkTable : IDisposable
 			return;
 		}
 
-		var hashValue = ToHashCode( value );
+		if ( entry.ListHasher is null || !entry.ListHasher.TryHash( value, out var hash ) )
+			hash = ToHashCode( value );
 
+		SetHash( entry, hash );
+	}
+
+	private static void SetHash( Entry entry, int hashValue )
+	{
 		if ( entry.HashCodeValue == hashValue )
 			return;
 
@@ -207,6 +256,33 @@ internal class NetworkTable : IDisposable
 			return;
 
 		UpdateSlotHash( v, value );
+	}
+
+	/// <summary>
+	/// Update the hash for a specific slot id without boxing plain value types.
+	/// </summary>
+	public void UpdateSlotHash<T>( int slot, T value )
+	{
+		if ( !PlainValue<T>.IsPlain )
+		{
+			UpdateSlotHash( slot, (object)value );
+			return;
+		}
+
+		if ( !_entries.TryGetValue( slot, out var v ) )
+			return;
+
+		// Same hash as ToHashCode gives the boxed value
+		SetHash( v, HashCode.Combine( value ) );
+	}
+
+	private static class PlainValue<T>
+	{
+		public static readonly bool IsPlain = typeof( T ).IsValueType
+			&& !typeof( T ).IsAssignableTo( typeof( INetworkProperty ) )
+			&& !typeof( T ).IsAssignableTo( typeof( INetworkSerializer ) )
+			&& !typeof( T ).IsAssignableTo( typeof( IList ) )
+			&& !typeof( T ).IsAssignableTo( typeof( IDictionary ) );
 	}
 
 	private static int ToHashCode( object value )
@@ -345,7 +421,7 @@ internal class NetworkTable : IDisposable
 			if ( entry.IsReliableType || entry.IsDeltaSnapshotType )
 				continue;
 
-			var bs = ByteStream.CreateReader( serialized );
+			var bs = ByteStream.CreateReader( serialized.Span );
 
 			try
 			{
@@ -492,7 +568,7 @@ internal class NetworkTable : IDisposable
 		}
 		else
 		{
-			Game.TypeLibrary.ToBytes( entry.GetValue(), ref bs );
+			Game.TypeLibrary.ToBytes( value, ref bs );
 		}
 	}
 
