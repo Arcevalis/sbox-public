@@ -86,6 +86,7 @@ internal static class Program
 
 			using var lifetime = new CancellationTokenSource();
 			Console.CancelKeyPress += ( _, e ) => { e.Cancel = true; lifetime.Cancel(); };
+			using var termination = OwnedProcess.WatchTermination( lifetime );
 
 			if ( options.CallTool is not null )
 				return await Call( options, lifetime.Token );
