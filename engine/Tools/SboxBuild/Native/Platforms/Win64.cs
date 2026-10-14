@@ -136,6 +136,18 @@ public sealed class Win64 : NativePlatform
 
 	public override void Generate( Module module, Options options )
 	{
+		// More at once for big projects. Eight each starved the largest ones, which the rest of the build
+		// tends to wait on: mapdoclib's 170 files held back hammer, toolframework2 and resourcecompiler.
+		// Counted here, after unity batching, so it is the files that actually compile.
+		if ( module.Msvc.MultiProcessor )
+		{
+			foreach ( var config in module.Configs )
+			{
+				var sources = module.ResolvedFiles.Count( f => f.Kind == FileKind.Compile && !f.ExcludeFrom.Contains( config.Name ) );
+				config.Option( $"/MP{Math.Clamp( sources / 8, MpCount, MaxMpCount )}" );
+			}
+		}
+
 		Vcxproj.Write( module, options );
 		SchemaCompiler.WriteInfo( module );
 
@@ -250,14 +262,8 @@ public sealed class Win64 : NativePlatform
 
 		config.Include( "common", "public", "public/tier0", "thirdparty/sdl3/include" );
 
+		// How many files compile at once is decided when the project is written, see Generate.
 		if ( !module.Msvc.MultiProcessor ) Set( config.Cl, "MultiProcessorCompilation", "false" );
-		else
-		{
-			// More at once for big projects. Eight each starved the largest ones, which the rest of the build
-			// tends to wait on: mapdoclib's 170 files held back hammer, toolframework2 and resourcecompiler.
-			var sources = module.ResolvedFiles.Count( f => f.Kind == FileKind.Compile );
-			config.Option( $"/MP{Math.Clamp( sources / 8, MpCount, MaxMpCount )}" );
-		}
 
 		if ( !module.Msvc.Rtti ) Set( config.Cl, "RuntimeTypeInfo", "false" );
 		if ( module.CompileAsC ) config.Cl["CompileAs"] = "CompileAsC";
