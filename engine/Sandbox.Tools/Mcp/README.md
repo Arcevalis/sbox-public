@@ -45,7 +45,8 @@ game/bin/managed/sbox-cli --game facepunch.sandbox
 
 A project is a `.sbproj` or the directory containing it. Inside a project, the CLI only ever
 attaches to that project's instance. Launches open normal visible windows. `--engine <directory>` overrides the game installation
-inferred from the CLI's location. Owned launches currently require Windows. An existing process
+inferred from the CLI's location. Owned launches kill their process tree when the CLI
+exits. An existing process
 must be running an engine build with the pipe support; restart older editors after rebuilding.
 
 ## Stdio protocol and session files

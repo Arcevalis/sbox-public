@@ -12,16 +12,21 @@ namespace Sandbox.Cli;
 /// <summary>
 /// Owns a launched instance. A non-inherited Windows job handle guarantees cleanup even
 /// when the CLI is killed. Job membership is assigned atomically during process creation.
+/// On Linux the child leads its own session instead (see OwnedProcess.Linux.cs), and the
+/// tree is killed when the CLI exits.
 /// </summary>
-internal sealed class OwnedProcess : IDisposable
+internal sealed partial class OwnedProcess : IDisposable
 {
-	readonly SafeFileHandle job;
+	readonly SafeFileHandle job = null!;
 	internal Process Process { get; }
 
 	internal OwnedProcess( string executable, string directory, IReadOnlyList<string> arguments )
 	{
 		if ( !OperatingSystem.IsWindows() )
-			throw new PlatformNotSupportedException( "Launching owned instances currently requires Windows. Use --connect for an existing instance." );
+		{
+			Process = StartLinux( executable, directory, arguments );
+			return;
+		}
 
 		job = CreateJobObject( IntPtr.Zero, null );
 		if ( job.IsInvalid )
@@ -118,7 +123,10 @@ internal sealed class OwnedProcess : IDisposable
 	/// </summary>
 	public void Dispose()
 	{
-		job.Dispose();
+		if ( !OperatingSystem.IsWindows() )
+			KillLinuxTree();
+
+		job?.Dispose();
 		Process.Dispose();
 	}
 
