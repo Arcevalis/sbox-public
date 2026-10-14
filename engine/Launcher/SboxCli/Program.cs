@@ -150,7 +150,7 @@ internal static class Program
 			}
 			else
 			{
-				var executable = Path.Combine( options.EngineDirectory, options.Mode == "--project" ? "sbox-dev.exe" : "sbox.exe" );
+				var executable = Path.Combine( options.EngineDirectory, EngineExecutable( options.Mode == "--project" ) );
 				if ( !File.Exists( executable ) )
 					throw new FileNotFoundException( "Engine executable not found. Use --engine to specify the game directory.", executable );
 
@@ -476,6 +476,13 @@ internal static class Program
 			}
 		}
 	}
+
+	/// <summary>
+	/// The engine binary that opens projects (sbox-dev) or runs games (sbox).
+	/// Windows binaries carry a .exe extension, Linux and macOS ones don't.
+	/// </summary>
+	static string EngineExecutable( bool editor ) =>
+		( editor ? "sbox-dev" : "sbox" ) + ( OperatingSystem.IsWindows() ? ".exe" : "" );
 
 	static string RequestId( string line )
 	{

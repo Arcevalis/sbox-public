@@ -18,13 +18,14 @@ listener and no port to configure.
 
 ## 1. Find sbox-cli
 
-It is `<engine>/bin/managed/sbox-cli.exe`, where `<engine>` is the folder containing `sbox.exe`:
+It is `<engine>/bin/managed/sbox-cli` (`sbox-cli.exe` on Windows), where `<engine>`
+is the folder containing `sbox` (`sbox.exe` on Windows):
 
 1. The `FACEPUNCH_ENGINE` environment variable. The launcher sets it as a Windows **user**
    variable, so a shell started before that may lack it — check the user scope too
    (`[Environment]::GetEnvironmentVariable('FACEPUNCH_ENGINE','User')`).
 2. The default Steam folder, `C:\Program Files (x86)\Steam\steamapps\common\sbox`.
-3. The folder of a running `sbox-dev.exe`.
+3. The folder of a running `sbox-dev` (`sbox-dev.exe` on Windows).
 4. Ask the user.
 
 Don't hard-code the result into project files; it differs per machine.
@@ -59,8 +60,9 @@ double quotes from native arguments — escape them (`'{\"query\":\"scene\"}'`) 
 For a long session, register it with the client so tools appear natively over one connection:
 
 ```bash
-claude mcp add sbox -- "<engine>/bin/managed/sbox-cli.exe" --connect
+claude mcp add sbox -- "<engine>/bin/managed/sbox-cli" --connect
 ```
+(`sbox-cli.exe` in place of `sbox-cli` on Windows.)
 
 The client's working directory picks the project, as above. With `--connect` the server fails to
 start if that project's editor isn't open. `--project` instead attaches to the open editor or, if

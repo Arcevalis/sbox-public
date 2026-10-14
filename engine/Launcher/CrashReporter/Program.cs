@@ -298,14 +298,14 @@ class Program
 
 	/// <summary>
 	/// Walks upward from the starting path to find the nearest ancestor that looks like a game root
-	/// (sbox.exe or sbox-dev.exe present). Optionally requires a specific subdirectory to exist.
+	/// (sbox or sbox-dev present, with a .exe extension on Windows). Optionally requires a specific subdirectory to exist.
 	/// </summary>
 	static string? FindGameRoot( string startPath, string? requiredSubdirectory = null )
 	{
 		var dir = Path.GetDirectoryName( startPath );
 		while ( !string.IsNullOrEmpty( dir ) )
 		{
-			var isRoot = File.Exists( Path.Combine( dir, "sbox.exe" ) ) || File.Exists( Path.Combine( dir, "sbox-dev.exe" ) );
+			var isRoot = HasEngineBinary( dir, "sbox" ) || HasEngineBinary( dir, "sbox-dev" );
 			var hasSubdir = requiredSubdirectory is null || Directory.Exists( Path.Combine( dir, requiredSubdirectory ) );
 
 			if ( isRoot && hasSubdir )
@@ -323,6 +323,14 @@ class Program
 
 		return null;
 	}
+
+	/// <summary>
+	/// Engine binaries carry a .exe extension on Windows and none everywhere else.
+	/// Both spellings are accepted so copies and Wine prefixes resolve either way.
+	/// </summary>
+	static bool HasEngineBinary( string directory, string baseName ) =>
+		File.Exists( Path.Combine( directory, baseName ) ) ||
+		File.Exists( Path.Combine( directory, baseName + ".exe" ) );
 
 	/// <summary>
 	/// Checks if this is a retail build by looking for .version file in the game root.
@@ -382,7 +390,7 @@ class Program
 			Console.WriteLine( $"Attached managed stacks: {data.Length:N0} bytes" );
 
 			// Delete the disk minidump after successful processing (retail builds only)
-			// Dev builds (sbox-dev.exe) keep the minidump for debugging
+			// Dev builds (sbox-dev) keep the minidump for debugging
 			if ( !string.IsNullOrEmpty( minidumpPathToDelete ) && IsRetailBuild( minidumpPathToDelete ) )
 			{
 				try
