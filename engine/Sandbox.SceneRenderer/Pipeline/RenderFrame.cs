@@ -87,6 +87,7 @@ internal sealed class RenderFrame
 	public float Time { get; private set; }
 
 	static readonly StringToken TimeAttribute = new( "Time" );
+	static readonly StringToken DisableScreenSpaceEffects = new( "DisableScreenSpaceEffects" );
 
 	/// <summary>
 	/// Start a frame of <paramref name="world"/> through <paramref name="view"/>.
@@ -124,6 +125,8 @@ internal sealed class RenderFrame
 	{
 		Time = RenderContext.RenderTime;
 		context.Attributes.Set( TimeAttribute, Time );
+		// The managed skybox is a child frame; AO and SSR belong to the main camera.
+		context.Attributes.Set( DisableScreenSpaceEffects, IsSkybox );
 		constants = new ViewConstants();
 		View.FillConstants( ref constants, Output.Size, Time, Output.Samples, DepthMin, DepthMax );
 
