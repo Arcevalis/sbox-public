@@ -851,7 +851,7 @@ public sealed partial class SceneCamera : IDisposable, IManagedCamera
 
 		using var setup = new CameraRenderer( "RenderToTexture", _cameraId );
 		setup.Configure( this, config );
-		setup.Native.RenderToTexture( texture.native, Graphics.SceneView );
+		setup.Native.RenderToTexture( texture.native, Graphics.SceneView, default );
 	}
 
 

@@ -64,6 +64,11 @@ public sealed unsafe partial class CommandList
 		// Instance counts remain exact integers.
 		public int Count;
 
+		/// <summary>
+		/// Identifies a deferred view without boxing or allocating a key object.
+		/// </summary>
+		public long ViewId;
+
 		public Vector4 Data1;
 		public Vector4 Data2;
 		public Vector4 Data3;
@@ -103,6 +108,12 @@ public sealed unsafe partial class CommandList
 	private class State
 	{
 		public Dictionary<string, RenderTarget> renderTargets = new();
+
+		/// <summary>
+		/// Resolved view metadata for this playback, shared with inserted command lists.
+		/// </summary>
+		public Dictionary<long, ViewData> views = new();
+
 		public Stack<(RenderTarget Target, NativeEngine.RenderViewport Viewport)> renderTargetStack = new();
 		public Stack<OpenScope> openScopes = new();
 
@@ -114,6 +125,7 @@ public sealed unsafe partial class CommandList
 			// We just clear the list - RenderTargets get freed and 
 			// re-added to the pool automatically.
 			renderTargets.Clear();
+			views.Clear();
 			renderTargetStack.Clear();
 
 			// Execution closes these itself, this is only here so a pooled state never carries one forward
