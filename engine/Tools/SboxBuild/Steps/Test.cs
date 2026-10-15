@@ -181,7 +181,9 @@ internal partial class Test( bool noBuild = true, string filter = null )
 	private static void PrintResult( TestResult result )
 	{
 		var project = result.Project;
+		RecordForSummary( result );
 
+		GitHubActions.Group( $"{project.DisplayName} ({(result.Success ? "passed" : "failed")}, {result.Duration.TotalSeconds:F0}s)" );
 		Log.Info( "" );
 		Log.Info( project.NeedsEngine
 			? $"===== {project.DisplayName} ({result.Duration.TotalSeconds:F0}s) ====="
@@ -202,6 +204,9 @@ internal partial class Test( bool noBuild = true, string filter = null )
 			}
 		}
 
+		// Failures stay outside the collapsed output so they're readable straight away.
+		GitHubActions.EndGroup();
+
 		if ( !result.Success )
 		{
 			Log.Info( "" );
@@ -213,6 +218,51 @@ internal partial class Test( bool noBuild = true, string filter = null )
 				Log.Info( failedTest );
 				Log.Info( "" );
 			}
+		}
+	}
+
+	/// <summary>
+	/// Hands the counts from dotnet test's closing totals, and each failure's message and location,
+	/// to the job summary.
+	/// </summary>
+	private static void RecordForSummary( TestResult result )
+	{
+		int Count( Regex pattern ) => result.Output
+			.Select( line => pattern.Match( line ) )
+			.Where( match => match.Success )
+			.Sum( match => int.Parse( match.Groups["count"].Value, CultureInfo.InvariantCulture ) );
+
+		var name = result.Project.Name.Replace( "Sandbox.Test.", "" );
+		GitHubActions.AddTests( new( name, Count( PassedCount() ), Count( FailedCount() ), Count( SkippedCount() ) ) );
+
+		// A collected block runs until the next passing test, so back-to-back failures share one.
+		var blocks = new List<string>();
+		foreach ( var line in result.FailedTests.SelectMany( x => x.Split( '\n' ) ) )
+		{
+			if ( FailedName().IsMatch( line ) || blocks.Count == 0 ) blocks.Add( "" );
+			blocks[^1] += line + "\n";
+		}
+
+		foreach ( var failure in blocks )
+		{
+			var lines = failure.Split( '\n' ).Select( x => x.Trim() ).ToList();
+			var method = StackMethod().Match( failure );
+			var location = StackLocation().Match( failure );
+			var test = method.Success
+				? string.Join( '.', method.Groups["method"].Value.Split( '.' ).TakeLast( 2 ) )
+				: FailedName().Match( failure ) is { Success: true } header ? header.Groups["name"].Value : lines.FirstOrDefault() ?? "";
+
+			var message = lines
+				.SkipWhile( x => x != "Error Message:" ).Skip( 1 )
+				.TakeWhile( x => x != "Stack Trace:" && x.Length > 0 );
+
+			var text = string.Join( ' ', message );
+			var file = location.Success ? location.Groups["file"].Value : null;
+			var line = location.Success ? location.Groups["line"].Value : null;
+
+			GitHubActions.AddFailure( new( test, text, file is null ? null : $"{Path.GetFileName( file )}:{line}" ) );
+			GitHubActions.Error( $"Test failed: {test}", text.Length > 0 ? text : "See the Tests log.",
+				file is null ? null : Path.GetRelativePath( Directory.GetCurrentDirectory(), file ), line );
 		}
 	}
 
@@ -245,4 +295,22 @@ internal partial class Test( bool noBuild = true, string filter = null )
 
 	[GeneratedRegex( @"(?<value>[\d.]+)\s*(?<unit>ms|s|m|h)\b" )]
 	private static partial Regex DurationPart();
+
+	[GeneratedRegex( @"^\s*Passed:\s*(?<count>\d+)\s*$" )]
+	private static partial Regex PassedCount();
+
+	[GeneratedRegex( @"^\s*Failed:\s*(?<count>\d+)\s*$" )]
+	private static partial Regex FailedCount();
+
+	[GeneratedRegex( @"^\s*Skipped:\s*(?<count>\d+)\s*$" )]
+	private static partial Regex SkippedCount();
+
+	[GeneratedRegex( @"^\s*Failed (?<name>.+?) \[" )]
+	private static partial Regex FailedName();
+
+	[GeneratedRegex( @"\bat (?<method>[\w.`<>]+)\(" )]
+	private static partial Regex StackMethod();
+
+	[GeneratedRegex( @" in (?<file>.+?):line (?<line>\d+)" )]
+	private static partial Regex StackLocation();
 }
