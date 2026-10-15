@@ -138,6 +138,8 @@ public abstract partial class GameNetworkSystem : IDisposable
 		return NetworkSystem.GetFilteredConnections( minimumState, filter );
 	}
 
+	internal void CollectConnections( List<Connection> into, Connection.ChannelState minimumState ) => NetworkSystem.CollectConnections( into, minimumState );
+
 	public void BroadcastRaw( ByteStream msg, Connection.Filter? filter = null )
 	{
 		BroadcastRaw( msg, filter, NetFlags.Reliable );

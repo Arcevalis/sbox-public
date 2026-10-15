@@ -186,6 +186,7 @@ public abstract partial class GameObjectSystem : IDeltaSnapshot
 					ControlCondition = c => c.IsHost,
 					GetValue = () => propertyAndAttribute.Property.GetValue( this ),
 					SetValue = v => propertyAndAttribute.Property?.SetValue( this, v ),
+					Typed = NetworkTable.TypedAccess.Create( this, propertyAndAttribute.Property ),
 					NeedsQuery = isQuery,
 					DebugName = propertyAndAttribute.DebugName
 				};

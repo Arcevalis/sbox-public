@@ -1,5 +1,6 @@
 using Sandbox.Hashing;
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -101,14 +102,21 @@ internal class DeltaSnapshotSystem
 
 	internal sealed class SentPacket
 	{
-		public readonly List<SentValue> Values = new();
+		public readonly List<SentValue> Values;
 		public float SentTime;
 
-		static readonly Stack<SentPacket> Pool = new();
+		// By capacity in powers of two, so a packet is rented big enough and its list never grows
+		static readonly Stack<SentPacket>[] Pools = Enumerable.Range( 0, 32 ).Select( _ => new Stack<SentPacket>() ).ToArray();
 
-		public static SentPacket Rent( float time )
+		SentPacket( int capacity ) => Values = new( capacity );
+
+		/// <summary>
+		/// A packet with room for <paramref name="count"/> values.
+		/// </summary>
+		public static SentPacket Rent( float time, int count )
 		{
-			var packet = Pool.TryPop( out var p ) ? p : new SentPacket();
+			var size = (int)BitOperations.RoundUpToPowerOf2( (uint)Math.Max( count, 1 ) );
+			var packet = Pools[BitOperations.Log2( (uint)size )].TryPop( out var p ) ? p : new SentPacket( size );
 			packet.SentTime = time;
 			return packet;
 		}
@@ -116,7 +124,7 @@ internal class DeltaSnapshotSystem
 		public void Return()
 		{
 			Values.Clear();
-			Pool.Push( this );
+			Pools[BitOperations.Log2( (uint)Values.Capacity )].Push( this );
 		}
 	}
 
@@ -615,7 +623,7 @@ internal class DeltaSnapshotSystem
 	/// <summary>
 	/// Cut the cluster being written until what's left fits in one packet once encoded.
 	/// </summary>
-	void Fit( ConnectionData target, ref ByteStream writer, ref SentPacket packet, ushort firstClusterId, ref int clusters )
+	void Fit( ConnectionData target, ref ByteStream writer, ushort firstClusterId, ref int clusters )
 	{
 		while ( true )
 		{
@@ -634,7 +642,7 @@ internal class DeltaSnapshotSystem
 			while ( keep > 1 && Measure( ref writer, _clusterObjects[keep].Start, keep ) > ClusterLimit )
 				keep--;
 
-			Carry( target, ref writer, ref packet, (ushort)(firstClusterId + clusters), keep );
+			Carry( target, ref writer, (ushort)(firstClusterId + clusters), keep );
 			clusters++;
 		}
 	}
@@ -642,7 +650,7 @@ internal class DeltaSnapshotSystem
 	/// <summary>
 	/// Send the first <paramref name="keep"/> objects of the cluster being written and start the next with the rest.
 	/// </summary>
-	void Carry( ConnectionData target, ref ByteStream writer, ref SentPacket packet, ushort clusterId, int keep )
+	void Carry( ConnectionData target, ref ByteStream writer, ushort clusterId, int keep )
 	{
 		var cut = _clusterObjects[keep].Start;
 		var end = writer.Position;
@@ -653,9 +661,8 @@ internal class DeltaSnapshotSystem
 
 		writer.ToSpan()[cut..end].CopyTo( _carried );
 		writer.Position = cut;
-		Close( target, ref writer, packet, clusterId, keep );
+		Close( target, ref writer, clusterId, keep );
 
-		packet = SentPacket.Rent( Time );
 		BeginCluster( ref writer, (ushort)(clusterId + 1) );
 
 		var shift = writer.Position - cut;
@@ -668,9 +675,11 @@ internal class DeltaSnapshotSystem
 	/// <summary>
 	/// Send the first <paramref name="count"/> objects of the cluster being written, which ends at the writer's position.
 	/// </summary>
-	void Close( ConnectionData target, ref ByteStream writer, SentPacket packet, ushort clusterId, int count )
+	void Close( ConnectionData target, ref ByteStream writer, ushort clusterId, int count )
 	{
 		var entries = CollectionsMarshal.AsSpan( _clusterEntries );
+		var used = count < _clusterObjects.Count ? _clusterObjects[count].FirstEntry : _clusterEntries.Count;
+		var packet = SentPacket.Rent( Time, used );
 
 		for ( var i = 0; i < count; i++ )
 		{
@@ -680,7 +689,6 @@ internal class DeltaSnapshotSystem
 
 		FlushCluster( target, ref writer, packet, clusterId, count );
 
-		var used = count < _clusterObjects.Count ? _clusterObjects[count].FirstEntry : _clusterEntries.Count;
 		_clusterObjects.RemoveRange( 0, count );
 		_clusterEntries.RemoveRange( 0, used );
 
@@ -1031,7 +1039,7 @@ internal class DeltaSnapshotSystem
 	/// <summary>
 	/// Send a delta snapshot for a set of networked objects to the specified connections.
 	/// </summary>
-	public void Send( IEnumerable<IDeltaSnapshot> objects, Connection[] connections )
+	public void Send( ReadOnlySpan<IDeltaSnapshot> objects, Connection[] connections )
 	{
 		_pending.Clear();
 		_cleanCounts.Clear();
@@ -1103,7 +1111,6 @@ internal class DeltaSnapshotSystem
 		var connection = target.Connection;
 		var writer = new ByteStream( DeltaSnapshotCluster.MaxSize * 4 );
 		var clusters = 0;
-		SentPacket packet = null;
 
 		_clusterObjects.Clear();
 		_clusterEntries.Clear();
@@ -1141,24 +1148,21 @@ internal class DeltaSnapshotSystem
 				if ( _needed.Count == 0 )
 					continue;
 
-				if ( packet is null )
-				{
-					packet = SentPacket.Rent( Time );
+				if ( _clusterObjects.Count == 0 )
 					BeginCluster( ref writer, (ushort)(firstClusterId + clusters) );
-				}
 
 				_clusterObjects.Add( (state, writer.Position, _clusterEntries.Count, _needed.Count) );
 				_clusterEntries.AddRange( _needed );
 				WriteObject( ref writer, local, _needed );
 
 				if ( writer.Position > _measureAt )
-					Fit( target, ref writer, ref packet, firstClusterId, ref clusters );
+					Fit( target, ref writer, firstClusterId, ref clusters );
 			}
 
-			if ( packet is not null )
+			if ( _clusterObjects.Count > 0 )
 			{
-				Fit( target, ref writer, ref packet, firstClusterId, ref clusters );
-				Close( target, ref writer, packet, (ushort)(firstClusterId + clusters), _clusterObjects.Count );
+				Fit( target, ref writer, firstClusterId, ref clusters );
+				Close( target, ref writer, (ushort)(firstClusterId + clusters), _clusterObjects.Count );
 				clusters++;
 			}
 		}
@@ -1291,6 +1295,8 @@ internal class DeltaSnapshotSystem
 		_shared.Clear();
 	}
 
+	readonly List<Connection> _singleSendConnections = new();
+
 	/// <summary>
 	/// Send everything this object has to every connection, reliably, like when its owner changes.
 	/// </summary>
@@ -1308,10 +1314,9 @@ internal class DeltaSnapshotSystem
 
 		AssignNetIndex( local );
 
-		var filteredConnections = System.GetFilteredConnections();
-		var connections = filteredConnections as Connection[] ?? filteredConnections.ToArray();
+		System.CollectConnections( _singleSendConnections, Connection.ChannelState.Snapshot );
 
-		foreach ( var connection in connections )
+		foreach ( var connection in _singleSendConnections )
 		{
 			var target = GetConnection( connection );
 			var state = target.Get( local );
@@ -1325,7 +1330,7 @@ internal class DeltaSnapshotSystem
 			using var writer = WriteSnapshot( local, _needed );
 			SendMessage( connection, InternalMessageType.DeltaSnapshot, writer.ToSpan(), NetFlags.Reliable );
 
-			var packet = SentPacket.Rent( Time );
+			var packet = SentPacket.Rent( Time, _needed.Count );
 			MarkSent( state, CollectionsMarshal.AsSpan( _needed ), packet.Values );
 
 			if ( target.SentSnapshots.Remove( (local.ObjectId, local.SnapshotId), out var replaced ) )

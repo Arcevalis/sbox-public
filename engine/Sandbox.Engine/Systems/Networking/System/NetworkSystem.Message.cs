@@ -124,14 +124,19 @@ internal partial class NetworkSystem
 		// This network system only exists in the game.
 		using var gameScope = GameSystem?.Push();
 
-		if ( _connections.Any( c => c.HasPendingSends ) )
+		// A failed encoder can close a connection while we drain the queue, so they're flushed from a copy
+		_flushing.Clear();
+
+		foreach ( var connection in _connections )
 		{
-			// A failed encoder can close a connection while we drain the queue.
-			foreach ( var connection in _connections.ToArray() )
-			{
-				connection.FlushPendingSends();
-			}
+			if ( connection.HasPendingSends )
+				_flushing.Add( connection );
 		}
+
+		foreach ( var connection in _flushing )
+			connection.FlushPendingSends();
+
+		_flushing.Clear();
 		Connection?.FlushPendingSends();
 
 		// A handler can pump messages again (leaving as host does), the outer loop owns the held scope
@@ -141,10 +146,10 @@ internal partial class NetworkSystem
 		{
 			foreach ( var socket in sockets )
 			{
-				socket?.GetIncomingMessages( HandleIncomingMessage );
+				socket?.GetIncomingMessages( _handleIncomingMessage ??= HandleIncomingMessage );
 			}
 
-			Connection?.GetIncomingMessages( HandleIncomingMessage );
+			Connection?.GetIncomingMessages( _handleIncomingMessage ??= HandleIncomingMessage );
 		}
 		finally
 		{
@@ -156,6 +161,8 @@ internal partial class NetworkSystem
 		}
 	}
 
+	MessageHandler _handleIncomingMessage;
+	readonly List<Connection> _flushing = new();
 	int _incomingDepth;
 	Json.ScriptDeserializationScope _untrustedScope;
 

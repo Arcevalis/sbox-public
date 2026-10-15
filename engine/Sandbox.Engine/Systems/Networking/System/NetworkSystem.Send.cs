@@ -148,4 +148,7 @@ internal partial class NetworkSystem
 		CollectRecipients( connections, minimumState, filter );
 		return connections;
 	}
+
+	/// <inheritdoc cref="GetFilteredConnections"/>
+	internal void CollectConnections( List<Connection> into, Connection.ChannelState minimumState ) => CollectRecipients( into, minimumState, null );
 }

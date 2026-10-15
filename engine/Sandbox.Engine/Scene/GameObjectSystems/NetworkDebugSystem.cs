@@ -251,10 +251,17 @@ sealed partial class NetworkDebugSystem : GameObjectSystem<NetworkDebugSystem>
 
 		Samples.Enqueue( _currentTick );
 
+		// Once the history is full, the oldest sample is reused for the next
 		if ( Samples.Count > MaxSamples )
-			Samples.Dequeue();
+		{
+			_currentTick = Samples.Dequeue();
+			_currentTick.BytesPerType.Clear();
+		}
+		else
+		{
+			_currentTick = new Sample();
+		}
 
-		_currentTick = new Sample();
 		_nextSampleTime = SampleRate;
 	}
 

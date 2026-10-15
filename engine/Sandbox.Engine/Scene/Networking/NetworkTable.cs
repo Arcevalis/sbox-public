@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using Sandbox;
 
 namespace Sandbox.Network;
@@ -36,6 +37,7 @@ internal class NetworkTable : IDisposable
 		public bool Initialized;
 		public int Slot;
 		public ListHasher ListHasher;
+		public TypedAccess Typed;
 
 		bool INetworkProxy.IsProxy => !HasControl( Connection.Local );
 
@@ -276,13 +278,80 @@ internal class NetworkTable : IDisposable
 		SetHash( v, HashCode.Combine( value ) );
 	}
 
+	/// <summary>
+	/// Reads and writes an entry's value as its own type, so plain values aren't boxed on every update.
+	/// </summary>
+	internal abstract class TypedAccess
+	{
+		public abstract void Read( Entry entry, ref ByteStream bs );
+		public abstract void Write( ref ByteStream bs );
+
+		/// <summary>
+		/// For an instance property of a plain value type with a getter and a setter, otherwise null.
+		/// </summary>
+		public static TypedAccess Create( object instance, PropertyInfo property )
+		{
+			if ( property.GetMethod is not { IsStatic: false } || property.SetMethod is not { IsStatic: false } )
+				return null;
+
+			var type = property.PropertyType;
+			if ( !IsPlain( type ) )
+				return null;
+
+			if ( !Factories.TryGetValue( type, out var factory ) )
+			{
+				factory = typeof( TypedAccess ).GetMethod( nameof( CreateTyped ), BindingFlags.NonPublic | BindingFlags.Static )
+					.MakeGenericMethod( type )
+					.CreateDelegate<Func<object, PropertyInfo, TypedAccess>>();
+
+				Factories.AddOrUpdate( type, factory );
+			}
+
+			return factory( instance, property );
+		}
+
+		// Weak, so game types it was made for don't outlive a hotload
+		[SkipHotload] static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, Func<object, PropertyInfo, TypedAccess>> Factories = new();
+
+		static TypedAccess CreateTyped<T>( object instance, PropertyInfo property ) => new TypedAccess<T>( instance, property );
+	}
+
+	sealed class TypedAccess<T> : TypedAccess
+	{
+		readonly Func<T> _get;
+		readonly Action<T> _set;
+
+		public TypedAccess( object instance, PropertyInfo property )
+		{
+			_get = property.GetMethod.CreateDelegate<Func<T>>( instance );
+			_set = property.SetMethod.CreateDelegate<Action<T>>( instance );
+		}
+
+		public override void Read( Entry entry, ref ByteStream bs )
+		{
+			var value = Game.TypeLibrary.FromBytes<T>( ref bs );
+			if ( EqualityComparer<T>.Default.Equals( _get(), value ) )
+				return;
+
+			entry.Initialized = false;
+			// Same hash as ToHashCode gives the boxed value
+			SetHash( entry, HashCode.Combine( value ) );
+			_set( value );
+		}
+
+		public override void Write( ref ByteStream bs ) => Game.TypeLibrary.ToBytes( _get(), ref bs );
+	}
+
+	// A value type that's hashed and compared as itself, not a network property, serializer or collection
+	static bool IsPlain( Type type ) => type.IsValueType
+		&& !type.IsAssignableTo( typeof( INetworkProperty ) )
+		&& !type.IsAssignableTo( typeof( INetworkSerializer ) )
+		&& !type.IsAssignableTo( typeof( IList ) )
+		&& !type.IsAssignableTo( typeof( IDictionary ) );
+
 	private static class PlainValue<T>
 	{
-		public static readonly bool IsPlain = typeof( T ).IsValueType
-			&& !typeof( T ).IsAssignableTo( typeof( INetworkProperty ) )
-			&& !typeof( T ).IsAssignableTo( typeof( INetworkSerializer ) )
-			&& !typeof( T ).IsAssignableTo( typeof( IList ) )
-			&& !typeof( T ).IsAssignableTo( typeof( IDictionary ) );
+		public static readonly bool IsPlain = NetworkTable.IsPlain( typeof( T ) );
 	}
 
 	private static int ToHashCode( object value )
@@ -549,6 +618,12 @@ internal class NetworkTable : IDisposable
 	/// <param name="onlyWriteChanges"></param>
 	private void WriteEntryToStream( Entry entry, ref ByteStream bs, bool onlyWriteChanges = false )
 	{
+		if ( entry.Typed is { } typed )
+		{
+			typed.Write( ref bs );
+			return;
+		}
+
 		var value = entry.GetValue();
 		if ( entry.IsSerializerType )
 		{
@@ -761,6 +836,10 @@ internal class NetworkTable : IDisposable
 			{
 				SetValue( slot, null );
 			}
+		}
+		else if ( entry.Typed is { } typed )
+		{
+			typed.Read( entry, ref bs );
 		}
 		else
 		{

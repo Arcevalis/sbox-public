@@ -1,4 +1,5 @@
 ﻿using Sandbox.Network;
+using System.Runtime.InteropServices;
 
 namespace Sandbox;
 
@@ -54,30 +55,35 @@ public partial class Scene : GameObject
 
 		system.DeltaSnapshots.UpdateTime();
 
-		var connections = system.GetFilteredConnections( Connection.ChannelState.Connected );
-		var connectionsArray = connections as Connection[] ?? connections.ToArray();
+		// The array is only rebuilt when the connections change
+		system.CollectConnections( _sendConnectionList, Connection.ChannelState.Connected );
+		if ( !CollectionsMarshal.AsSpan( _sendConnectionList ).SequenceEqual( _sendConnections ) )
+			_sendConnections = _sendConnectionList.ToArray();
 
 		// Partition objects into dirty (pending changes) and clean (fully ACK'd).
 		// Dirty objects are processed first so they end up in earlier clusters,
 		// which are less likely to be delayed under network congestion.
-		_dirtySnapshotObjects.Clear();
+		_snapshotObjects.Clear();
 		_cleanSnapshotObjects.Clear();
 
 		foreach ( var n in networkedObjects )
 		{
 			if ( n.LocalSnapshotState.AckedByConnections < 0 )
-				_dirtySnapshotObjects.Add( n );
+				_snapshotObjects.Add( n );
 			else
 				_cleanSnapshotObjects.Add( n );
 		}
 
-		IEnumerable<IDeltaSnapshot> objects = _dirtySnapshotObjects.Concat( _cleanSnapshotObjects );
+		_snapshotObjects.AddRange( _cleanSnapshotObjects );
 
 		// If we're the host, include any GameObjectSystems.
 		if ( Networking.IsHost )
-			objects = objects.Concat( systems.Values );
+		{
+			foreach ( var gameObjectSystem in systems.Values )
+				_snapshotObjects.Add( gameObjectSystem );
+		}
 
-		system.DeltaSnapshots.Send( objects, connectionsArray );
+		system.DeltaSnapshots.Send( CollectionsMarshal.AsSpan( _snapshotObjects ), _sendConnections );
 
 		system.DeltaSnapshots.Tick();
 	}
@@ -163,7 +169,9 @@ public partial class Scene : GameObject
 		// everyone else is the same, so it's encoded once.
 		NetPacket shared = null;
 
-		foreach ( var connection in system.GetFilteredConnections() )
+		system.CollectConnections( _clientTickConnections, Connection.ChannelState.Snapshot );
+
+		foreach ( var connection in _clientTickConnections )
 		{
 			// Not to peers behind the host: only the host gets to know where everyone looks from
 			if ( connection is MockConnection )
@@ -212,8 +220,11 @@ public partial class Scene : GameObject
 	/// A cache of all the MapInstances that gets updated every frame
 	/// </summary>
 	readonly List<MapInstance> _networkMapInstanceCache = new();
-	readonly List<IDeltaSnapshot> _dirtySnapshotObjects = new();
+	readonly List<IDeltaSnapshot> _snapshotObjects = new();
 	readonly List<IDeltaSnapshot> _cleanSnapshotObjects = new();
+	readonly List<Connection> _sendConnectionList = new();
+	Connection[] _sendConnections = [];
+	readonly List<Connection> _clientTickConnections = new();
 
 	/// <summary>
 	/// Are these bounds visible to the specified <see cref="Connection"/>?

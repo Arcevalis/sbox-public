@@ -76,6 +76,7 @@ internal sealed partial class NetworkObject
 					ControlCondition = isHostSync ? static c => c.IsHost : _hasControlCondition ??= HasControl,
 					GetValue = () => propertyAndAttribute.Property.GetValue( instance ),
 					SetValue = ( v ) => propertyAndAttribute.Property?.SetValue( instance, v ),
+					Typed = NetworkTable.TypedAccess.Create( instance, propertyAndAttribute.Property ),
 					NeedsQuery = isQuery,
 					DebugName = propertyAndAttribute.DebugName
 				};
