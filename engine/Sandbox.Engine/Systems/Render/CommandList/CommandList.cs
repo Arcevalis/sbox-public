@@ -1530,6 +1530,25 @@ public sealed unsafe partial class CommandList
 	}
 
 	/// <summary>
+	/// Generates the mips below <paramref name="initialMip"/>, for when the levels above it were written directly.
+	/// </summary>
+	internal void GenerateMipMaps( RenderTargetHandle handle, Graphics.DownsampleMethod method, int initialMip )
+	{
+		static void Execute( ref Entry entry, CommandList commandList )
+		{
+			if ( !commandList.state.renderTargets.TryGetValue( (string)entry.Object5, out var target ) )
+			{
+				Log.Warning( $"[{commandList.DebugName ?? "CommandList"}] Unknown rt: {(string)entry.Object5}" );
+				return;
+			}
+
+			Graphics.GenerateMipMaps( target.ColorTarget, (Graphics.DownsampleMethod)(int)entry.Data1.x, (int)entry.Data1.y );
+		}
+
+		AddEntry( &Execute, new Entry { Object5 = handle.Name, Data1 = new Vector4( (int)method, initialMip, 0, 0 ) } );
+	}
+
+	/// <summary>
 	/// Generates a mip-map chain for the specified render target.
 	/// This will generate mipmaps for the color texture of the render target.
 	/// </summary>
