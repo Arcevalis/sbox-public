@@ -45,7 +45,7 @@ internal sealed partial class VmtFile
 	}
 
 	/// <summary>
-	/// Loads for a Windows PC, DX90 target. The optional resolver receives symbols without '$';
+	/// Loads for a Windows PC, DX90/PS2.0b target. The optional resolver receives symbols without '$';
 	/// returning null uses the built-in target defaults. Unknown conditions produce diagnostics,
 	/// and entries whose conditions cannot be determined are excluded. Material key prefixes
 	/// such as "360?" use the same resolver; renderer predicates such as "srgb" need caller input.
@@ -224,7 +224,7 @@ internal sealed partial class VmtFile
 		{
 			return resolveCondition?.Invoke( symbol ) ?? symbol.ToUpperInvariant() switch
 			{
-				"WIN32" or "WINDOWS" or "PC" or "DX90" => true,
+				"WIN32" or "WINDOWS" or "PC" or "DX90" or "DX90_20B" => true,
 				"WIN64" => Environment.Is64BitProcess,
 				"360" or "X360" or "XBOX" or "XBOX360" or "PS3" or "GAMECONSOLE" or "OSX" or "LINUX" or "POSIX"
 					or "WINXP" or "DX60" or "DX70" or "DX80" or "DX81" or "DX95" => false,

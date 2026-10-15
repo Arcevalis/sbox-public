@@ -24,7 +24,12 @@ internal sealed partial class VmtFile
 			if ( !block.IsBlock ) continue;
 			var name = block.Name.AsSpan();
 			var dx = name.IndexOf( "DX", StringComparison.OrdinalIgnoreCase );
-			if ( dx < 0 || !int.TryParse( name[(dx + 2)..], NumberStyles.None, CultureInfo.InvariantCulture, out var level ) )
+			if ( dx < 0 )
+				continue;
+			var target = name[(dx + 2)..];
+			if ( target.EndsWith( "_20b", StringComparison.OrdinalIgnoreCase ) )
+				target = target[..^4];
+			if ( !int.TryParse( target, NumberStyles.None, CultureInfo.InvariantCulture, out var level ) )
 				continue;
 			var selected = name[..dx] switch
 			{
