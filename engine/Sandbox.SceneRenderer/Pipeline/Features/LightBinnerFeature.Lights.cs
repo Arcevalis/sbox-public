@@ -45,6 +45,9 @@ internal sealed partial class LightBinnerFeature
 		/// </summary>
 		public uint LightModulatorCount;
 
+		/// <summary>
+		/// Byte stride shared with the native and shader light buffers.
+		/// </summary>
 		public const int NativeSize = 156;
 
 		internal static void ValidateLayout()

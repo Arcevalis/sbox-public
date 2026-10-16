@@ -144,7 +144,8 @@ internal sealed class LightModulatorSystem : GameObjectSystem<LightModulatorSyst
 		{
 			var current = rectangles[i];
 			var previous = previousRectangles[i];
-			if ( current.Origin != previous.Origin || current.U != previous.U || current.V != previous.V
+			// Reciprocal axes can change by very little while moving the edges of a large pane substantially.
+			if ( !current.Origin.Equals( previous.Origin ) || !current.U.Equals( previous.U ) || !current.V.Equals( previous.V )
 				|| current.HalfWidth != previous.HalfWidth || current.HalfHeight != previous.HalfHeight )
 				return true;
 		}

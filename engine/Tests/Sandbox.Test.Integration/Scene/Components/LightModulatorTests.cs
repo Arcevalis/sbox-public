@@ -7,6 +7,40 @@ namespace SceneTests.Components;
 public class LightModulatorRenderPreparationTests
 {
 	/// <summary>
+	/// Small changes to reciprocal axes can move a large pane into a light's range.
+	/// </summary>
+	[TestMethod]
+	public void SmallRotationRefreshesCandidates()
+	{
+		if ( !Graphics.IsAvailable )
+			Assert.Inconclusive( "Requires SBOX_TEST_GRAPHICS=1." );
+
+		var scene = Scene.CreateEditorScene();
+		using var scope = scene.Push();
+
+		try
+		{
+			var light = new ScenePointLight( scene.SceneWorld, new Vector3( 42, 499, 0 ), 1, Color.White );
+			var pane = scene.CreateObject().Components.Create<LightModulator>();
+			pane.Texture = Texture.White;
+			pane.Size = new Vector2( 1000, 1000 );
+			pane.WorldPosition = new Vector3( 50, 0, 0 );
+
+			var system = scene.GetSystem<LightModulatorSystem>();
+			scene.PreCameraRender();
+			Assert.AreEqual( 0, system.CandidateCount );
+
+			pane.WorldRotation = Rotation.FromYaw( 1 );
+			scene.PreCameraRender();
+			Assert.AreEqual( 1, system.CandidateCount, "A small rotation must include lights newly intersecting the pane." );
+		}
+		finally
+		{
+			scene.Destroy();
+		}
+	}
+
+	/// <summary>
 	/// Appearance edits upload rectangles without rebuilding candidates; light changes do the reverse.
 	/// </summary>
 	[TestMethod]
