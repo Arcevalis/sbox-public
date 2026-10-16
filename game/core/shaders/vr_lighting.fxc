@@ -397,6 +397,17 @@ void ComputeDirectLightingForLight( const FinalCombinerInput_t f, float3 vReceiv
 			return;
 	#endif
 	
+	// Apply transmission after range, cone and shadow rejection, to this light alone.
+	if ( lightData.Type == LightType::LightTypeDirectional )
+	{
+		vLightColor *= LightModulators::EvaluateSun( f.vPositionWs.xyz, -lightData.GetDirection() );
+	}
+	else
+	{
+		vLightColor *= LightModulators::Evaluate( f.vPositionWs.xyz, vPositionToLightDirWs,
+			sqrt( flDistToLightSq ), lightData.LightModulatorOffset, lightData.LightModulatorCount );
+	}
+
 	float3 vDiffuseTerm, vSpecularTerm, vTransmissiveTerm;
 	ComputeDiffuseAndSpecularTerms(
 		vDiffuseTerm,
@@ -424,7 +435,7 @@ void ComputeDirectionalLight( const FinalCombinerInput_t f, float3 vReceiverNorm
 
 	const float2 vDiffuseExponent = ( ( 1.0 - f.vRoughness.xy ) * 0.8 ) + 0.6;
 
-	float3 vLightColor = g_DirectionalLightColor.rgb;
+	float3 vLightColor = g_DirectionalLightColor.rgb * LightModulators::EvaluateSun( f.vPositionWs.xyz, -g_DirectionalLightDirection.xyz );
 
 	float3 vPositionToLightDirWs = -g_DirectionalLightDirection.xyz;
 	float3 vPositionToCameraDirWs = CalculatePositionToCameraDirWs( f.vPositionWs.xyz );

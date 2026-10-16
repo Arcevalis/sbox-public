@@ -3,6 +3,7 @@
 
 #include "common/Shadow.hlsl"
 #include "common/lightbinner.hlsl"
+#include "common/classes/LightModulators.hlsl"
 #include "light_probe_volume.fxc"
 #include "baked_lighting_constants.fxc"
 
@@ -169,7 +170,20 @@ struct Light
 
     float3 GetLightColor(float3 vPositionWs)
     {
-        return LightData.Color * GetLightCookie(vPositionWs);
+        float3 transmission;
+        if ( LightData.Type == LightType::LightTypeDirectional )
+        {
+            transmission = LightModulators::EvaluateSun( vPositionWs, -LightData.GetDirection() );
+        }
+        else
+        {
+            float3 ray = LightData.GetPosition() - vPositionWs;
+            float distance = length( ray );
+            transmission = LightModulators::Evaluate( vPositionWs, ray / max( distance, 0.0001f ), distance,
+                LightData.LightModulatorOffset, LightData.LightModulatorCount );
+        }
+
+        return LightData.Color * GetLightCookie(vPositionWs) * transmission;
     }
 
     float3 GetLightPosition()
