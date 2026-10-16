@@ -464,7 +464,7 @@ float4 EvaluateTextGradient( GradientData g, float4 rect, float2 p )
 		{
 			float2 corners[4] = { c, float2( w, 0 ) - c, float2( w, h ) - c, float2( 0, h ) - c };
 			float2 pick = corners[0];
-			for ( int i = 1; i < 4; i++ )
+			[ForceUnroll] for ( int i = 1; i < 4; i++ )
 			{
 				bool better = g.SizeMode == 1 ? length( corners[i] ) > length( pick ) : length( corners[i] ) < length( pick );
 				if ( better ) pick = corners[i];
