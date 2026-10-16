@@ -671,7 +671,7 @@ PS
 		float gradLength;
 		float t = GradientPosition( g, texCoord, boxSize, gradLength );
 
-		int last = g.Count - 1;
+		int last = clamp( g.Count, 1, 8 ) - 1;
 
 		if ( t <= GradientStop( g, 0, gradLength ) )
 			return g.StopColors[0];

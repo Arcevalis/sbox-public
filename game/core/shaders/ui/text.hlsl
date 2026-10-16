@@ -485,7 +485,7 @@ float4 EvaluateTextGradient( GradientData g, float4 rect, float2 p )
 
 	t = saturate( t );
 
-	int last = g.Count - 1;
+	int last = clamp( g.Count, 1, 8 ) - 1;
 	if ( t <= g.StopOffsets[0] ) return g.StopColors[0];
 	if ( t >= g.StopOffsets[last] ) return g.StopColors[last];
 
