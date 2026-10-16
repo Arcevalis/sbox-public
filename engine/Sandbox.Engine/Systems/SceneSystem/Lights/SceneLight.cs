@@ -10,6 +10,15 @@ public class SceneLight : SceneObject
 {
 	internal CSceneLightObject lightNative;
 
+	/// <summary>
+	/// Updates the scene-owned modulation candidates and the managed renderer's light mirror.
+	/// </summary>
+	internal void SetModulatorRange( uint offset, uint count )
+	{
+		lightNative.SetLightModulatorRange( offset, count );
+		NotifyChanged( Rendering.SceneObjectChange.Settings );
+	}
+
 	internal SceneLight() { }
 	internal SceneLight( HandleCreationData _ ) { }
 
