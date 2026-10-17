@@ -20,24 +20,11 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 	[Property, Header( "Limits" )]
 	public int MaxParticles { get; set; } = 1000;
 
-	ParticleFloat _lifetime = 1.0f;
-
-	// Set when Lifetime is assigned (code, inspector, undo, deserialization); makes the next step re-evaluate DeathTime on live particles.
-	bool _lifetimeChanged;
-
 	/// <summary>
 	/// The lifetime of each particle, in seconds.
 	/// </summary>
 	[Property]
-	public ParticleFloat Lifetime
-	{
-		get => _lifetime;
-		set
-		{
-			_lifetime = value;
-			_lifetimeChanged = true;
-		}
-	}
+	public ParticleFloat Lifetime { get; set; } = 1.0f;
 
 	/// <summary>
 	/// Scales the simulation time for this effect.
@@ -448,7 +435,7 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 	Dictionary<SkinnedModelRenderer, int> _boneTargets;
 
 	// Main thread only: particles flagged IsDead during the parallel update, released in PostStep.
-	List<Particle> _deadParticles;
+	List<(Particle particle, uint generation)> _deadParticles;
 
 	/// <summary>
 	/// Called before the particles are stepped.
@@ -515,14 +502,14 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 
 	public void Clear()
 	{
-		// Snapshot so OnParticleDestroyed may terminate other particles while we release.
-		var live = Particles.ToArray();
-		Particles.Clear();
-
-		foreach ( var p in live )
+		// Callbacks can terminate other particles from the snapshot.
+		foreach ( var p in Particles.ToArray() )
 		{
-			ReleaseParticle( p );
+			if ( Particles.Contains( p ) )
+				Terminate( p );
 		}
+
+		Particles.Clear();
 
 		DelayedParticles.Clear();
 		_boneTargets?.Clear();
@@ -551,27 +538,17 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 	Transform _worldTx;
 	Vector3 _worldForce;
 
-	// Per-step flags set in PreStep so UpdateParticle can skip work for zero/constant inputs.
-	bool _reevaluateLifetime;
-	bool _hasDamping;
-	bool _hasLocalSpace;
-	bool _hasForce;
-	bool _hasConstantMovement;
-	float _constantPerParticleTimeScale;
-
 	internal void UpdateParticle( int index )
 	{
 		var p = Particles[index];
 
-		// Lifetime is drawn at emit; only re-evaluate on live particles on the step after Lifetime changes.
-		if ( _reevaluateLifetime )
-			p.DeathTime = p.BornTime + Lifetime.Evaluate( p.Rand( 155, 100 ), p.Rand( 145, 100 ) );
+		// Re-evaluate each step to support live edits and frame-based randomness.
+		p.DeathTime = p.BornTime + Lifetime.Evaluate( p.Rand( 155, 100 ), p.Rand( 145, 100 ) );
 
 		float delta = MathX.Remap( p.BornTime + p.Age, p.BornTime, p.DeathTime );
 		p.LifeDelta = delta;
 
-		var perParticleTimeScale = float.IsNaN( _constantPerParticleTimeScale ) ? PerParticleTimeScale.Evaluate( p, 3355 ) : _constantPerParticleTimeScale;
-		var timeScale = perParticleTimeScale * _timeDelta * p.TimeScale;
+		var timeScale = PerParticleTimeScale.Evaluate( p, 3355 ) * _timeDelta * p.TimeScale;
 		var frame = p.Frame;
 
 		p.Age += timeScale;
@@ -581,7 +558,9 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 		if ( p.LifeDelta < 0 )
 			return;
 
-		var localSpace = _hasLocalSpace ? LocalSpace.Evaluate( p, 254 ).Clamp( 0, 1 ) : 0.0f;
+		var damping = Damping.Evaluate( p, 8234 );
+		var forceScale = ForceScale.Evaluate( p, 7723 );
+		var localSpace = LocalSpace.Evaluate( p, 254 ).Clamp( 0, 1 );
 
 		var appliedBoneSpace = false;
 
@@ -603,41 +582,36 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 			ApplyLocalSpaceMovement( ref p, localSpace, lastTransform, _worldTx );
 		}
 
-		if ( _hasDamping )
-			p.ApplyDamping( Damping.Evaluate( p, 8234 ) * timeScale );
+		p.ApplyDamping( damping * timeScale );
 
 		OnStep?.Invoke( p, p.LifeDelta );
 
-		if ( _hasForce )
+		if ( Force && forceScale != 0.0f )
 		{
-			var forceScale = ForceScale.Evaluate( p, 7723 );
-			if ( forceScale != 0.0f )
+			if ( !ForceDirection.IsNearlyZero() )
 			{
-				if ( !ForceDirection.IsNearlyZero() )
-				{
-					p.Velocity += forceScale * (ForceSpace == SimulationSpace.Local ? _worldForce : ForceDirection) * timeScale;
-				}
+				p.Velocity += forceScale * (ForceSpace == SimulationSpace.Local ? _worldForce : ForceDirection) * timeScale;
+			}
 
-				if ( !OrbitalForce.IsNearlyZero() )
-				{
-					var force = OrbitalForce.Evaluate( delta, p.Rand( 8363 ), p.Rand( 5216 ), p.Rand( 2323 ) );
-					var localOffset = (_worldTx.Position - p.Position).Normal;
-					var rotatedOffset = localOffset.RotateAround( 0, new Angles( force ) );
-					var rotDelta = localOffset - rotatedOffset;
+			if ( !OrbitalForce.IsNearlyZero() )
+			{
+				var force = OrbitalForce.Evaluate( delta, p.Rand( 8363 ), p.Rand( 5216 ), p.Rand( 2323 ) );
+				var localOffset = (_worldTx.Position - p.Position).Normal;
+				var rotatedOffset = localOffset.RotateAround( 0, new Angles( force ) );
+				var rotDelta = localOffset - rotatedOffset;
 
-					p.Velocity += forceScale * rotDelta * timeScale;
-				}
+				p.Velocity += forceScale * rotDelta * timeScale;
+			}
 
-				if ( !OrbitalPull.IsNearlyZero() )
-				{
-					var localOffset = (_worldTx.Position - p.Position) / 100.0f;
-					p.Velocity += forceScale * localOffset * timeScale * OrbitalPull.Evaluate( delta, p.Rand( 4333 ) );
-				}
+			if ( !OrbitalPull.IsNearlyZero() )
+			{
+				var localOffset = (_worldTx.Position - p.Position) / 100.0f;
+				p.Velocity += forceScale * localOffset * timeScale * OrbitalPull.Evaluate( delta, p.Rand( 4333 ) );
 			}
 		}
 
 		// Apply constant movement
-		if ( _hasConstantMovement )
+		if ( !ConstantMovement.IsNearlyZero() )
 		{
 			var constantMovement = ConstantMovement.Evaluate( p, 4395 ) * _timeDelta;
 			p.Position += constantMovement.LerpTo( _worldTx.NormalToWorld( constantMovement ) * constantMovement.Length, localSpace );
@@ -831,49 +805,56 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 
 		OnPreStep?.Invoke( _timeDelta );
 
-		// After OnPreStep, so controllers and emitters changing properties there apply this step.
-		_reevaluateLifetime = _lifetimeChanged;
-		_lifetimeChanged = false;
-		_hasDamping = !Damping.IsNearlyZero();
-		_hasLocalSpace = !LocalSpace.IsNearlyZero();
-		_hasForce = Force && !ForceScale.IsNearlyZero();
-		_hasConstantMovement = !ConstantMovement.IsNearlyZero();
-		_constantPerParticleTimeScale = PerParticleTimeScale.IsConstant ? PerParticleTimeScale.ConstantValue : float.NaN;
-
-		if ( Collision )
-			_trace = Scene.Trace.WithoutTags( CollisionIgnore );
+		_trace = Scene.Trace.WithoutTags( CollisionIgnore );
 
 		RunDelayedParticles();
 	}
 
 	internal void PostStep()
 	{
-		// Order-preserving compaction: one pass instead of a List.Remove per dead particle.
-		int write = 0;
-		for ( int read = 0; read < Particles.Count; read++ )
+		// Callbacks and follower destruction can inspect or mutate Particles while a particle is released.
+		// Keep the old per-particle removal order in that case; otherwise compact in one pass.
+		bool needsIndividualRemoval = OnParticleDestroyed is not null;
+		foreach ( var p in Particles )
 		{
-			var p = Particles[read];
-			if ( p.IsDead )
-			{
-				(_deadParticles ??= new()).Add( p );
-				continue;
-			}
-
-			Particles[write++] = p;
+			if ( !p.IsDead ) continue;
+			(_deadParticles ??= new()).Add( (p, p.Generation) );
+			needsIndividualRemoval |= p.hasUpdated || p.Follower.IsValid();
 		}
 
-		if ( write < Particles.Count )
-			Particles.RemoveRange( write, Particles.Count - write );
-
-		// Release after compacting, so a Terminate() from OnParticleDestroyed sees a consistent list.
-		if ( _deadParticles is { Count: > 0 } )
+		if ( _deadParticles is { Count: > 0 } deadParticles )
 		{
-			foreach ( var p in _deadParticles )
+			// A callback can recursively step this effect; give that step its own buffer.
+			_deadParticles = null;
+			try
 			{
-				ReleaseParticle( p );
+				if ( needsIndividualRemoval )
+				{
+					foreach ( var (p, generation) in deadParticles )
+					{
+						// A callback may have already terminated and even reused this particle.
+						if ( p.Generation == generation && p.IsDead && !p.IsReleased )
+							Terminate( p );
+					}
+				}
+				else
+				{
+					int write = 0;
+					for ( int read = 0; read < Particles.Count; read++ )
+					{
+						var p = Particles[read];
+						if ( !p.IsDead ) Particles[write++] = p;
+					}
+					Particles.RemoveRange( write, Particles.Count - write );
+					foreach ( var (p, _) in deadParticles )
+						ReleaseParticle( p );
+				}
 			}
-
-			_deadParticles.Clear();
+			finally
+			{
+				deadParticles.Clear();
+				_deadParticles ??= deadParticles;
+			}
 		}
 
 		ParticleBounds = BBox.FromPositionAndSize( _worldTx.Position, _maxDistance * 2.0f );
@@ -1073,8 +1054,7 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 		}
 
 		p.BornTime += delay;
-		// Same draw UpdateParticle uses when Lifetime changes
-		p.DeathTime = p.BornTime + Lifetime.Evaluate( p.Rand( 155, 100 ), p.Rand( 145, 100 ) );
+		p.DeathTime = p.BornTime + Lifetime.Evaluate( delta, p.Rand( 145, 100 ) );
 
 		if ( UsePrefabFeature && FollowerPrefabChance.Evaluate( delta, Random.Shared.Float( 0, 1 ) ) > Random.Shared.Float() )
 		{
@@ -1115,15 +1095,18 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 
 	public void Terminate( Particle p )
 	{
-		ReleaseParticle( p );
-		Particles.Remove( p );
+		if ( ReleaseParticle( p ) )
+			Particles.Remove( p );
 	}
 
 	/// <summary>
 	/// Tear down a particle that is leaving the effect and return it to the pool. Does not touch <see cref="Particles"/>.
 	/// </summary>
-	void ReleaseParticle( Particle p )
+	bool ReleaseParticle( Particle p )
 	{
+		if ( p.IsReleased ) return false;
+		p.IsReleased = true;
+
 		// Release by reference, not IsValid() - a destroyed renderer is still a valid dictionary key, so the
 		// ref-count stays balanced.
 		if ( p.AttachTarget is not null )
@@ -1164,6 +1147,7 @@ public sealed partial class ParticleEffect : Component, Component.ExecuteInEdito
 			Particle.Pool.Enqueue( p );
 
 		SceneMetrics.ParticlesDestroyed++;
+		return true;
 	}
 
 	internal void OnControllerDisabled( Component c )

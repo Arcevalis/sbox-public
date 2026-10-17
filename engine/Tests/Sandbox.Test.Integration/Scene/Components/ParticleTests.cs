@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
 using Sandbox.Rendering;
 
 namespace SceneTests.Components;
@@ -704,8 +705,7 @@ public class ParticleEffectTest
 	}
 
 	/// <summary>
-	/// Lifetime is drawn at emit. Changing Lifetime (here from OnPreStep) still applies to live
-	/// particles on that same step, and only then, so a DeathTime set by user code sticks.
+	/// Lifetime changes apply to live particles and DeathTime is recalculated every step.
 	/// </summary>
 	[TestMethod]
 	public void LifetimeChange_AppliesToLiveParticles()
@@ -744,7 +744,97 @@ public class ParticleEffectTest
 
 		scene.GameTick();
 
-		Assert.AreEqual( custom.BornTime + 5.0f, custom.DeathTime, 0.0001f, "Lifetime should not be re-evaluated once the change is applied" );
+		Assert.AreEqual( custom.BornTime + 2.0f, custom.DeathTime, 0.0001f, "Lifetime should be re-evaluated on every step" );
+	}
+
+	[TestMethod]
+	public void Clear_DestroyCallbacksSeeRemainingParticles()
+	{
+		var scene = new Scene();
+		using var sceneScope = scene.Push();
+		var effect = scene.CreateObject().Components.Create<ParticleEffect>();
+		effect.Emit( Vector3.Zero, 0 );
+		effect.Emit( Vector3.Zero, 0 );
+		var counts = new List<int>();
+		effect.OnParticleDestroyed += p => counts.Add( effect.Particles.Count );
+
+		effect.Clear();
+
+		CollectionAssert.AreEqual( new[] { 2, 1 }, counts );
+		Assert.AreEqual( 0, effect.Particles.Count );
+	}
+
+	[TestMethod]
+	public void Step_UsesChangesMadeByParticleCallback()
+	{
+		var scene = new Scene();
+		using var sceneScope = scene.Push();
+		var effect = scene.CreateObject().Components.Create<ParticleEffect>();
+		effect.Lifetime = 10;
+		effect.ForceDirection = new Vector3( 10, 0, 0 );
+		effect.ForceSpace = ParticleEffect.SimulationSpace.World;
+		var p = effect.Emit( Vector3.Zero, 0 );
+		p.Velocity = Vector3.Zero;
+		effect.OnStep += ( particle, delta ) =>
+		{
+			effect.Force = true;
+			effect.ConstantMovement = new Vector3( 0, 10, 0 );
+		};
+
+		effect.PreStep( 0.1f );
+		effect.UpdateParticle( 0 );
+		Assert.IsTrue( p.Velocity.x > 0, "Force enabled by OnStep should apply immediately" );
+		Assert.IsTrue( p.Position.y > 0, "Movement enabled by OnStep should apply immediately" );
+	}
+
+	[TestMethod]
+	public void Step_AppliesSmallNonzeroDampingAndForce()
+	{
+		var scene = new Scene();
+		using var sceneScope = scene.Push();
+		var effect = scene.CreateObject().Components.Create<ParticleEffect>();
+		effect.Lifetime = 10;
+		effect.Damping = 0.00005f;
+		effect.Force = true;
+		effect.ForceScale = 0.00005f;
+		effect.ForceDirection = new Vector3( 0, 100, 0 );
+		effect.ForceSpace = ParticleEffect.SimulationSpace.World;
+		var p = effect.Emit( Vector3.Zero, 0 );
+		p.Velocity = new Vector3( 10, 0, 0 );
+
+		effect.PreStep( 0.1f );
+		effect.UpdateParticle( 0 );
+		Assert.IsTrue( p.Velocity.x < 10, "Small damping should still reduce velocity" );
+		Assert.IsTrue( p.Velocity.y > 0, "Small force should still affect velocity" );
+	}
+
+	[TestMethod]
+	public void Expiry_CallbackCanTerminateAndReuseAnotherDeadParticle()
+	{
+		var scene = new Scene();
+		using var sceneScope = scene.Push();
+		var effect = scene.CreateObject().Components.Create<ParticleEffect>();
+		var first = effect.Emit( Vector3.Zero, 0 );
+		var second = effect.Emit( Vector3.Zero, 0 );
+		first.IsDead = true;
+		second.IsDead = true;
+		var counts = new List<int>();
+		Particle replacement = null;
+		effect.OnParticleDestroyed += p =>
+		{
+			counts.Add( effect.Particles.Count );
+			if ( p != first ) return;
+			effect.Terminate( first ); // Re-entering the current release must be harmless.
+			effect.Terminate( second );
+			replacement = effect.Emit( Vector3.Zero, 0 );
+		};
+
+		effect.PostStep();
+
+		CollectionAssert.AreEqual( new[] { 2, 2 }, counts );
+		Assert.AreEqual( 1, effect.Particles.Count );
+		Assert.AreSame( replacement, effect.Particles[0] );
+		Assert.IsFalse( Particle.Pool.Contains( replacement ), "A live replacement must not be pooled" );
 	}
 
 	/// <summary>

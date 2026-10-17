@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -11,9 +11,9 @@ public class ParticleFloatTest
 	/// Effects embed dozens of these and get cloned per impact; curve data must stay behind a reference.
 	/// </summary>
 	[TestMethod]
-	public void SizeIs24Bytes()
+	public void SizeIs32Bytes()
 	{
-		Assert.AreEqual( 24, Unsafe.SizeOf<ParticleFloat>() );
+		Assert.AreEqual( 32, Unsafe.SizeOf<ParticleFloat>() );
 	}
 
 	/// <summary>
@@ -23,12 +23,15 @@ public class ParticleFloatTest
 	public void RangeSerializesConstantsAsVector4()
 	{
 		var value = new ParticleFloat( 2, 5 );
+		value.Constants.z = 7;
+		value.Constants.w = 9;
+		Assert.IsNotNull( typeof( ParticleFloat ).GetField( nameof( ParticleFloat.Constants ) ) );
 
 		var json = JsonSerializer.Serialize( value, Json.options );
 		var node = JsonNode.Parse( json );
 
 		Assert.IsNotNull( node["Constants"], json );
-		Assert.AreEqual( new Vector4( 2, 5, 0, 0 ), node["Constants"].Deserialize<Vector4>( Json.options ) );
+		Assert.AreEqual( new Vector4( 2, 5, 7, 9 ), node["Constants"].Deserialize<Vector4>( Json.options ) );
 
 		var read = JsonSerializer.Deserialize<ParticleFloat>( json, Json.options );
 
@@ -36,6 +39,8 @@ public class ParticleFloatTest
 		Assert.AreEqual( ParticleFloat.EvaluationType.Seed, read.Evaluation );
 		Assert.AreEqual( 2f, read.ConstantA );
 		Assert.AreEqual( 5f, read.ConstantB );
+		Assert.AreEqual( 7f, read.Constants.z );
+		Assert.AreEqual( 9f, read.Constants.w );
 	}
 
 	[TestMethod]
@@ -87,6 +92,16 @@ public class ParticleFloatTest
 		Assert.IsFalse( new ParticleFloat( 1, 2 ).IsConstant );
 		Assert.IsTrue( vector.IsConstant );
 		Assert.IsFalse( mixed.IsConstant );
+	}
+
+	[TestMethod]
+	public void CustomJsonOptionsIgnoreConvenienceProperties()
+	{
+		var value = new ParticleFloat( 2, 5 );
+		var json = JsonNode.Parse( JsonSerializer.Serialize( value, new JsonSerializerOptions() ) );
+		Assert.IsNotNull( json["Constants"] );
+		foreach ( var name in new[] { "ConstantValue", "ConstantA", "ConstantB", "CurveRange", "IsConstant" } )
+			Assert.IsNull( json[name], name );
 	}
 
 	/// <summary>
