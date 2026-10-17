@@ -276,5 +276,8 @@ internal sealed partial class MdlFile
 			stream.Seek( pos, SeekOrigin.Begin );
 		} );
 
+		(_includeLabels, _includeFiles) = ReadIncludes( stream );
+		(_sequences, _sequenceNames, _sequenceActivities, _sequenceAnimDescs, _animDescs, _animDescNames, _animDescNameValid) = ReadSequences( stream );
+
 	}
 }
