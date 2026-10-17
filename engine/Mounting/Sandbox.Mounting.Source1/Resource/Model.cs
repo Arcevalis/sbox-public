@@ -13,7 +13,7 @@ internal sealed partial class SourceModelBuilder( BaseMount mount, string fullPa
 	private BaseMount Host { get; } = mount;
 	private string FullPath { get; } = fullPath;
 	private string ContentRoot { get; } = BaseMount.GetContentRoot( fullPath, "models" );
-	internal Model BuildModel( MdlFile mdl, VtxFile vtx, PhyFile physics, string name = null, Transform[] referencePose = null )
+	internal Model BuildModel( MdlFile mdl, VtxFile vtx, PhyFile physics, string name = null, Transform[] referencePose = null, IReadOnlyList<SourceAnimation> animations = null )
 	{
 		var builder = Model.Builder.WithName( name );
 		var viewBounds = GetViewBounds( mdl );
@@ -40,6 +40,7 @@ internal sealed partial class SourceModelBuilder( BaseMount mount, string fullPa
 		materials.AddGroups( builder );
 
 		var boneNames = AddSkeleton( builder, mdl, boneBounds, boneTransforms, parentLocal: vtx == null );
+		AddAnimations( builder, mdl, animations );
 		PhysicsPlan physicsPlan = null;
 		if ( physics != null )
 		{
