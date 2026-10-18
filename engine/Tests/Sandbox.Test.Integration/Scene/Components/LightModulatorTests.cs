@@ -7,6 +7,70 @@ namespace SceneTests.Components;
 public class LightModulatorRenderPreparationTests
 {
 	/// <summary>
+	/// Infinite planes reach distant lights without making UV edits or reference sizes rebuild candidates.
+	/// </summary>
+	[TestMethod]
+	public void InfinitePlaneAndWorldSizedUVs()
+	{
+		if ( !Graphics.IsAvailable )
+			Assert.Inconclusive( "Requires SBOX_TEST_GRAPHICS=1." );
+
+		var scene = Scene.CreateEditorScene();
+		using var scope = scene.Push();
+		try
+		{
+			var light = scene.CreateObject().Components.Create<PointLight>();
+			light.WorldPosition = new Vector3( 0, 1000, 0 );
+			light.Radius = 10;
+			light.Shadows = false;
+			var pane = scene.CreateObject().Components.Create<LightModulator>();
+			pane.Texture = Texture.White;
+			pane.WorldPosition = new Vector3( 5, 0, 0 );
+			var system = scene.GetSystem<LightModulatorSystem>();
+			scene.PreCameraRender();
+			Assert.AreEqual( 0, system.CandidateCount );
+			var rebuilds = system.RebuildCount;
+			var uploads = system.RectangleUploadCount;
+
+			pane.WorldSizedUVs = true;
+			scene.PreCameraRender();
+			Assert.AreEqual( rebuilds, system.RebuildCount, "UV units must not change the physical bounds." );
+			Assert.AreEqual( ++uploads, system.RectangleUploadCount );
+			Assert.IsTrue( pane.BuildData( out var finite ) );
+			Assert.AreEqual( 1, finite.WorldSizedUVs );
+			Assert.AreEqual( 0, finite.Infinite );
+
+			pane.Infinite = true;
+			scene.PreCameraRender();
+			Assert.AreEqual( ++rebuilds, system.RebuildCount );
+			Assert.AreEqual( 1, system.CandidateCount, "The plane must reach lights far outside its reference rectangle." );
+			pane.Size = Vector2.Zero;
+			pane.WorldScale = new Vector3( 1, 3, 2 );
+			scene.PreCameraRender();
+			Assert.AreEqual( rebuilds, system.RebuildCount );
+			Assert.AreEqual( 1, system.CandidateCount, "An infinite world-mapped plane does not depend on Size." );
+			Assert.IsTrue( pane.BuildData( out var infinite ) );
+			Assert.AreEqual( 1, infinite.Infinite );
+
+			pane.Size = new Vector2( 64, 96 );
+			pane.WorldSizedUVs = false;
+			scene.PreCameraRender();
+			Assert.AreEqual( rebuilds, system.RebuildCount, "Changing an infinite plane's UV reference must not rebuild candidates." );
+			pane.WorldRotation = Rotation.FromYaw( 90 );
+			scene.PreCameraRender();
+			Assert.AreEqual( ++rebuilds, system.RebuildCount );
+			Assert.AreEqual( 0, system.CandidateCount, "Rotating the infinite plane away must exclude the light." );
+			pane.Infinite = false;
+			scene.PreCameraRender();
+			Assert.AreEqual( ++rebuilds, system.RebuildCount, "Switching back to a rectangle must rebuild candidates." );
+		}
+		finally
+		{
+			scene.Destroy();
+		}
+	}
+
+	/// <summary>
 	/// Named controls preserve the shader defaults and retain independent values when switching effects.
 	/// </summary>
 	[TestMethod]

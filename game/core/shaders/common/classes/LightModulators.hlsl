@@ -31,6 +31,8 @@ struct LightModulatorRectangle
     float EdgeFeather;
     int Effect;
     float4 EffectParameters;
+    int WorldSizedUVs;
+    int Infinite;
 };
 
 StructuredBuffer<LightModulatorRectangle> LightModulatorRectangles < Attribute( "LightModulatorRectangles" ); >;
@@ -135,15 +137,16 @@ struct LightModulators
             return 1.0f;
 
         float3 relative = position + toLight * distance - rect.Origin;
-        float2 uv = float2( dot( relative, rect.U ), dot( relative, rect.V ) ) * float2( 1.0f, -1.0f ) + 0.5f;
+        float2 projected = float2( dot( relative, rect.U ), dot( relative, rect.V ) ) * float2( 1.0f, -1.0f );
+        float2 uv = projected + 0.5f;
 
         // Clip the physical aperture before transforming UVs: tiling never enlarges the rectangle.
-        if ( any( uv < 0.0f ) || any( uv > 1.0f ) )
+        if ( rect.Infinite == 0 && (any( uv < 0.0f ) || any( uv > 1.0f )) )
             return 1.0f;
 
         float edgeDistance = min( min( uv.x, 1.0f - uv.x ), min( uv.y, 1.0f - uv.y ) );
         float coverage = rect.Strength;
-        if ( rect.EdgeFeather > 0.0f )
+        if ( rect.Infinite == 0 && rect.EdgeFeather > 0.0f )
             coverage *= smoothstep( 0.0f, rect.EdgeFeather, edgeDistance );
 
         // World-space distance normal to the plane keeps the fade width independent of the light angle.
@@ -151,6 +154,8 @@ struct LightModulators
             coverage *= smoothstep( 0.0f, rect.DistanceFeather, abs( dot( position - rect.Origin, rect.Normal ) ) );
 
         float2 centered = uv - 0.5f;
+        if ( rect.WorldSizedUVs != 0 )
+            centered = projected * float2( rect.HalfWidth, rect.HalfHeight ) / 64.0f;
         uv = float2( rect.Rotation.x * centered.x + rect.Rotation.y * centered.y,
             -rect.Rotation.y * centered.x + rect.Rotation.x * centered.y );
         uv = uv * rect.Tiling + 0.5f;

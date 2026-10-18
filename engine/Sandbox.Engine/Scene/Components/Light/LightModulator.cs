@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Sandbox;
 
 /// <summary>
-/// Filters direct light passing through a textured rectangle in the local Y/Z plane.
+/// Filters direct light passing through a textured rectangle or infinite plane in the local Y/Z plane.
 /// This changes lighting on receivers; add a separate renderer to display the glass itself.
 /// </summary>
 [Expose, Title( "Light Modulator" ), Category( "Light" ), Icon( "filter" )]
@@ -92,7 +92,7 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	/// Zero gives a hard boundary; 0.1 fades across the outer ten percent on each axis.
 	/// Uses the physical rectangle, independent of texture tiling or scrolling.
 	/// </summary>
-	[Property, Range( 0, 0.5f )]
+	[Property, Range( 0, 0.5f ), HideIf( nameof( Infinite ), true )]
 	public float EdgeFeather
 	{
 		get;
@@ -138,7 +138,8 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	}
 
 	/// <summary>
-	/// Texture repeats across the rectangle on each axis. One fits once; negative values mirror it.
+	/// Texture repeats across the rectangle, or per 128 world units with World Sized UVs enabled.
+	/// Negative values mirror the texture.
 	/// Scaling and rotation are centered on the rectangle.
 	/// </summary>
 	[Property, Group( "Texture Mapping" )]
@@ -152,6 +153,22 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 			InvalidateData();
 		}
 	} = Vector2.One;
+
+	/// <summary>
+	/// Keep texture density independent of rectangle size and object scale.
+	/// Tiling specifies repeats per 128 world units along the plane's axes, centered on its origin.
+	/// </summary>
+	[Property, Group( "Texture Mapping" ), Title( "World Sized UVs" )]
+	public bool WorldSizedUVs
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
 
 	/// <summary>
 	/// Texture-coordinate offset in repeats, applied after tiling and rotation.
@@ -623,7 +640,24 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	} = 1;
 
 	/// <summary>
+	/// Extend the rectangle to an infinite plane, without aperture clipping or edge feathering.
+	/// Sidedness and distance feathering still apply.
+	/// </summary>
+	[Property, Title( "Infinite Plane" )]
+	public bool Infinite
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
 	/// Rectangle width along local Y and height along local Z, before object scaling.
+	/// For an infinite plane, this is the UV reference size when World Sized UVs is disabled.
 	/// </summary>
 	[Property]
 	public Vector2 Size
@@ -761,11 +795,12 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 		if ( texture is null )
 			return false;
 
-		if ( Size.x <= 0 || Size.y <= 0 )
+		var size = Infinite && WorldSizedUVs ? new Vector2( 128, 128 ) : Size;
+		if ( size.x <= 0 || size.y <= 0 )
 			return false;
 
-		var width = MathF.Abs( Size.x * WorldScale.y );
-		var height = MathF.Abs( Size.y * WorldScale.z );
+		var width = MathF.Abs( size.x * WorldScale.y );
+		var height = MathF.Abs( size.y * WorldScale.z );
 		if ( !float.IsFinite( width ) || !float.IsFinite( height ) || width < 0.001f || height < 0.001f )
 			return false;
 
@@ -777,6 +812,8 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 		data.TwoSided = TwoSided ? 1 : 0;
 		data.HalfWidth = width * 0.5f;
 		data.HalfHeight = height * 0.5f;
+		data.WorldSizedUVs = WorldSizedUVs ? 1 : 0;
+		data.Infinite = Infinite ? 1 : 0;
 		data.Tint = new Vector3( Tint.r, Tint.g, Tint.b );
 		data.MipLevel = FiniteClamp( MipLevel, 0, 12 );
 		data.DistanceMipBias = FiniteClamp( DistanceMipBias, 0, 4 );
@@ -842,11 +879,20 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	}
 
 	/// <summary>
-	/// Shows the physical rectangle rather than a view-dependent projection volume.
+	/// Shows the physical rectangle or a grid for an infinite plane.
 	/// </summary>
 	protected override void DrawGizmos()
 	{
 		Gizmo.Draw.Color = Color.Cyan;
+		if ( Infinite )
+		{
+			for ( int i = -128; i <= 128; i += 64 )
+			{
+				Gizmo.Draw.Line( new Vector3( 0, i, -128 ), new Vector3( 0, i, 128 ) );
+				Gizmo.Draw.Line( new Vector3( 0, -128, i ), new Vector3( 0, 128, i ) );
+			}
+			return;
+		}
 		Gizmo.Draw.LineBBox( new BBox( new Vector3( -0.1f, -Size.x * 0.5f, -Size.y * 0.5f ), new Vector3( 0.1f, Size.x * 0.5f, Size.y * 0.5f ) ) );
 	}
 }
@@ -880,14 +926,19 @@ internal struct LightModulatorData
 	internal float EdgeFeather;
 	internal int Effect;
 	internal Vector4 EffectParameters;
+	internal int WorldSizedUVs;
+	internal int Infinite;
 
 	/// <summary>
-	/// Conservative point/spot broad phase: closest point on the rectangle versus light range.
+	/// Conservative point/spot broad phase: distance to the rectangle or infinite plane versus light range.
 	/// A spot's enclosing range sphere deliberately permits false positives, never false negatives.
 	/// </summary>
 	internal readonly bool IntersectsLight( Vector3 position, float radius )
 	{
 		var delta = position - Origin;
+		if ( Infinite != 0 )
+			return MathF.Abs( Vector3.Dot( delta, Normal ) ) <= radius;
+
 		var u = U * (2 * HalfWidth);
 		var v = V * (2 * HalfHeight);
 		var closest = Origin

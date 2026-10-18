@@ -30,6 +30,14 @@ public class LightModulatorTests
 		Assert.IsFalse( rect.IntersectsLight( new( 100, 13, 24 ), 4.99f ) );
 		Assert.IsTrue( rect.IntersectsLight( new( 100, -10, -20 ), 0 ) );
 		Assert.IsFalse( rect.IntersectsLight( new( 0, 0, 0 ), 50 ) );
+
+		rect.Infinite = 1;
+		Assert.IsTrue( rect.IntersectsLight( new( 90, 10000, -20000 ), 10 ) );
+		Assert.IsFalse( rect.IntersectsLight( new( 90, 10000, -20000 ), 9.99f ) );
+		Assert.IsTrue( rect.IntersectsLight( new( 100, -10000, 20000 ), 0 ) );
+		rect.Normal = Vector3.Up;
+		Assert.IsFalse( rect.IntersectsLight( new( 100, 0, 11 ), 10 ) );
+		Assert.IsTrue( rect.IntersectsLight( new( 100, 0, 10 ), 10 ) );
 	}
 
 	/// <summary>
@@ -38,7 +46,7 @@ public class LightModulatorTests
 	[TestMethod]
 	public void RectangleGpuLayout()
 	{
-		Assert.AreEqual( 160, Marshal.SizeOf<Sandbox.LightModulatorData>() );
+		Assert.AreEqual( 168, Marshal.SizeOf<Sandbox.LightModulatorData>() );
 		Assert.AreEqual( 12, Marshal.OffsetOf<Sandbox.LightModulatorData>( "TextureIndex" ).ToInt32() );
 		Assert.AreEqual( 48, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Normal" ).ToInt32() );
 		Assert.AreEqual( 80, Marshal.OffsetOf<Sandbox.LightModulatorData>( "DistanceFeather" ).ToInt32() );
@@ -54,5 +62,7 @@ public class LightModulatorTests
 		Assert.AreEqual( 136, Marshal.OffsetOf<Sandbox.LightModulatorData>( "EdgeFeather" ).ToInt32() );
 		Assert.AreEqual( 140, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Effect" ).ToInt32() );
 		Assert.AreEqual( 144, Marshal.OffsetOf<Sandbox.LightModulatorData>( "EffectParameters" ).ToInt32() );
+		Assert.AreEqual( 160, Marshal.OffsetOf<Sandbox.LightModulatorData>( "WorldSizedUVs" ).ToInt32() );
+		Assert.AreEqual( 164, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Infinite" ).ToInt32() );
 	}
 }
