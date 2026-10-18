@@ -400,7 +400,8 @@ void ComputeDirectLightingForLight( const FinalCombinerInput_t f, float3 vReceiv
 	// Apply transmission after range, cone and shadow rejection, to this light alone.
 	if ( lightData.Type == LightType::LightTypeDirectional )
 	{
-		vLightColor *= LightModulators::EvaluateSun( f.vPositionWs.xyz, -lightData.GetDirection() );
+		// Indexed baked sun matrices already point from the receiver toward the source.
+		vLightColor *= LightModulators::EvaluateSun( f.vPositionWs.xyz, lightData.GetDirection() );
 	}
 	else
 	{

@@ -173,7 +173,8 @@ struct Light
         float3 transmission;
         if ( LightData.Type == LightType::LightTypeDirectional )
         {
-            transmission = LightModulators::EvaluateSun( vPositionWs, -LightData.GetDirection() );
+            // Indexed baked sun matrices already point from the receiver toward the source.
+            transmission = LightModulators::EvaluateSun( vPositionWs, LightData.GetDirection() );
         }
         else
         {
