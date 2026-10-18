@@ -659,7 +659,7 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	/// Rectangle width along local Y and height along local Z, before object scaling.
 	/// For an infinite plane, this is the UV reference size when World Sized UVs is disabled.
 	/// </summary>
-	[Property]
+	[Property, HideIf( nameof( Infinite ), true )]
 	public Vector2 Size
 	{
 		get;
