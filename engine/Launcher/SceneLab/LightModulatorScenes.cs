@@ -1,10 +1,93 @@
 namespace Sandbox.SceneLab;
 
 /// <summary>
-/// An underwater-style gallery showing textured transmission on stonework and through volumetric fog.
+/// Textured transmission showcases and rendering regressions.
 /// </summary>
 internal static class LightModulatorScenes
 {
+	/// <summary>
+	/// A red transmission filter with receivers above and below it, lit by dynamic or indexed baked sunlight.
+	/// </summary>
+	public static Scene Sun( int bakeIndex )
+	{
+		var scene = new Scene();
+		using var scope = scene.Push();
+		if ( bakeIndex >= 0 )
+		{
+			var probe = new GameObject( true, "Sun probe" ).Components.Create<LightProbeVolume>();
+			probe.Bounds = BBox.FromPositionAndSize( 0, 2000 );
+			probe.Texture = Texture.CreateVolume( 1, 1, 6 ).WithData( new byte[24] ).Finish();
+			probe.IndicesTexture = Texture.CreateVolume( 1, 1, 1 ).WithData( new byte[] { 0, 255, 255, 255 } ).Finish();
+			probe.ScalarsTexture = Texture.CreateVolume( 1, 1, 1 ).WithData( new byte[] { 255, 0, 0, 0 } ).Finish();
+		}
+		foreach ( float height in new[] { 64.0f, -64.0f } )
+		{
+			var receiver = new GameObject( true, $"Sun receiver {height}" ).Components.Create<ModelRenderer>();
+			receiver.WorldPosition = new Vector3( 0, -height, height );
+			receiver.Model = Model.Load( "models/dev/box.vmdl" );
+			receiver.MaterialOverride = Material.Load( "materials/dev/primary_white.vmat" );
+		}
+		var sun = new GameObject( true, "Sun" ).Components.Create<DirectionalLight>();
+		sun.WorldRotation = Rotation.LookAt( Vector3.Down );
+		sun.LightColor = Color.White;
+		sun.Shadows = true;
+		sun.ContactShadows = false;
+		var camera = new GameObject( true, "Camera" ).Components.Create<CameraComponent>();
+		camera.FieldOfView = 60;
+		camera.IsMainCamera = true;
+		camera.ZNear = 1;
+		camera.BackgroundColor = Color.Black;
+		var pane = new GameObject( true, "Sun modulator" ).Components.Create<LightModulator>();
+		pane.WorldRotation = Rotation.LookAt( Vector3.Down );
+		pane.Texture = Texture.White;
+		pane.Tint = Color.Red;
+		pane.Infinite = true;
+		pane.TwoSided = true;
+		pane.DistanceFeather = 0;
+		sun.BakeLightIndex = bakeIndex;
+		camera.WorldPosition = new Vector3( -230, 0, 140 );
+		camera.WorldRotation = Rotation.LookAt( new Vector3( 0, 0, 30 ) - camera.WorldPosition );
+		return scene;
+	}
+
+	/// <summary>
+	/// Both renderers share shaders, so check actual above/below-plane pixels as well as parity.
+	/// </summary>
+	public static string ValidateSun( Scene scene )
+	{
+		using var scope = scene.Push();
+		var sun = scene.GetAllComponents<DirectionalLight>().Single();
+		var camera = scene.Camera;
+		var pane = scene.GetAllComponents<LightModulator>().Single();
+		int bakeIndex = sun.BakeLightIndex;
+		camera.FieldOfView = 45;
+		foreach ( var receiver in scene.GetAllComponents<ModelRenderer>().OrderByDescending( x => x.WorldPosition.z ) )
+		{
+			float height = receiver.WorldPosition.z;
+			camera.WorldPosition = receiver.WorldPosition + new Vector3( -110, 0, 70 );
+			camera.WorldRotation = Rotation.LookAt( receiver.WorldPosition - camera.WorldPosition );
+			pane.Enabled = false;
+			float unfiltered = CaptureGreen();
+			pane.Enabled = true;
+			float filtered = CaptureGreen();
+			Log.Info( $"Sun modulation: bake index {bakeIndex}, height {height}, green {unfiltered:F4} -> {filtered:F4}" );
+			if ( unfiltered <= 0.02f || (height > 0 ? MathF.Abs( unfiltered - filtered ) > 0.01f : filtered >= unfiltered * 0.2f) )
+				return $"Sun modulation failed at bake index {bakeIndex}, height {height}: green {unfiltered} -> {filtered}.";
+		}
+		return null;
+
+		float CaptureGreen()
+		{
+			using var bitmap = new Bitmap( 96, 96 );
+			for ( int frame = 0; frame < 10; ++frame )
+			{
+				scene.GameTick( 0.0f );
+				camera.RenderToBitmap( bitmap );
+			}
+			return bitmap.GetPixels().Average( p => p.g );
+		}
+	}
+
 	/// <summary>
 	/// Build a dark gallery with an overhead textured light and a low camera looking through its shafts.
 	/// </summary>
