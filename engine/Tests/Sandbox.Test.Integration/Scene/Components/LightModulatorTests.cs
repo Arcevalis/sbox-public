@@ -7,6 +7,70 @@ namespace SceneTests.Components;
 public class LightModulatorRenderPreparationTests
 {
 	/// <summary>
+	/// Named controls preserve the shader defaults and retain independent values when switching effects.
+	/// </summary>
+	[TestMethod]
+	public void EffectControlsPackAndRetainSettings()
+	{
+		if ( !Graphics.IsAvailable )
+			Assert.Inconclusive( "Requires SBOX_TEST_GRAPHICS=1." );
+
+		var scene = Scene.CreateEditorScene();
+		using var scope = scene.Push();
+		try
+		{
+			var pane = scene.CreateObject().Components.Create<LightModulator>();
+			pane.Texture = Texture.White;
+			foreach ( var effect in System.Enum.GetValues<LightModulator.ModulationEffect>() )
+			{
+				pane.Effect = effect;
+				Assert.IsTrue( pane.BuildData( out var defaults ) );
+				Assert.AreEqual( new Vector4( 1, 1, 1, 0 ), defaults.EffectParameters, $"{effect} defaults must preserve its appearance." );
+			}
+
+			pane.Effect = LightModulator.ModulationEffect.Caustics;
+			pane.CausticsWobble = 0.05f;
+			pane.CausticsLayerScale = 2.26f;
+			scene.PreCameraRender();
+			var system = scene.GetSystem<LightModulatorSystem>();
+			var uploads = system.RectangleUploadCount;
+
+			pane.CloudShadowDepth = 0.4f;
+			pane.ScrollSpeed = Vector2.One;
+			scene.PreCameraRender();
+			Assert.AreEqual( uploads, system.RectangleUploadCount, "Inactive effect edits must not upload unchanged rendering data." );
+			pane.Effect = LightModulator.ModulationEffect.CloudShadows;
+			Assert.IsTrue( pane.BuildData( out var cloud ) );
+			Assert.AreEqual( 0.4f, cloud.EffectParameters.y );
+			pane.Effect = LightModulator.ModulationEffect.Caustics;
+			Assert.IsTrue( pane.BuildData( out var caustics ) );
+			Assert.AreEqual( new Vector4( 1, 2, 2, 0 ), caustics.EffectParameters );
+			Assert.AreEqual( Vector2.Zero, caustics.ScrollSpeed, "Other effects must not inherit scrolling." );
+			pane.Effect = LightModulator.ModulationEffect.Scroll;
+			Assert.IsTrue( pane.BuildData( out var scroll ) );
+			Assert.AreEqual( Vector2.One, scroll.ScrollSpeed, "Scroll retains its own two-axis speed." );
+
+			pane.Effect = LightModulator.ModulationEffect.Kaleidoscope;
+			pane.KaleidoscopeSegments = 12;
+			pane.KaleidoscopeSpeed = -72;
+			Assert.IsTrue( pane.BuildData( out var kaleidoscope ) );
+			Assert.AreEqual( new Vector4( -2, 1, 2, 0 ), kaleidoscope.EffectParameters );
+
+			pane.Effect = LightModulator.ModulationEffect.Ripple;
+			pane.RippleSpeed = float.NaN;
+			pane.RippleDisplacement = float.PositiveInfinity;
+			pane.RippleFrequency = 0;
+			pane.RippleTimeOffset = 1000;
+			Assert.IsTrue( pane.BuildData( out var ripple ) );
+			Assert.AreEqual( new Vector4( 1, 1, 0.1f, 60 ), ripple.EffectParameters, "Scripted values must remain finite and within the control ranges." );
+		}
+		finally
+		{
+			scene.Destroy();
+		}
+	}
+
+	/// <summary>
 	/// Small changes to reciprocal axes can move a large pane into a light's range.
 	/// </summary>
 	[TestMethod]
@@ -77,7 +141,40 @@ public class LightModulatorRenderPreparationTests
 				() => pane.Tiling = new Vector2( 2, 3 ),
 				() => pane.Offset = new Vector2( 0.25f, 0.5f ),
 				() => pane.TextureRotation = 45,
+				() => pane.Effect = LightModulator.ModulationEffect.Scroll,
 				() => pane.ScrollSpeed = Vector2.One,
+				() => pane.Effect = LightModulator.ModulationEffect.Caustics,
+				() => pane.CausticsSpeed = 0.5f,
+				() => pane.CausticsWobble = 0.03f,
+				() => pane.CausticsLayerScale = 1.356f,
+				() => pane.CausticsTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.CloudShadows,
+				() => pane.CloudShadowSpeed = 0.5f,
+				() => pane.CloudShadowDepth = 0.5f,
+				() => pane.CloudShadowLayerScale = 2.04f,
+				() => pane.CloudShadowTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.Rotate,
+				() => pane.RotationSpeed = 43.2f,
+				() => pane.RotationTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.Kaleidoscope,
+				() => pane.KaleidoscopeSpeed = 43.2f,
+				() => pane.KaleidoscopeBlend = 0.5f,
+				() => pane.KaleidoscopeSegments = 8,
+				() => pane.KaleidoscopeTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.ChromaticSplit,
+				() => pane.ChromaticSplitSpeed = 0.5f,
+				() => pane.ChromaticSplitSeparation = 0.012f,
+				() => pane.ChromaticSplitTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.Ripple,
+				() => pane.RippleSpeed = 0.5f,
+				() => pane.RippleDisplacement = 0.03f,
+				() => pane.RippleFrequency = 0.5f,
+				() => pane.RippleTimeOffset = 0.25f,
+				() => pane.Effect = LightModulator.ModulationEffect.Pulse,
+				() => pane.PulseSpeed = 0.5f,
+				() => pane.PulseDepth = 0.5f,
+				() => pane.PulseSharpness = 0.5f,
+				() => pane.PulseTimeOffset = 0.25f,
 				() => pane.Strength = 0,
 				() => pane.Texture = Texture.Black
 			];

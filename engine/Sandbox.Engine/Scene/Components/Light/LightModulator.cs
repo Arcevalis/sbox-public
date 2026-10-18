@@ -31,6 +31,31 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	}
 
 	/// <summary>
+	/// Built-in animation of the projected texture, evaluated in the shader.
+	/// </summary>
+	public enum ModulationEffect
+	{
+		/// <summary>Sample the texture once using its existing mapping controls.</summary>
+		None,
+		/// <summary>Combine two moving, distorted samples into changing caustic highlights.</summary>
+		Caustics,
+		/// <summary>Layer drifting texture samples into cloud shadows.</summary>
+		CloudShadows,
+		/// <summary>Rotate the texture continuously around its center.</summary>
+		Rotate,
+		/// <summary>Fold the texture into rotating mirrored sectors.</summary>
+		Kaleidoscope,
+		/// <summary>Separate red and blue samples around the green sample.</summary>
+		ChromaticSplit,
+		/// <summary>Distort the texture with expanding circular waves.</summary>
+		Ripple,
+		/// <summary>Cycle the texture's brightness smoothly.</summary>
+		Pulse,
+		/// <summary>Move the texture continuously along U and V.</summary>
+		Scroll
+	}
+
+	/// <summary>
 	/// Multiply applies the texture directly; Lighten only boosts light and Darken only reduces it.
 	/// Applied per RGB channel after contrast, brightness and tint, before strength and alpha.
 	/// </summary>
@@ -144,11 +169,402 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 	}
 
 	/// <summary>
-	/// Texture movement in repeats per second along U and V. Zero leaves the projection still.
+	/// Scroll effect movement in repeats per second along U and V. Zero leaves the projection still.
 	/// Runs in the shader without rebuilding textures or light candidate lists each frame.
 	/// </summary>
-	[Property, Group( "Texture Mapping" )]
+	[Property, Group( "Animation" ), Title( "Speed (repeats/sec)" ), Range( -1, 1 ), ShowIf( nameof( Effect ), ModulationEffect.Scroll )]
 	public Vector2 ScrollSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = new( 0.1f, 0 );
+
+	/// <summary>
+	/// Animate the projected texture before contrast, brightness, tint and blending.
+	/// None preserves the existing texture mapping.
+	/// </summary>
+	[Property, Group( "Animation" )]
+	public ModulationEffect Effect
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Animation speed multiplier. Zero freezes caustic motion; negative values reverse it.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed" ), Range( -10, 10 ), ShowIf( nameof( Effect ), ModulationEffect.Caustics )]
+	public float CausticsSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Maximum UV displacement in texture repeats.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Wobble" ), Range( 0, 0.25f ), ShowIf( nameof( Effect ), ModulationEffect.Caustics )]
+	public float CausticsWobble
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 0.025f;
+
+	/// <summary>
+	/// Scale of the second caustic sample relative to the first.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Layer Scale" ), Range( 0.1f, 4 ), ShowIf( nameof( Effect ), ModulationEffect.Caustics )]
+	public float CausticsLayerScale
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1.13f;
+
+	/// <summary>
+	/// Offset in caustic animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.Caustics )]
+	public float CausticsTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Cloud drift speed multiplier. Zero freezes the clouds; negative values reverse them.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed" ), Range( -10, 10 ), ShowIf( nameof( Effect ), ModulationEffect.CloudShadows )]
+	public float CloudShadowSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Blend from white transmission at zero to the full cloud texture at one, before colour adjustments.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Shadow Depth" ), Range( 0, 1 ), ShowIf( nameof( Effect ), ModulationEffect.CloudShadows )]
+	public float CloudShadowDepth
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Scale of the second cloud sample relative to the first.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Layer Scale" ), Range( 0.1f, 4 ), ShowIf( nameof( Effect ), ModulationEffect.CloudShadows )]
+	public float CloudShadowLayerScale
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1.7f;
+
+	/// <summary>
+	/// Offset in cloud animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.CloudShadows )]
+	public float CloudShadowTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Clockwise rotation speed in degrees per second. Negative values rotate counterclockwise.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed (degrees/sec)" ), Range( -360, 360 ), ShowIf( nameof( Effect ), ModulationEffect.Rotate )]
+	public float RotationSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 36;
+
+	/// <summary>
+	/// Offset in rotation animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.Rotate )]
+	public float RotationTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Rotation speed of the mirrored pattern in degrees per second.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed (degrees/sec)" ), Range( -360, 360 ), ShowIf( nameof( Effect ), ModulationEffect.Kaleidoscope )]
+	public float KaleidoscopeSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 36;
+
+	/// <summary>
+	/// Blend from the original UV mapping at zero to fully mirrored sectors at one.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Fold Amount" ), Range( 0, 1 ), ShowIf( nameof( Effect ), ModulationEffect.Kaleidoscope )]
+	public float KaleidoscopeBlend
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Number of mirrored sectors around the center of the texture.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Sector Count" ), Range( 1, 64 ), ShowIf( nameof( Effect ), ModulationEffect.Kaleidoscope )]
+	public int KaleidoscopeSegments
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 6;
+
+	/// <summary>
+	/// Offset in kaleidoscope animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.Kaleidoscope )]
+	public float KaleidoscopeTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Rotation speed of the red/blue separation direction in radians per second.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed (radians/sec)" ), Range( -10, 10 ), ShowIf( nameof( Effect ), ModulationEffect.ChromaticSplit )]
+	public float ChromaticSplitSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// UV offset in texture repeats for the red and blue samples on either side of green.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Channel Separation" ), Range( 0, 0.1f ), ShowIf( nameof( Effect ), ModulationEffect.ChromaticSplit )]
+	public float ChromaticSplitSeparation
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 0.01f;
+
+	/// <summary>
+	/// Offset in chromatic split animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.ChromaticSplit )]
+	public float ChromaticSplitTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Wave animation speed multiplier. Zero freezes the ripples; negative values reverse them.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed" ), Range( -10, 10 ), ShowIf( nameof( Effect ), ModulationEffect.Ripple )]
+	public float RippleSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Maximum radial UV displacement in texture repeats.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Displacement" ), Range( 0, 0.25f ), ShowIf( nameof( Effect ), ModulationEffect.Ripple )]
+	public float RippleDisplacement
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 0.025f;
+
+	/// <summary>
+	/// Radial wave frequency multiplier. Higher values produce more closely spaced waves.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Wave Frequency" ), Range( 0.1f, 10 ), ShowIf( nameof( Effect ), ModulationEffect.Ripple )]
+	public float RippleFrequency
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Offset in ripple animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.Ripple )]
+	public float RippleTimeOffset
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	}
+
+	/// <summary>
+	/// Brightness cycles per second. Zero freezes the pulse; negative values reverse it.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Speed (cycles/sec)" ), Range( -10, 10 ), ShowIf( nameof( Effect ), ModulationEffect.Pulse )]
+	public float PulseSpeed
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Brightness variation, from constant brightness at zero to a full zero-to-one pulse at one.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Pulse Depth" ), Range( 0, 1 ), ShowIf( nameof( Effect ), ModulationEffect.Pulse )]
+	public float PulseDepth
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Shape of the brightness pulse. One gives a sine wave; higher values narrow the bright interval.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Sharpness" ), Range( 0.1f, 8 ), ShowIf( nameof( Effect ), ModulationEffect.Pulse )]
+	public float PulseSharpness
+	{
+		get;
+		set
+		{
+			if ( field == value ) return;
+			field = value;
+			InvalidateData();
+		}
+	} = 1;
+
+	/// <summary>
+	/// Offset in pulse animation time, in seconds at the default speed.
+	/// </summary>
+	[Property, Group( "Animation" ), Title( "Time Offset" ), Range( -60, 60 ), ShowIf( nameof( Effect ), ModulationEffect.Pulse )]
+	public float PulseTimeOffset
 	{
 		get;
 		set
@@ -366,7 +782,9 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 		data.DistanceMipBias = FiniteClamp( DistanceMipBias, 0, 4 );
 		data.Tiling = new Vector2( FiniteClamp( Tiling.x, -1024, 1024, 1 ), FiniteClamp( Tiling.y, -1024, 1024, 1 ) );
 		data.Offset = new Vector2( FiniteClamp( Offset.x, -1000000, 1000000 ), FiniteClamp( Offset.y, -1000000, 1000000 ) );
-		data.ScrollSpeed = new Vector2( FiniteClamp( ScrollSpeed.x, -1024, 1024 ), FiniteClamp( ScrollSpeed.y, -1024, 1024 ) );
+		data.ScrollSpeed = Effect == ModulationEffect.Scroll
+			? new Vector2( FiniteClamp( ScrollSpeed.x, -1024, 1024 ), FiniteClamp( ScrollSpeed.y, -1024, 1024 ) )
+			: Vector2.Zero;
 		var angle = float.IsFinite( TextureRotation ) ? TextureRotation % 360 * (MathF.PI / 180) : 0;
 		data.Rotation = new Vector2( MathF.Cos( angle ), MathF.Sin( angle ) );
 		data.Contrast = FiniteClamp( Contrast, 0, 8, 1 );
@@ -375,6 +793,43 @@ public sealed class LightModulator : Component, Component.ExecuteInEditor
 		data.Strength = FiniteClamp( Strength, 0, 1, 1 );
 		data.EdgeFeather = FiniteClamp( EdgeFeather, 0, 0.5f );
 		data.DistanceFeather = FiniteClamp( DistanceFeather, 0, 1000000 );
+		data.Effect = Enum.IsDefined( Effect ) ? (int)Effect : 0;
+		data.EffectParameters = Effect switch
+		{
+			ModulationEffect.Caustics => new(
+				FiniteClamp( CausticsSpeed, -10, 10, 1 ),
+				FiniteClamp( CausticsWobble, 0, 0.25f, 0.025f ) / 0.025f,
+				FiniteClamp( CausticsLayerScale, 0.1f, 4, 1.13f ) / 1.13f,
+				FiniteClamp( CausticsTimeOffset, -60, 60 ) ),
+			ModulationEffect.CloudShadows => new(
+				FiniteClamp( CloudShadowSpeed, -10, 10, 1 ),
+				FiniteClamp( CloudShadowDepth, 0, 1, 1 ),
+				FiniteClamp( CloudShadowLayerScale, 0.1f, 4, 1.7f ) / 1.7f,
+				FiniteClamp( CloudShadowTimeOffset, -60, 60 ) ),
+			ModulationEffect.Rotate => new(
+				FiniteClamp( RotationSpeed, -360, 360, 36 ) / 36,
+				1, 1, FiniteClamp( RotationTimeOffset, -60, 60 ) ),
+			ModulationEffect.Kaleidoscope => new(
+				FiniteClamp( KaleidoscopeSpeed, -360, 360, 36 ) / 36,
+				FiniteClamp( KaleidoscopeBlend, 0, 1, 1 ),
+				Math.Clamp( KaleidoscopeSegments, 1, 64 ) / 6.0f,
+				FiniteClamp( KaleidoscopeTimeOffset, -60, 60 ) ),
+			ModulationEffect.ChromaticSplit => new(
+				FiniteClamp( ChromaticSplitSpeed, -10, 10, 1 ),
+				FiniteClamp( ChromaticSplitSeparation, 0, 0.1f, 0.01f ) / 0.01f,
+				1, FiniteClamp( ChromaticSplitTimeOffset, -60, 60 ) ),
+			ModulationEffect.Ripple => new(
+				FiniteClamp( RippleSpeed, -10, 10, 1 ),
+				FiniteClamp( RippleDisplacement, 0, 0.25f, 0.025f ) / 0.025f,
+				FiniteClamp( RippleFrequency, 0.1f, 10, 1 ),
+				FiniteClamp( RippleTimeOffset, -60, 60 ) ),
+			ModulationEffect.Pulse => new(
+				FiniteClamp( PulseSpeed, -10, 10, 1 ),
+				FiniteClamp( PulseDepth, 0, 1, 1 ),
+				FiniteClamp( PulseSharpness, 0.1f, 8, 1 ),
+				FiniteClamp( PulseTimeOffset, -60, 60 ) ),
+			_ => new( 1, 1, 1, 0 )
+		};
 		return data.TextureIndex > 0;
 	}
 
@@ -423,6 +878,8 @@ internal struct LightModulatorData
 	internal int BlendMode;
 	internal float Strength;
 	internal float EdgeFeather;
+	internal int Effect;
+	internal Vector4 EffectParameters;
 
 	/// <summary>
 	/// Conservative point/spot broad phase: closest point on the rectangle versus light range.

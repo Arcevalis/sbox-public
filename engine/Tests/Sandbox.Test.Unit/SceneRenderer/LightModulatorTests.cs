@@ -38,7 +38,7 @@ public class LightModulatorTests
 	[TestMethod]
 	public void RectangleGpuLayout()
 	{
-		Assert.AreEqual( 140, Marshal.SizeOf<Sandbox.LightModulatorData>() );
+		Assert.AreEqual( 160, Marshal.SizeOf<Sandbox.LightModulatorData>() );
 		Assert.AreEqual( 12, Marshal.OffsetOf<Sandbox.LightModulatorData>( "TextureIndex" ).ToInt32() );
 		Assert.AreEqual( 48, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Normal" ).ToInt32() );
 		Assert.AreEqual( 80, Marshal.OffsetOf<Sandbox.LightModulatorData>( "DistanceFeather" ).ToInt32() );
@@ -52,5 +52,7 @@ public class LightModulatorTests
 		Assert.AreEqual( 128, Marshal.OffsetOf<Sandbox.LightModulatorData>( "BlendMode" ).ToInt32() );
 		Assert.AreEqual( 132, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Strength" ).ToInt32() );
 		Assert.AreEqual( 136, Marshal.OffsetOf<Sandbox.LightModulatorData>( "EdgeFeather" ).ToInt32() );
+		Assert.AreEqual( 140, Marshal.OffsetOf<Sandbox.LightModulatorData>( "Effect" ).ToInt32() );
+		Assert.AreEqual( 144, Marshal.OffsetOf<Sandbox.LightModulatorData>( "EffectParameters" ).ToInt32() );
 	}
 }
