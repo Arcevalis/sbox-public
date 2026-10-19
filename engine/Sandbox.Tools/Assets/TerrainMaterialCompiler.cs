@@ -10,8 +10,8 @@ internal class TerrainMaterialCompiler : ResourceCompiler
 {
 	protected override Task<bool> Compile()
 	{
-		var filename = Context.AbsolutePath;
-		var jsonString = File.ReadAllText( filename );
+		var filename = CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( Context.AbsolutePath ).LowercaseFileName();
+		var jsonString = Context.ReadSourceAsString();
 
 		var docOptions = new JsonDocumentOptions();
 		docOptions.MaxDepth = 512;

@@ -612,14 +612,8 @@ file class AssetFolderInstance : SceneFolder
 
 	public AssetFolderInstance( string relativePath, string assetPath )
 	{
-		var extension = System.IO.Path.GetExtension( assetPath ).Replace( ".", "_" );
-		_folder = System.IO.Path.ChangeExtension( assetPath, null );
-		_folder = $"{_folder}{extension}_data";
-
-		_relativeFolder = System.IO.Path.ChangeExtension( relativePath, null );
-		_relativeFolder = $"{_relativeFolder}{extension}_data".NormalizeFilename( false );
-
-		System.IO.Directory.CreateDirectory( _folder );
+		_folder = SceneDataFolder.Prepare( assetPath );
+		_relativeFolder = SceneDataFolder.GetPath( relativePath ).NormalizeFilename( false );
 
 		_fs = new LocalFileSystem( _folder );
 	}

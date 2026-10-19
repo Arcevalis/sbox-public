@@ -444,11 +444,11 @@ public class ResourceSystem
 	/// <param name="recursive">Whether or not to check folders within the specified folder.</param>
 	public IEnumerable<T> GetAll<T>( string filepath, bool recursive = true ) where T : Resource
 	{
-		filepath = filepath.Replace( '\\', '/' );
-		if ( !filepath.EndsWith( "/" ) ) filepath += "/";
+		filepath = filepath.NormalizeFilename( false ).TrimStart( '/' );
+		if ( !filepath.EndsWith( "/", StringComparison.Ordinal ) ) filepath += "/";
 		return ResourceIndex.Values.OfType<T>().Distinct().Where( x =>
 		{
-			if ( x.ResourcePath.StartsWith( filepath ) )
+			if ( x.ResourcePath.StartsWith( filepath, StringComparison.Ordinal ) )
 			{
 				if ( recursive ) return true;
 				if ( !x.ResourcePath.Substring( filepath.Length ).Contains( "/" ) ) return true;
@@ -624,7 +624,7 @@ public class ResourceSystem
 		Assert.NotNull( type );
 		Assert.NotNull( file );
 
-		if ( !file.EndsWith( "_c" ) ) file += "_c";
+		if ( !file.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) file += "_c";
 
 		Span<byte> data = null;
 
@@ -641,8 +641,8 @@ public class ResourceSystem
 				return null;
 			}
 
-			ResourceId resourceId = file;
-			if ( g_pResourceSystem.ResolvePathToGuid( file, out Guid resolvedGuid ) )
+			ResourceId resourceId = Resource.FixPath( file );
+			if ( g_pResourceSystem.ResolvePathToGuid( resourceId.Path + "_c", out Guid resolvedGuid ) )
 			{
 				resourceId.Guid = resolvedGuid;
 			}
@@ -681,7 +681,8 @@ public class ResourceSystem
 				AssignGuid( se, guid );
 			}
 
-			if ( se.ResourcePath != file )
+			// Case-only arrivals are the same resource, not moves.
+			if ( !string.Equals( se.ResourcePath, Resource.FixPath( file ), StringComparison.Ordinal ) )
 			{
 				// if the resource was loaded from a different path than it's now on, move it to the new path
 				MoveResource( se, file );

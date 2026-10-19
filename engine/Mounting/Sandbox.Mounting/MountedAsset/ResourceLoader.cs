@@ -74,12 +74,12 @@ public abstract class ResourceLoader
 		// Force an engine specific extension, if it isn't already set
 		if ( extensions.TryGetValue( type, out var extension ) )
 		{
-			if ( !path.EndsWith( extension ) )
+			if ( !path.EndsWith( extension, StringComparison.OrdinalIgnoreCase ) )
 				path += extension;
 		}
 
 		RelativePath = path;
-		Path = $"mount://{_mount.Ident}/{RelativePath}";
+		Path = $"mount://{_mount.Ident}/{RelativePath}".ToLowerInvariant();
 		Type = type;
 		Name = System.IO.Path.GetFileNameWithoutExtension( path );
 

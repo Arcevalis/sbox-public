@@ -483,7 +483,7 @@ internal static class Program
 	/// Windows binaries carry a .exe extension, Linux and macOS ones don't.
 	/// </summary>
 	static string EngineExecutable( bool editor ) =>
-		( editor ? "sbox-dev" : "sbox" ) + ( OperatingSystem.IsWindows() ? ".exe" : "" );
+		(editor ? "sbox-dev" : "sbox") + (OperatingSystem.IsWindows() ? ".exe" : "");
 
 	static string RequestId( string line )
 	{

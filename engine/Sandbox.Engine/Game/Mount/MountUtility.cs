@@ -93,6 +93,11 @@ public static class MountUtility
 		return job.Texture;
 	}
 
+	internal static string GetThumbnailPath( ResourceLoader loader )
+	{
+		return $"thumbs/{loader._mount.Ident}/{loader.RelativePath.WithExtension( ".png" )}".ToLowerInvariant();
+	}
+
 	internal static void TickPreviewRenders()
 	{
 		_activeJobs.RemoveWhere( x => x.IsFinished );
@@ -196,10 +201,8 @@ public static class MountUtility
 			var path = EngineFileSystem.Root.GetFullPath( "/" );
 			if ( string.IsNullOrWhiteSpace( path ) ) return false;
 
-			path += $"/mount/{sceneLoader._mount.Ident}/assets/thumbs/{sceneLoader._mount.Ident}/{System.IO.Path.GetDirectoryName( sceneLoader.RelativePath )}/";
-			System.IO.Directory.CreateDirectory( path );
-
-			path += System.IO.Path.GetFileName( sceneLoader.RelativePath ).WithExtension( ".png" );
+			path = System.IO.Path.Combine( path, "mount", sceneLoader._mount.Ident, "assets", GetThumbnailPath( sceneLoader ) );
+			System.IO.Directory.CreateDirectory( System.IO.Path.GetDirectoryName( path ) );
 			System.IO.File.WriteAllBytes( path, bytes );
 
 			Log.Info( $"Written {path}" );

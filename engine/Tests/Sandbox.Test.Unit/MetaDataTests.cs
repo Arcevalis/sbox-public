@@ -10,6 +10,42 @@ public class MetaDataTests
 	static readonly DateTime PinnedTime = new DateTime( 2020, 1, 1, 0, 0, 0, DateTimeKind.Utc );
 
 	[TestMethod]
+	public void LegacyMetadataPreservesGuidAndSettingsWhenWritingCanonicalIdentity()
+	{
+		if ( !OperatingSystem.IsLinux() ) return;
+
+		var root = Path.Combine( Path.GetTempPath(), $"metadata_case_{Guid.NewGuid():N}" );
+		Directory.CreateDirectory( root );
+		var canonical = Path.Combine( root, "devstead.scene.meta" );
+		var legacy = Path.Combine( root, "Devstead.scene.meta" );
+		try
+		{
+			var guid = Guid.NewGuid();
+			var original = $"{{\"guid\":\"{guid:D}\",\"setting\":42}}";
+			File.WriteAllText( legacy, original );
+			var meta = new MetaData( canonical );
+
+			Assert.AreEqual( guid, meta.Get<Guid>( "guid" ) );
+			Assert.AreEqual( 42, meta.GetInt( "setting" ) );
+			Assert.IsFalse( File.Exists( canonical ) );
+
+			meta.Set( "added", true );
+			Assert.IsTrue( File.Exists( canonical ) );
+			Assert.AreEqual( guid, meta.Get<Guid>( "guid" ) );
+			Assert.AreEqual( 42, meta.GetInt( "setting" ) );
+			Assert.IsTrue( meta.GetBool( "added" ) );
+			Assert.AreEqual( original, File.ReadAllText( legacy ) );
+
+			File.WriteAllText( legacy, "{\"setting\":7}" );
+			Assert.AreEqual( 42, meta.GetInt( "setting" ) );
+		}
+		finally
+		{
+			Directory.Delete( root, true );
+		}
+	}
+
+	[TestMethod]
 	public void SetSameValueTwiceSkipsSecondWrite()
 	{
 		var path = NewTempPath();
