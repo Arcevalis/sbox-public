@@ -370,6 +370,7 @@ public sealed partial class ModelPhysics
 
 		Bodies.Clear();
 		Joints.Clear();
+		_appliedJointScales = null;
 
 		PhysicsWereCreated = false;
 	}

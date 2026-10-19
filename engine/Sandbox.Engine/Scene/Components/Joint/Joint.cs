@@ -6,6 +6,8 @@ namespace Sandbox;
 public abstract class Joint : Component, Component.ExecuteInEditor
 {
 	private PhysicsJoint _joint;
+
+	internal PhysicsJoint NativeJoint => _joint;
 	private PhysicsBody _worldBody;
 
 	private bool started;
