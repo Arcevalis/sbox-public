@@ -38,12 +38,12 @@ internal static partial class SceneCompiler
 		return $"{dataFolder}/compiled/{generation}".NormalizeFilename( false );
 	}
 
-	static void CleanupGeneration( string path )
+	internal static void CleanupGeneration( string path )
 	{
 		try
 		{
 			if ( FileSystem.Mounted.DirectoryExists( path ) )
-				FileSystem.Mounted.DeleteDirectory( path, true );
+				DeleteStagedDirectory( path );
 		}
 		catch ( Exception e )
 		{
@@ -51,7 +51,27 @@ internal static partial class SceneCompiler
 		}
 	}
 
-	static void CleanupPreviousGenerations( string currentPath, object generationGate, HashSet<string> activeGenerations )
+	// FileSystem.Mounted is a read-only aggregate view, so mutating it always throws:
+	// resolve the physical path and delete through System.IO instead.
+	static void DeleteStagedDirectory( string path )
+	{
+		var physical = FileSystem.Mounted.GetFullPath( path );
+		if ( string.IsNullOrEmpty( physical ) || !Directory.Exists( physical ) )
+			return;
+
+		Directory.Delete( physical, true );
+	}
+
+	static void DeleteStagedFile( string path )
+	{
+		var physical = FileSystem.Mounted.GetFullPath( path );
+		if ( string.IsNullOrEmpty( physical ) || !File.Exists( physical ) )
+			return;
+
+		File.Delete( physical );
+	}
+
+	internal static void CleanupPreviousGenerations( string currentPath, object generationGate, HashSet<string> activeGenerations )
 	{
 		var compiledFolder = currentPath[..currentPath.LastIndexOf( '/' )];
 		HashSet<string> active;
@@ -59,12 +79,19 @@ internal static partial class SceneCompiler
 		lock ( generationGate )
 			active = new HashSet<string>( activeGenerations, StringComparer.OrdinalIgnoreCase );
 
+		// The aggregate merges every mounted layer, so only delete victims sitting beside
+		// the generation just written - never lower-layer shadows of this folder.
+		var scope = Path.GetDirectoryName( FileSystem.Mounted.GetFullPath( currentPath ) );
+
 		try
 		{
 			foreach ( var directory in FileSystem.Mounted.FindDirectory( compiledFolder ).ToArray() )
 			{
 				var path = $"{compiledFolder}/{directory}".NormalizeFilename( false );
 				if ( path.Equals( currentPath, StringComparison.OrdinalIgnoreCase ) || active.Contains( path ) )
+					continue;
+
+				if ( !IsStagedInScope( path, scope ) )
 					continue;
 
 				CleanupGeneration( path );
@@ -75,7 +102,8 @@ internal static partial class SceneCompiler
 				var path = $"{compiledFolder}/{file}".NormalizeFilename( false );
 				try
 				{
-					FileSystem.Mounted.DeleteFile( path );
+					if ( IsStagedInScope( path, scope ) )
+						DeleteStagedFile( path );
 				}
 				catch ( Exception e )
 				{
@@ -87,6 +115,19 @@ internal static partial class SceneCompiler
 		{
 			Log.Warning( $"Could not clean up old compiled scene resources in '{compiledFolder}': {e.Message}" );
 		}
+	}
+
+	static bool IsStagedInScope( string path, string scope )
+	{
+		if ( string.IsNullOrEmpty( scope ) )
+			return true;
+
+		var physical = FileSystem.Mounted.GetFullPath( path );
+		if ( string.IsNullOrEmpty( physical ) )
+			return false;
+
+		var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		return string.Equals( Path.GetDirectoryName( physical ), scope, comparison );
 	}
 
 	static void WriteScene( Asset asset, string sourcePath, SceneEditorSession editor, SourceRevision sourceRevision, SceneFile file, SceneCompilerSettings settings )
