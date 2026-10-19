@@ -16,7 +16,7 @@ public abstract class SceneLoader<T> : ResourceLoader<T>, IThumbnailProvider whe
 			if ( !_thumbnail.IsValid() )
 			{
 				_thumbnail = GetThumbnail()
-					?? Texture.LoadFromFileSystem( $"/thumbs/{Host.Ident}/{RelativePath.WithExtension( ".png" )}", GlobalContext.Menu.FileMount, false )
+					?? Texture.LoadFromFileSystem( $"/{MountUtility.GetThumbnailPath( this )}", GlobalContext.Menu.FileMount, false )
 					?? Texture.Invalid;
 			}
 

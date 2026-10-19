@@ -17,7 +17,7 @@ internal struct ResourceId : IJsonConvert
 	/// </summary>
 	public string Path { get; set; }
 
-	public bool IsEmpty => (Guid is null || Guid == default) && string.IsNullOrEmpty( Path );
+	public bool IsEmpty => (Guid is null || Guid == System.Guid.Empty) && string.IsNullOrEmpty( Path );
 
 	public static ResourceId Get( Resource resource )
 	{

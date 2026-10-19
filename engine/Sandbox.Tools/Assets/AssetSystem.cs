@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using System;
 using System.Collections.Concurrent;
 using System.ComponentModel;
@@ -67,17 +67,35 @@ public static partial class AssetSystem
 	}
 
 
-	static void UpdateAsset( Asset asset )
+	internal static void UpdateAsset( Asset asset )
 	{
+		// The path keys are derived from the asset's identity, which this update can change
+		RemoveAssetPaths( asset );
 		asset.UpdateInternals();
 
-		if ( string.IsNullOrWhiteSpace( asset.Path ) )
+		if ( string.IsNullOrWhiteSpace( asset.Path ) || asset.IsDeleted )
 			return;
 
-		assetsByPath[asset.Path] = asset;
-		assetsByPath[asset.AbsolutePath] = asset;
-		assetsByPath[asset.RelativePath] = asset;
-		assetsByPath[asset.AbsoluteCompiledPath] = asset;
+		foreach ( var path in GetAssetPaths( asset ) )
+		{
+			assetsByPath[path] = asset;
+		}
+	}
+
+	static IEnumerable<string> GetAssetPaths( Asset asset )
+	{
+		return new[] { asset.Path, asset.AbsolutePath, asset.RelativePath, asset.AbsoluteCompiledPath }
+			.Where( path => !string.IsNullOrWhiteSpace( path ) )
+			.Select( path => path.Replace( '\\', '/' ) );
+	}
+
+	internal static void RemoveAssetPaths( Asset asset )
+	{
+		foreach ( var path in GetAssetPaths( asset ) )
+		{
+			// Another asset may already have claimed a reused path.
+			((ICollection<KeyValuePair<string, Asset>>)assetsByPath).Remove( new( path, asset ) );
+		}
 	}
 
 
@@ -94,10 +112,7 @@ public static partial class AssetSystem
 
 		log.Trace( $"Removed: {a}" );
 
-		if ( a.Path is not null ) assetsByPath.TryRemove( a.Path, out _ );
-		if ( a.AbsolutePath is not null ) assetsByPath.TryRemove( a.AbsolutePath, out _ );
-		if ( a.RelativePath is not null ) assetsByPath.TryRemove( a.RelativePath, out _ );
-		if ( a.AbsoluteCompiledPath is not null ) assetsByPath.TryRemove( a.AbsoluteCompiledPath, out _ );
+		RemoveAssetPaths( a );
 
 		// Can it ever come back??
 		UpdateQueue.Remove( a );
@@ -352,14 +367,18 @@ public static partial class AssetSystem
 	/// Lowercase the file name, keeping directories. Sources keep their case,
 	/// but outputs, references and idents derive from this lowercase identity.
 	/// </summary>
-	internal static string LowercaseAssetFileName( string path )
-	{
-		var directory = System.IO.Path.GetDirectoryName( path );
-		var filename = System.IO.Path.GetFileName( path ).ToLowerInvariant();
+	internal static string LowercaseAssetFileName( string path ) => path.LowercaseFileName();
 
-		return string.IsNullOrEmpty( directory )
-			? filename
-			: System.IO.Path.Combine( directory, filename );
+	/// <summary>
+	/// Whether the asset's physical source file differs from the lowercase identity
+	/// by case. Native file IO uses the identity spelling, so a mismatch means native
+	/// cannot open the source on a case-sensitive filesystem - managed code must feed
+	/// it from memory instead.
+	/// </summary>
+	internal static bool SourceSpellingDiffersFromIdentity( Asset asset )
+	{
+		var source = asset?.GetSourceFile( true );
+		return !string.IsNullOrEmpty( source ) && !string.Equals( source, LowercaseAssetFileName( source ), StringComparison.Ordinal );
 	}
 
 	/// <summary>
@@ -379,15 +398,6 @@ public static partial class AssetSystem
 
 		var extension = gameResourceType.Extension;
 		absoluteFilename = System.IO.Path.ChangeExtension( absoluteFilename, extension );
-
-		// Name the file in lower case. Resource paths are lower case throughout, and an
-		// on-demand recompile opens the source by that lower-cased path - so on a case
-		// sensitive filesystem a file named any other way can't be found and never compiles.
-		// The compiler already writes its own output this way ("3d object - cube.prefab_c"
-		// next to "3D Object - Cube.prefab"), and Asset.Name is lower-cased for display on
-		// every platform, so nothing the user sees changes. Directories keep their casing -
-		// those already exist and we don't own them.
-		absoluteFilename = LowercaseAssetFileName( absoluteFilename );
 
 		// try to find it first. If we find it, return it.
 		var found = AssetSystem.FindByPath( absoluteFilename );
@@ -560,4 +570,3 @@ public static partial class AssetSystem
 		return new EmbeddedAsset( target );
 	}
 }
-

@@ -36,7 +36,7 @@ public class GuidTests
 		_testPath = System.IO.Path.Combine( _assetsPath, testName );
 		System.IO.Directory.CreateDirectory( _testPath );
 
-		NativeEngine.FullFileSystem.AddProjectPath( "unittest", _assetsPath.ToLowerInvariant() );
+		NativeEngine.FullFileSystem.AddProjectPath( "unittest", _assetsPath );
 
 		// Rebuild the guid mappings once so they include the fixtures. A rebuild rescans
 		// everything mounted (~0.5s), and later tests only add files in their own new folder
@@ -503,6 +503,63 @@ public class GuidTests
 		Assert.IsNotNull( newModel, "Couldn't load the new resource" );
 		Assert.AreNotSame( original, newModel, "Path resolved to old model, which isn't at this path anymore" );
 		Assert.AreEqual( newGuid, newModel.Guid, "Incorrect GUID for the new model" );
+	}
+
+	[TestMethod]
+	public void MixedCaseCompiledSceneUsesCanonicalIdentity()
+	{
+		var folder = Path.GetFileName( _testPath );
+		var identity = $"{folder}/devstead.scene";
+		var diskPath = $"{folder}/Devstead.SCENE_C";
+		var guid = Guid.NewGuid();
+		WriteScene( identity, guid );
+		File.Move( Path.Combine( _assetsPath, identity + "_c" ), Path.Combine( _assetsPath, diskPath ) );
+		MetaChanged( identity );
+
+		var scene = Game.Resources.LoadGameResource<SceneFile>( diskPath, FileSystem.Mounted );
+		Assert.IsNotNull( scene );
+		Assert.AreEqual( identity, scene.ResourcePath );
+		Assert.AreEqual( guid, scene.Guid );
+		Assert.AreSame( scene, Game.Resources.Get<SceneFile>( identity ) );
+		Assert.AreSame( scene, Game.Resources.Get<SceneFile>( guid ) );
+		Assert.AreSame( scene, Game.Resources.GetByIdLong<SceneFile>( identity.FastHash64() ) );
+		var reference = JsonNode.Parse( Json.Serialize( scene ) ).AsObject();
+		Assert.AreEqual( identity, reference["Path"].GetValue<string>() );
+		Assert.AreEqual( guid, reference["Id"].GetValue<Guid>() );
+
+		var reloaded = Game.Resources.LoadGameResource<SceneFile>( identity.ToUpperInvariant() + "_C", FileSystem.Mounted );
+		Assert.AreSame( scene, reloaded );
+		Assert.AreEqual( identity, scene.ResourcePath );
+	}
+
+	[TestMethod]
+	public void MixedCaseSceneMoveReplacesOldPathIndices()
+	{
+		var folder = Path.GetFileName( _testPath );
+		var oldIdentity = $"{folder}/devstead.scene";
+		var newIdentity = $"{folder}/renamed.scene";
+		var oldDiskPath = $"{folder}/Devstead.scene_C";
+		var newDiskPath = $"{folder}/Renamed.SCENE_C";
+		var guid = Guid.NewGuid();
+		WriteScene( oldIdentity, guid );
+		File.Move( Path.Combine( _assetsPath, oldIdentity + "_c" ), Path.Combine( _assetsPath, oldDiskPath ) );
+		MetaChanged( oldIdentity );
+		var original = Game.Resources.LoadGameResource<SceneFile>( oldDiskPath, FileSystem.Mounted );
+		Assert.IsNotNull( original );
+		Assert.AreEqual( guid, original.Guid );
+
+		File.Move( Path.Combine( _assetsPath, oldDiskPath ), Path.Combine( _assetsPath, newDiskPath ) );
+		File.Move( Path.Combine( _assetsPath, oldIdentity + ".meta" ), Path.Combine( _assetsPath, newIdentity + ".meta" ) );
+		NativeEngine.g_pResourceSystem.InvalidateDatabase();
+
+		var moved = Game.Resources.LoadGameResource<SceneFile>( newDiskPath, FileSystem.Mounted );
+		Assert.AreSame( original, moved );
+		Assert.AreEqual( newIdentity, moved.ResourcePath );
+		Assert.AreSame( moved, Game.Resources.Get<SceneFile>( newIdentity ) );
+		Assert.AreSame( moved, Game.Resources.Get<SceneFile>( guid ) );
+		Assert.AreSame( moved, Game.Resources.GetByIdLong<SceneFile>( newIdentity.FastHash64() ) );
+		Assert.IsNull( Game.Resources.Get<SceneFile>( oldIdentity ) );
+		Assert.IsNull( Game.Resources.GetByIdLong<SceneFile>( oldIdentity.FastHash64() ) );
 	}
 
 	void WriteScene( string relativePath, Guid guid )

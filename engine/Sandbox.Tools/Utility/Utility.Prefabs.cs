@@ -315,7 +315,7 @@ public static partial class EditorUtility
 			{
 				foreach ( var prefabInstanceRoot in go.GetAllObjects( false ).Where( x => x.IsPrefabInstanceRoot ) )
 				{
-					if ( prefabInstanceRoot != go && prefabInstanceRoot.PrefabInstanceSource == go.PrefabInstanceSource )
+					if ( prefabInstanceRoot != go && Resource.FixPath( prefabInstanceRoot.PrefabInstanceSource ) == Resource.FixPath( go.PrefabInstanceSource ) )
 					{
 						Log.Warning( $"Failed to write GameObject to prefab, {prefabInstanceRoot.PrefabInstanceSource} occurs more than once in hierarchy." );
 						EditorUtility.PlayRawSound( "sounds/editor/fail.wav" );
@@ -370,7 +370,7 @@ public static partial class EditorUtility
 
 			Dictionary<Guid, Guid> instanceToPrefabGuid = null;
 
-			bool isWritingBackToExistingInstance = go.IsOutermostPrefabInstanceRoot && prefabFile.ResourcePath == go.PrefabInstanceSource;
+			bool isWritingBackToExistingInstance = go.IsOutermostPrefabInstanceRoot && Resource.FixPath( prefabFile.ResourcePath ) == Resource.FixPath( go.PrefabInstanceSource );
 			// Some special care when writing back existing prefab instances
 			// Need to keep ids up to date
 			if ( isWritingBackToExistingInstance )
@@ -424,7 +424,7 @@ public static partial class EditorUtility
 			var prefabFile = ResourceLibrary.Get<PrefabFile>( prefabSource );
 
 			// Need to write back the changes to the editor session of this prefab if it exists, before updating the instances
-			var openSession = SceneEditorSession.All.OfType<PrefabEditorSession>().FirstOrDefault( session => session.Scene.Source.ResourcePath == prefabSource );
+			var openSession = SceneEditorSession.All.OfType<PrefabEditorSession>().FirstOrDefault( session => Resource.FixPath( session.Scene.Source.ResourcePath ) == Resource.FixPath( prefabSource ) );
 			if ( openSession is not null )
 			{
 				using var undo = openSession.UndoScope( "Apply Prefab Instance Changes" )

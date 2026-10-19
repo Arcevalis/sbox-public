@@ -10,8 +10,16 @@ namespace Sandbox.Engine.Shaders;
 /// </summary>
 class ShaderSource
 {
-	public string AbsolutePath { get; internal set; }
+	string absolutePath;
+	public string AbsolutePath
+	{
+		get => absolutePath;
+		internal set => absolutePath = CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( value );
+	}
 	public string RelativePath { get; internal set; }
+	internal string IdentityPath => AbsolutePath.LowercaseFileName();
+	internal string CompiledPath => IdentityPath + "_c";
+	internal string ExistingCompiledPath => CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( CompiledPath );
 
 	public List<ProgramSource> Programs { get; set; } = new();
 
@@ -38,7 +46,7 @@ class ShaderSource
 	{
 		var vfx = new Shader();
 
-		bool loaded = vfx.LoadFromCompiledUnlessOutOfDate( AbsolutePath );
+		bool loaded = vfx.LoadFromCompiledUnlessOutOfDate( ExistingCompiledPath );
 
 		//
 		// the compiled shader loaded, compare to see what needs recompiling

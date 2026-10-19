@@ -6,6 +6,7 @@ namespace Sandbox;
 
 /// <summary>
 /// A serialized reference to a data file (like navdata) that needs to be tracked and packaged.
+/// Paths are game-relative logical identities, not physical filenames, and retain file suffixes.
 /// These files have no dependencies themselves.
 /// </summary>
 internal readonly struct FileReference
@@ -24,7 +25,7 @@ internal readonly struct FileReference
 	private FileReference( string referenceType, string path )
 	{
 		ReferenceType = referenceType;
-		Path = path;
+		Path = path?.NormalizeFilename( false ).TrimStart( '/' )!;
 	}
 
 	public override string ToString() => Path;

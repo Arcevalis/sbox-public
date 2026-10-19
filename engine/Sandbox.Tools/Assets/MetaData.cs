@@ -35,7 +35,12 @@ namespace Editor
 		/// </summary>
 		JsonElement? Read()
 		{
-			var info = new System.IO.FileInfo( FilePath );
+			// Meta paths are built from asset names, which keep the case they were authored with,
+			// so the file on disk may only match them where the filesystem is case insensitive.
+			// Ask the physical filesystem which spelling actually exists before touching it.
+			var readPath = System.IO.File.Exists( FilePath ) ? FilePath : Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( System.IO.Path.GetFullPath( FilePath ) );
+
+			var info = new System.IO.FileInfo( readPath );
 			var exists = info.Exists;
 			var writeTime = exists ? info.LastWriteTimeUtc : default;
 			var length = exists ? info.Length : 0;
@@ -52,7 +57,7 @@ namespace Editor
 
 			try
 			{
-				var json = System.IO.File.ReadAllText( FilePath );
+				var json = System.IO.File.ReadAllText( readPath );
 
 				using var document = JsonDocument.Parse( json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip } );
 				var root = document.RootElement.Clone();

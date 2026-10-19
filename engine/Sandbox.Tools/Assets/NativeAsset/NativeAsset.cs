@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Editor;
 
@@ -285,6 +285,16 @@ internal class NativeAsset : Asset
 
 		if ( !CanRecompile )
 			return false;
+
+		// Native reopens the source by its lowercase identity, which cannot open a
+		// mixed-case source on a case-sensitive filesystem. Feed the native compiler
+		// from memory instead - it stays the compiler, only the transport changes.
+		if ( SceneCompiler.ShouldBypassNativeSceneCompile( this ) )
+			return SceneCompiler.CompileCaseMismatchedScene( this );
+
+		// Same case-mismatch bypass for prefabs, via the managed prefab compiler.
+		if ( PrefabCompiler.ShouldBypassNativePrefabCompile( this ) )
+			return PrefabCompiler.CompileCaseMismatchedPrefab( this );
 
 		return IAssetSystem.RecompileAsset( native, full );
 	}
