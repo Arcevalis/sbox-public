@@ -170,18 +170,28 @@ struct Light
 
     float3 GetLightColor(float3 vPositionWs)
     {
-        float3 transmission;
-        if ( LightData.Type == LightType::LightTypeDirectional )
+        return GetLightColor( vPositionWs, LightModulators::Active() );
+    }
+
+    // bModulators: whether this light may be filtered, from its cluster's features for clustered lights.
+    float3 GetLightColor(float3 vPositionWs, bool bModulators)
+    {
+        float3 transmission = 1.0f;
+        [branch]
+        if ( bModulators )
         {
-            // Indexed baked sun matrices already point from the receiver toward the source.
-            transmission = LightModulators::EvaluateSun( vPositionWs, LightData.GetDirection() );
-        }
-        else
-        {
-            float3 ray = LightData.GetPosition() - vPositionWs;
-            float distance = length( ray );
-            transmission = LightModulators::Evaluate( vPositionWs, ray / max( distance, 0.0001f ), distance,
-                LightData.LightModulatorOffset, LightData.LightModulatorCount );
+            if ( LightData.Type == LightType::LightTypeDirectional )
+            {
+                // Indexed baked sun matrices already point from the receiver toward the source.
+                transmission = LightModulators::EvaluateSun( vPositionWs, LightData.GetDirection() );
+            }
+            else
+            {
+                float3 ray = LightData.GetPosition() - vPositionWs;
+                float distance = length( ray );
+                transmission = LightModulators::Evaluate( vPositionWs, ray / max( distance, 0.0001f ), distance,
+                    LightData.LightModulatorOffset, LightData.LightModulatorCount );
+            }
         }
 
         return LightData.Color * GetLightCookie(vPositionWs) * transmission;
@@ -242,15 +252,21 @@ struct Light
 
     // [mutating] is what lets a member write to its own fields under Slang; DXC ignores it
     [mutating]
-    void Init( float3 vPositionWs, BinnedLight lightData, float4 vPositionSs, float3 vReceiverNormalWs )
+    void Init( float3 vPositionWs, BinnedLight lightData, float4 vPositionSs, float3 vReceiverNormalWs, bool bModulators )
     {
         LightData = lightData;
 
-        Color = GetLightColor( vPositionWs );
+        Color = GetLightColor( vPositionWs, bModulators );
         Direction = GetLightDirection( vPositionWs );
         Position = GetLightPosition();
         Attenuation = GetLightAttenuation( vPositionWs );
         Visibility = Shadows( vPositionWs, vPositionSs, vReceiverNormalWs );
+    }
+
+    [mutating]
+    void Init( float3 vPositionWs, BinnedLight lightData, float4 vPositionSs, float3 vReceiverNormalWs )
+    {
+        Init( vPositionWs, lightData, vPositionSs, vReceiverNormalWs, LightModulators::Active() );
     }
 
     // Compatibility overload for uniform control flow; use the explicit normal overload inside light loops.
@@ -272,7 +288,9 @@ struct Light
             uint clusterLocalIndex = min( nLightIndex, range.Count - 1 );
             uint lightIndex = Cluster::LoadItem( range, clusterLocalIndex );
 
-            light.Init( vPositionWs, DynamicLightConstantByIndex( lightIndex ), vPositionSs, vReceiverNormalWs );
+            // Only clusters a modulated light reaches pay for the filter
+            bool bModulators = ( range.Features & ( LightModulators::Active() ? ClusterFeature_LightModulators : 0 ) ) != 0;
+            light.Init( vPositionWs, DynamicLightConstantByIndex( lightIndex ), vPositionSs, vReceiverNormalWs, bModulators );
             return light;
         }
 

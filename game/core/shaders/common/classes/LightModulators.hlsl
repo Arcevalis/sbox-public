@@ -175,6 +175,12 @@ struct LightModulators
         return lerp( 1.0f, transmission, saturate( sampleValue.a ) * coverage );
     }
 
+    // True when this view has any rectangles to evaluate. Uniform: test it once, outside light loops.
+    static bool Active()
+    {
+        return !LightModulatorsDisabled && LightModulatorRectangleCount > 0;
+    }
+
     // Evaluate only the candidates belonging to this local light.
     static float3 Evaluate( float3 position, float3 toLight, float distanceToLight, uint first, uint count )
     {
