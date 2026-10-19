@@ -8,7 +8,7 @@ namespace Sandbox.SceneLab;
 ///
 /// They share a stage (<see cref="Stage"/>): a camera, the sun with sky light, the default sky and a floor.
 /// </summary>
-internal static class GameScenes
+internal static partial class GameScenes
 {
 	/// <summary>
 	/// A camera looking at the middle of the floor from above and to the side, the sun, the default sky and a floor -
