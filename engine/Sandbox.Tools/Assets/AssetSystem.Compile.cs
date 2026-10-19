@@ -11,7 +11,7 @@ public static partial class AssetSystem
 		using var context = new ResourceCompileContextImp( _context );
 
 		var filename = context.AbsolutePath;
-		var extension = System.IO.Path.GetExtension( filename ).Trim( '.' );
+		var extension = System.IO.Path.GetExtension( filename ).Trim( '.' ).ToLowerInvariant();
 
 		// Do we have a specific compiler? These register the source extensions they
 		// handle themselves ([ResourceIdentity("wav")] etc), so check before the
@@ -86,8 +86,11 @@ public static partial class AssetSystem
 
 	internal static void CompileGameResource( ResourceCompileContext context )
 	{
+		// Resolve the disk's real casing: the context names the lowercase identity.
+		var sourcePath = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( context.AbsolutePath );
+
 		// Get the json contents
-		var jsonString = System.IO.File.ReadAllText( context.AbsolutePath );
+		var jsonString = System.IO.File.ReadAllText( sourcePath );
 
 		//
 		// Pre Feb-2023 we saved GameResources to keyvalues. Keep support for loading this
@@ -105,8 +108,7 @@ public static partial class AssetSystem
 
 		context.Data.Write( jsonString );
 
-		// Write binary blob data to BLOB block if companion file exists
-		var blobPath = context.AbsolutePath + "_d";
+		var blobPath = Asset.ResolveRelatedFilePath( sourcePath, "_d" );
 		if ( System.IO.File.Exists( blobPath ) )
 		{
 			context.AddCompileReference( blobPath );

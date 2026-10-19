@@ -455,7 +455,8 @@ public abstract partial class GameResource : Resource, ISourceLineProvider
 		{
 			try
 			{
-				var blobPath = filename + "_d";
+				// Sidecars are engine-owned: derive from the lowercase identity so every reader agrees.
+				var blobPath = filename.LowercaseFileName() + "_d";
 				System.IO.File.WriteAllBytes( blobPath, BinaryData );
 			}
 			catch ( Exception e )

@@ -256,7 +256,10 @@ public partial class StandaloneExporter
 		if ( !string.IsNullOrEmpty( _exportConfig.StartupImage ) )
 		{
 			var path = _exportConfig.StartupImage;
-			var startupImagePath = Path.Combine( _exportConfig.Project.GetAssetsPath(), path + "_c" );
+			var startupImagePath = AssetSystem.FindByPath( path )?.GetCompiledFile( true );
+			if ( string.IsNullOrEmpty( startupImagePath ) )
+				throw new InvalidOperationException( $"Couldn't find compiled startup image '{path}'" );
+
 			QueueCopy( startupImagePath, $"{baseDir}/core/materials/startup_background.vtex_c", BuildStep.CopyMisc );
 			QueueStartupImagePng( path, $"{baseDir}/core/materials/startup_background_color.png" );
 		}

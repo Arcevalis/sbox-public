@@ -27,12 +27,13 @@ namespace Editor
 		/// </summary>
 		JsonElement? Read()
 		{
-			if ( !System.IO.File.Exists( FilePath ) )
+			var readPath = System.IO.File.Exists( FilePath ) ? FilePath : Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( System.IO.Path.GetFullPath( FilePath ) );
+			if ( !System.IO.File.Exists( readPath ) )
 				return null;
 
 			try
 			{
-				var json = System.IO.File.ReadAllText( FilePath );
+				var json = System.IO.File.ReadAllText( readPath );
 
 				var document = JsonDocument.Parse( json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip } );
 				return document.RootElement;

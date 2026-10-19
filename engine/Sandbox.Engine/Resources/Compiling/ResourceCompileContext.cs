@@ -106,17 +106,21 @@ public abstract class ResourceCompileContext
 
 		_metaRead = true;
 
-		var metaPath = AbsolutePath + ".meta";
+		var sourcePath = CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( AbsolutePath );
+		var metaPath = sourcePath.LowercaseFileName() + ".meta";
 
-		// Depend on the meta even when it doesn't exist yet - authoring one later
-		// (eg adding visemes to a sound for the first time) should recompile us
+		// Creating canonical metadata must invalidate a compile that used legacy metadata too.
 		AddCompileReference( metaPath, optional: true );
 
 		try
 		{
-			if ( System.IO.File.Exists( metaPath ) )
+			var resolvedPath = System.IO.File.Exists( metaPath ) ? metaPath : CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( metaPath );
+			if ( System.IO.File.Exists( resolvedPath ) )
 			{
-				_meta = Json.ParseToJsonObject( System.IO.File.ReadAllText( metaPath ) );
+				if ( !string.Equals( resolvedPath, metaPath, StringComparison.Ordinal ) )
+					AddCompileReference( resolvedPath );
+
+				_meta = Json.ParseToJsonObject( System.IO.File.ReadAllText( resolvedPath ) );
 			}
 		}
 		catch ( Exception e )

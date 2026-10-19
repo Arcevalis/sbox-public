@@ -31,7 +31,8 @@ internal static partial class SceneCompiler
 
 	static string GetGenerationPath( Asset asset, string generation )
 	{
-		var sourcePath = asset.GetSourceFile( false );
+		// Same lowercase-identity derivation as RunGeneration's resourceFolder.
+		var sourcePath = AssetSystem.LowercaseAssetFileName( asset.GetSourceFile( false ) );
 		var extension = Path.GetExtension( sourcePath ).Replace( ".", "_" );
 		var dataFolder = $"{Path.ChangeExtension( sourcePath, null )}{extension}_data";
 		return $"{dataFolder}/compiled/{generation}".NormalizeFilename( false );
@@ -119,7 +120,11 @@ internal static partial class SceneCompiler
 			if ( compiledJson.RootElement.TryGetProperty( "__blobdata", out _ ) )
 				throw new InvalidOperationException( $"The scene resource compiler did not process '{asset.Path}'." );
 
-			if ( !asset.Compile( false ) )
+			// Native reopens the source by its lowercase identity, which cannot open a
+			// mixed-case source on a case-sensitive filesystem. The forced write above
+			// already produced and verified the output, and ReloadResource below picks it
+			// up - so only refresh through native when it can actually open the source.
+			if ( !AssetSystem.SourceSpellingDiffersFromIdentity( asset ) && !asset.Compile( false ) )
 				throw new InvalidOperationException( $"Could not refresh compiled scene '{asset.Path}'." );
 
 			if ( editor.HasUnsavedChanges || !HasSourceRevision( sourcePath, sourceRevision ) )
@@ -151,6 +156,102 @@ internal static partial class SceneCompiler
 			}
 
 			throw;
+		}
+	}
+
+	/// <summary>
+	/// Whether a scene recompile must bypass native <c>RecompileAsset</c>. Native file IO
+	/// uses the lowercase identity spelling, which cannot open a source that keeps a
+	/// mixed-case disk spelling on a case-sensitive filesystem. The native scene compiler
+	/// stays the compiler - it is fed from memory instead (see <see cref="CompileCaseMismatchedScene"/>).
+	/// </summary>
+	internal static bool ShouldBypassNativeSceneCompile( Asset asset )
+	{
+		if ( asset is null || asset.IsDeleted ) return false;
+		if ( !string.Equals( asset.AssetType?.FileExtension, "scene", StringComparison.OrdinalIgnoreCase ) ) return false;
+		return AssetSystem.SourceSpellingDiffersFromIdentity( asset );
+	}
+
+	/// <summary>
+	/// Recompile a mixed-case scene source without native source file IO. Mirrors the
+	/// <see cref="WriteScene"/> feed: load from the physical spelling (source + _d blobs),
+	/// hand the native compiler its input text addressed to the lowercase identity, verify
+	/// it processed the output, then reload the resource.
+	/// </summary>
+	internal static bool CompileCaseMismatchedScene( Asset asset )
+	{
+		if ( !ShouldBypassNativeSceneCompile( asset ) ) return false;
+
+		var sourcePath = asset.GetSourceFile( true );
+
+		SceneFile file;
+		try
+		{
+			file = SceneSource.LoadForEditing( asset );
+		}
+		catch ( Exception e ) when ( e is IOException or InvalidDataException or UnauthorizedAccessException or JsonException )
+		{
+			Log.Error( e, $"Could not load scene source '{asset.Path}'." );
+			return false;
+		}
+
+		if ( file is null )
+		{
+			Log.Error( $"Could not load scene source '{asset.Path}'." );
+			return false;
+		}
+
+		var json = file.Serialize();
+		json["__blobdata"] = System.Convert.ToBase64String( file.BinaryData ?? [] );
+		var previousOutput = asset.GetCompiledFile( true );
+		var previousBytes = !string.IsNullOrEmpty( previousOutput ) && File.Exists( previousOutput ) ? File.ReadAllBytes( previousOutput ) : null;
+
+		try
+		{
+			// Outputs derive from this path string, so compile through the lowercase
+			// identity: same asset (lookups are case-insensitive), lowercase _c.
+			var compilePath = AssetSystem.LowercaseAssetFileName( sourcePath );
+
+			if ( !IResourceCompilerSystem.GenerateResourceFileForced( compilePath, json.ToJsonString( new JsonSerializerOptions( JsonSerializerOptions.Default ) { MaxDepth = 512 } ) ) )
+				throw new InvalidOperationException( $"Could not write compiled scene '{asset.Path}'." );
+
+			var outputPath = asset.GetCompiledFile( true );
+			if ( string.IsNullOrEmpty( outputPath ) )
+				throw new InvalidOperationException( $"Could not find the compiled output path for '{asset.Path}'." );
+
+			var bytes = File.ReadAllBytes( outputPath );
+			using var compiledJson = JsonDocument.Parse( Game.Resources.ReadCompiledResourceJson( bytes ), new JsonDocumentOptions { MaxDepth = 512 } );
+			if ( compiledJson.RootElement.TryGetProperty( "__blobdata", out _ ) )
+				throw new InvalidOperationException( $"The scene resource compiler did not process '{asset.Path}'." );
+
+			NativeEngine.g_pResourceSystem.ReloadResource( asset.Path );
+			return true;
+		}
+		catch ( Exception e )
+		{
+			Log.Error( e, $"Could not compile scene '{asset.Path}'." );
+
+			try
+			{
+				var outputPath = asset.GetCompiledFile( true );
+				if ( string.IsNullOrEmpty( outputPath ) )
+					outputPath = previousOutput;
+				if ( !string.IsNullOrEmpty( outputPath ) )
+				{
+					if ( previousBytes is not null )
+						File.WriteAllBytes( outputPath, previousBytes );
+					else if ( File.Exists( outputPath ) )
+						File.Delete( outputPath );
+
+					NativeEngine.g_pResourceSystem.ReloadResource( asset.Path );
+				}
+			}
+			catch ( Exception restoreException )
+			{
+				Log.Warning( $"Could not restore the last compiled scene '{asset.Path}': {restoreException.Message}" );
+			}
+
+			return false;
 		}
 	}
 }
