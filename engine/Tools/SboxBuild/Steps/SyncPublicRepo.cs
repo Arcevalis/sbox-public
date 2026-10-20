@@ -224,7 +224,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 				return false;
 			}
 
-			var lfsArtifacts = HashLfsArtifacts( filteredRepoPath, shallowLfsPaths );
+			var lfsArtifacts = ReadLfsArtifacts( filteredRepoPath, shallowLfsPaths );
 			if ( lfsArtifacts is null )
 			{
 				return false;
@@ -314,7 +314,10 @@ internal class SyncPublicRepo( bool dryRun = false )
 
 		Log.Info( "Creating clone for filtering..." );
 
-		if ( Utility.RunProcess( "git", $"clone --config core.longpaths=true --shallow-exclude {SHALLOW_EXCLUDE_TAG} \"{localFilePath}\" \"{filteredRepoPath}\"" ) )
+		// LFS content is read from this checkout's object store, the clone only needs the pointers
+		var environment = new Dictionary<string, string> { ["GIT_LFS_SKIP_SMUDGE"] = "1" };
+
+		if ( Utility.RunProcess( "git", $"clone --config core.longpaths=true --shallow-exclude {SHALLOW_EXCLUDE_TAG} \"{localFilePath}\" \"{filteredRepoPath}\"", environmentVariables: environment ) )
 		{
 			return filteredRepoPath;
 		}
@@ -432,16 +435,94 @@ internal class SyncPublicRepo( bool dryRun = false )
 		return compiledAssets;
 	}
 
-	private static List<(string SourcePath, ArtifactFileInfo Artifact)> HashLfsArtifacts( string repoRoot, IReadOnlyCollection<string> lfsPaths )
+	/// <summary>
+	/// The clone's working tree holds LFS pointers. A pointer's oid is the artifact's sha256, so nothing
+	/// needs hashing, and the content comes from this checkout's LFS object store. Returns null on failure.
+	/// </summary>
+	private static List<(string SourcePath, ArtifactFileInfo Artifact)> ReadLfsArtifacts( string repoRoot, IReadOnlyCollection<string> lfsPaths )
 	{
-		var candidates = lfsPaths
-			.Where( p => RepoFileFilter().Match( p ).HasMatches )
-			.Select( path => (RepoPath: path, AbsolutePath: Path.Combine( repoRoot, path.Replace( '/', Path.DirectorySeparatorChar ) )) )
-			.ToList();
+		var objectsDirectory = GetLfsObjectsDirectory();
+		if ( objectsDirectory is null )
+		{
+			return null;
+		}
 
-		Log.Info( $"Found {candidates.Count} LFS artifact(s)" );
+		var artifacts = new List<(string SourcePath, ArtifactFileInfo Artifact)>();
+		foreach ( var path in lfsPaths.Where( p => RepoFileFilter().Match( p ).HasMatches ) )
+		{
+			var extension = Path.GetExtension( path );
+			if ( !string.IsNullOrEmpty( extension ) && ForbiddenArtifactExtensions.Contains( extension ) )
+			{
+				Log.Error( $"Encountered forbidden artifact extension ({extension}): {path}" );
+				return null;
+			}
 
-		return HashArtifacts( candidates );
+			var pointerPath = Path.Combine( repoRoot, path.Replace( '/', Path.DirectorySeparatorChar ) );
+			if ( !TryReadLfsPointer( pointerPath, out var oid, out var size ) )
+			{
+				Log.Error( $"Expected an LFS pointer in the clone: {path}" );
+				return null;
+			}
+
+			var objectPath = Path.Combine( objectsDirectory, oid[..2], oid[2..4], oid );
+			var objectInfo = new FileInfo( objectPath );
+			if ( !objectInfo.Exists || objectInfo.Length != size )
+			{
+				Log.Error( $"LFS object {oid} for {path} is missing from {objectsDirectory}" );
+				return null;
+			}
+
+			artifacts.Add( (objectPath, new ArtifactFileInfo { Path = path, Sha256 = oid, Size = size }) );
+		}
+
+		Log.Info( $"Found {artifacts.Count} LFS artifact(s)" );
+
+		return artifacts;
+	}
+
+	private static bool TryReadLfsPointer( string path, out string oid, out long size )
+	{
+		oid = null;
+		size = -1;
+
+		// Pointers are around 130 bytes, spec caps them at 1024
+		var info = new FileInfo( path );
+		if ( !info.Exists || info.Length > 1024 )
+		{
+			return false;
+		}
+
+		foreach ( var line in File.ReadLines( path ) )
+		{
+			if ( line.StartsWith( "oid sha256:", StringComparison.Ordinal ) )
+			{
+				oid = line["oid sha256:".Length..].Trim().ToLowerInvariant();
+			}
+			else if ( line.StartsWith( "size ", StringComparison.Ordinal ) && long.TryParse( line["size ".Length..], out var parsed ) )
+			{
+				size = parsed;
+			}
+		}
+
+		return oid is { Length: 64 } && oid.All( char.IsAsciiHexDigit ) && size >= 0;
+	}
+
+	private static string GetLfsObjectsDirectory()
+	{
+		string gitDirectory = null;
+		Utility.RunProcess( "git", "rev-parse --git-common-dir", onDataReceived: ( _, e ) =>
+		{
+			if ( !string.IsNullOrWhiteSpace( e.Data ) )
+				gitDirectory ??= e.Data.Trim();
+		} );
+
+		if ( string.IsNullOrEmpty( gitDirectory ) )
+		{
+			Log.Error( "Failed to find the git directory for LFS objects" );
+			return null;
+		}
+
+		return Path.Combine( Path.GetFullPath( gitDirectory ), "lfs", "objects" );
 	}
 
 	private bool RunFilterRepo( string relativeRepoPath )
