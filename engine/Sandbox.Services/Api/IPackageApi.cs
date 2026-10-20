@@ -217,6 +217,20 @@ public class PackageDllResult
 	/// Compiled, Pending or Failed
 	/// </summary>
 	public string Status { get; set; }
+
+	/// <summary>
+	/// The package's own assembly and any libraries it bundles, when Compiled
+	/// </summary>
+	public PackageDllFile[] Dlls { get; set; }
+	public string Error { get; set; }
+}
+
+public class PackageDllFile
+{
+	/// <summary>
+	/// Where it goes in the package, like <c>.bin/package.org.ident.dll</c>
+	/// </summary>
+	public string Path { get; set; }
 	public string Url { get; set; }
 
 	/// <summary>
@@ -224,7 +238,6 @@ public class PackageDllResult
 	/// </summary>
 	public string Crc { get; set; }
 	public long Size { get; set; }
-	public string Error { get; set; }
 }
 
 /// <summary>
