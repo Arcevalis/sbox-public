@@ -14,6 +14,7 @@ namespace Editor.Mcp;
 /// </summary>
 internal static class McpPipeServer
 {
+	[SkipHotload]
 	static CancellationTokenSource lifetime;
 
 	internal static void Start()
