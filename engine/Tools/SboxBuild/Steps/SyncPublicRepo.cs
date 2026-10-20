@@ -1,5 +1,4 @@
 using Microsoft.Extensions.FileSystemGlobbing;
-using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using static Facepunch.Constants;
@@ -191,40 +190,26 @@ internal class SyncPublicRepo( bool dryRun = false )
 		}
 
 		var repositoryRoot = Path.GetFullPath( "." );
+
+		// The build output doesn't come from the clone, so hash it while the clone is made
+		var buildArtifactsTask = Task.Run( () => HashBuildArtifacts( repositoryRoot ) );
+
 		var filteredRepoPath = CreateShallowClone( repositoryRoot );
 		if ( string.IsNullOrEmpty( filteredRepoPath ) )
 		{
+			buildArtifactsTask.Wait();
 			return false;
 		}
 
 		try
 		{
 			var relativeFilteredPath = GetRelativeWorkingDirectory( filteredRepoPath );
-			var uploadedArtifacts = new HashSet<ArtifactFileInfo>();
-			var uploadedArtifactHashes = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
-			var uploadedArtifactPaths = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
 
-			// Upload windows binaries
-			if ( !TryUploadBuildArtifacts( repositoryRoot, remoteBase, "win64", dryRun, ref uploadedArtifacts, uploadedArtifactHashes, uploadedArtifactPaths ) )
+			var buildArtifacts = buildArtifactsTask.GetAwaiter().GetResult();
+			if ( buildArtifacts is null )
 			{
 				return false;
 			}
-
-			// Upload linux binaries
-			if ( !TryUploadBuildArtifacts( repositoryRoot, remoteBase, "linuxsteamrt64", dryRun, ref uploadedArtifacts, uploadedArtifactHashes, uploadedArtifactPaths ) )
-			{
-				return false;
-			}
-
-			// Upload macOS binaries
-			if ( !TryUploadBuildArtifacts( repositoryRoot, remoteBase, "osxarm64", dryRun, ref uploadedArtifacts, uploadedArtifactHashes, uploadedArtifactPaths ) )
-			{
-				return false;
-			}
-
-			//
-			// Start working with the shallow clone
-			//
 
 			// Make certain we dont have any stray files in our shallow clone
 			if ( !CleanIgnoredFiles( relativeFilteredPath ) )
@@ -232,14 +217,23 @@ internal class SyncPublicRepo( bool dryRun = false )
 				return false;
 			}
 
-			// Upload LFS tracked files in the HEAD of the shallow clone
+			// LFS tracked files in the HEAD of the shallow clone
 			var shallowLfsPaths = GetCurrentLfsFiles( relativeFilteredPath );
 			if ( shallowLfsPaths is null )
 			{
 				return false;
 			}
 
-			if ( !TryUploadLfsArtifacts( filteredRepoPath, shallowLfsPaths, remoteBase, dryRun, ref uploadedArtifacts, uploadedArtifactHashes, uploadedArtifactPaths ) )
+			var lfsArtifacts = HashLfsArtifacts( filteredRepoPath, shallowLfsPaths );
+			if ( lfsArtifacts is null )
+			{
+				return false;
+			}
+
+			var uploadedArtifacts = new List<ArtifactFileInfo>();
+			var uniqueArtifacts = AddToManifest( buildArtifacts.Concat( lfsArtifacts ), uploadedArtifacts );
+
+			if ( !TryUploadArtifacts( uniqueArtifacts, remoteBase, dryRun ) )
 			{
 				return false;
 			}
@@ -361,54 +355,44 @@ internal class SyncPublicRepo( bool dryRun = false )
 		return false;
 	}
 
-	private static bool TryUploadBuildArtifacts( string repositoryRoot, string remoteBase, string platform, bool skipUpload, ref HashSet<ArtifactFileInfo> artifacts, HashSet<string> uploadedHashes, HashSet<string> uploadedPaths )
+	private static readonly string[] BuildPlatforms = { "win64", "linuxsteamrt64", "osxarm64" };
+
+	/// <summary>
+	/// Hashes the binaries for every platform and the compiled assets. Returns null on failure.
+	/// </summary>
+	private static List<(string SourcePath, ArtifactFileInfo Artifact)> HashBuildArtifacts( string repositoryRoot )
 	{
-		var buildArtifactsRoot = Path.Combine( repositoryRoot, "game", "bin", platform );
-		if ( !Directory.Exists( buildArtifactsRoot ) )
+		var files = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+
+		foreach ( var platform in BuildPlatforms )
 		{
-			Log.Info( $"Build artifacts directory not found, skipping upload: {buildArtifactsRoot}" );
-			return true;
-		}
-
-		// Inline matcher: include everything, exclude managed root folder, pdbs, and debug symbols
-		var matcher = new Matcher( StringComparison.OrdinalIgnoreCase, preserveFilterOrder: true );
-		matcher.AddInclude( "**/*" );
-		matcher.AddExclude( "managed/**" );
-		matcher.AddExclude( "**/*.pdb" );
-		matcher.AddExclude( "**/*.dbg" );
-
-		var filesToUpload = matcher
-			.GetResultsInFullPath( buildArtifactsRoot )
-			.ToHashSet( StringComparer.OrdinalIgnoreCase );
-
-		var compiledAssets = GetCompiledAssetFiles( repositoryRoot );
-		var newCompiledAssets = 0;
-		foreach ( var asset in compiledAssets )
-		{
-			if ( filesToUpload.Add( asset ) )
+			var buildArtifactsRoot = Path.Combine( repositoryRoot, "game", "bin", platform );
+			if ( !Directory.Exists( buildArtifactsRoot ) )
 			{
-				newCompiledAssets++;
+				Log.Info( $"Build artifacts directory not found, skipping upload: {buildArtifactsRoot}" );
+				continue;
 			}
+
+			// Inline matcher: include everything, exclude managed root folder, pdbs, and debug symbols
+			var matcher = new Matcher( StringComparison.OrdinalIgnoreCase, preserveFilterOrder: true );
+			matcher.AddInclude( "**/*" );
+			matcher.AddExclude( "managed/**" );
+			matcher.AddExclude( "**/*.pdb" );
+			matcher.AddExclude( "**/*.dbg" );
+
+			files.UnionWith( matcher.GetResultsInFullPath( buildArtifactsRoot ) );
 		}
 
-		if ( filesToUpload.Count == 0 )
-		{
-			Log.Info( "No build artifacts found to upload" );
-			return true;
-		}
+		var binaries = files.Count;
+		files.UnionWith( GetCompiledAssetFiles( repositoryRoot ) );
 
-		var compiledAssetSuffix = newCompiledAssets > 0 ? $" (including {newCompiledAssets} compiled asset(s))" : string.Empty;
-		Log.Info( $"Found {filesToUpload.Count} build artifact(s) to upload{compiledAssetSuffix}" );
+		Log.Info( $"Found {files.Count} build artifact(s) ({binaries} binaries, {files.Count - binaries} compiled assets)" );
 
-		var candidates = filesToUpload
-			.Select( path =>
-			{
-				var repoRelativePath = Path.GetRelativePath( repositoryRoot, path );
-				return (RepoPath: ToForwardSlash( repoRelativePath ), AbsolutePath: path);
-			} )
+		var candidates = files
+			.Select( path => (RepoPath: ToForwardSlash( Path.GetRelativePath( repositoryRoot, path ) ), AbsolutePath: path) )
 			.ToList();
 
-		return TryUploadArtifacts( candidates, remoteBase, artifacts, uploadedHashes, uploadedPaths, "build", skipUpload );
+		return HashArtifacts( candidates );
 	}
 
 	private static IReadOnlyCollection<string> GetCompiledAssetFiles( string repositoryRoot )
@@ -448,19 +432,16 @@ internal class SyncPublicRepo( bool dryRun = false )
 		return compiledAssets;
 	}
 
-	private static bool TryUploadLfsArtifacts( string repoRoot, IReadOnlyCollection<string> lfsPaths, string remoteBase, bool skipUpload, ref HashSet<ArtifactFileInfo> artifacts, HashSet<string> uploadedHashes, HashSet<string> uploadedPaths )
+	private static List<(string SourcePath, ArtifactFileInfo Artifact)> HashLfsArtifacts( string repoRoot, IReadOnlyCollection<string> lfsPaths )
 	{
-		if ( lfsPaths.Count == 0 )
-		{
-			return true;
-		}
-
 		var candidates = lfsPaths
 			.Where( p => RepoFileFilter().Match( p ).HasMatches )
 			.Select( path => (RepoPath: path, AbsolutePath: Path.Combine( repoRoot, path.Replace( '/', Path.DirectorySeparatorChar ) )) )
 			.ToList();
 
-		return TryUploadArtifacts( candidates, remoteBase, artifacts, uploadedHashes, uploadedPaths, "LFS", skipUpload );
+		Log.Info( $"Found {candidates.Count} LFS artifact(s)" );
+
+		return HashArtifacts( candidates );
 	}
 
 	private bool RunFilterRepo( string relativeRepoPath )
@@ -674,146 +655,145 @@ internal class SyncPublicRepo( bool dryRun = false )
 		".h"
 	};
 
-	private static bool TryUploadArtifacts( IReadOnlyCollection<(string RepoPath, string AbsolutePath)> candidates, string remoteBase, HashSet<ArtifactFileInfo> artifacts, HashSet<string> uploadedHashes, HashSet<string> uploadedPaths, string artifactLabel, bool skipUpload )
+	/// <summary>
+	/// Hashes the candidates in parallel. Returns null if any is missing or forbidden.
+	/// </summary>
+	private static List<(string SourcePath, ArtifactFileInfo Artifact)> HashArtifacts( IReadOnlyList<(string RepoPath, string AbsolutePath)> candidates )
 	{
-		if ( candidates.Count == 0 )
+		foreach ( var (repoPath, absolutePath) in candidates )
 		{
-			Log.Info( $"No {artifactLabel} artifacts found to upload" );
-			return true;
+			if ( !File.Exists( absolutePath ) )
+			{
+				Log.Error( $"Artifact not found on disk: {repoPath}" );
+				return null;
+			}
+
+			var extension = Path.GetExtension( absolutePath );
+			if ( !string.IsNullOrEmpty( extension ) && ForbiddenArtifactExtensions.Contains( extension ) )
+			{
+				Log.Error( $"Encountered forbidden artifact extension ({extension}): {repoPath}" );
+				return null;
+			}
 		}
 
-		var uniqueUploads = new List<(string AbsolutePath, ArtifactFileInfo Artifact)>();
-		var duplicateManifestCount = 0;
-		var duplicateUploadCount = 0;
-
-		// Pre-compute SHA256 hashes in parallel - hashing is CPU+IO bound and benefits from concurrency
-		var hashCache = new ConcurrentDictionary<string, (string Sha256, long Size)>( StringComparer.OrdinalIgnoreCase );
-		Parallel.ForEach( candidates, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, item =>
+		// Hashing is CPU+IO bound and benefits from concurrency
+		var results = new (string SourcePath, ArtifactFileInfo Artifact)?[candidates.Count];
+		Parallel.For( 0, candidates.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
 		{
-			var (_, absolutePath) = item;
-			if ( !File.Exists( absolutePath ) )
-				return;
-			var ext = Path.GetExtension( absolutePath );
-			if ( !string.IsNullOrEmpty( ext ) && ForbiddenArtifactExtensions.Contains( ext ) )
-				return;
+			var (repoPath, absolutePath) = candidates[i];
 
 			var fileInfo = new FileInfo( absolutePath );
 			var resolvedPath = absolutePath;
 			if ( fileInfo.LinkTarget is not null )
 			{
 				var resolved = fileInfo.ResolveLinkTarget( returnFinalTarget: true );
-				if ( resolved?.Exists == true )
+				if ( resolved?.Exists != true )
 				{
-					resolvedPath = resolved.FullName;
-					fileInfo = new FileInfo( resolvedPath );
+					return; // broken symlink - handled with a warning below
 				}
-				else
-				{
-					return; // broken symlink - handled with a warning in the sequential pass below
-				}
+
+				resolvedPath = resolved.FullName;
+				fileInfo = new FileInfo( resolvedPath );
 			}
 
-			hashCache[absolutePath] = (Utility.CalculateSha256( resolvedPath ), fileInfo.Length);
+			results[i] = (resolvedPath, new ArtifactFileInfo
+			{
+				Path = repoPath,
+				Sha256 = Utility.CalculateSha256( resolvedPath ),
+				Size = fileInfo.Length
+			});
 		} );
 
-		foreach ( var (repoPath, absolutePath) in candidates )
+		var artifacts = new List<(string SourcePath, ArtifactFileInfo Artifact)>( candidates.Count );
+		for ( var i = 0; i < candidates.Count; i++ )
 		{
-			var repoPathNormalized = ToForwardSlash( repoPath );
-
-			if ( !File.Exists( absolutePath ) )
+			if ( results[i] is not { } result )
 			{
-				Log.Error( $"Artifact not found on disk: {repoPathNormalized}" );
-				return false;
-			}
-
-			var extension = Path.GetExtension( absolutePath );
-			if ( !string.IsNullOrEmpty( extension ) && ForbiddenArtifactExtensions.Contains( extension ) )
-			{
-				Log.Error( $"Encountered forbidden artifact extension ({extension}): {repoPathNormalized}" );
-				return false;
-			}
-
-			if ( !hashCache.TryGetValue( absolutePath, out var cached ) )
-			{
-				// Not in cache - must be a broken symlink (resolved in the parallel pass above)
-				Log.Warning( $"Failed to resolve symlink target for {repoPathNormalized}, skipping artifact" );
+				Log.Warning( $"Failed to resolve symlink target for {candidates[i].RepoPath}, skipping artifact" );
 				continue;
 			}
 
-			if ( !uploadedPaths.Add( repoPathNormalized ) )
-			{
-				duplicateManifestCount++;
-				continue;
-			}
-
-			var artifact = new ArtifactFileInfo
-			{
-				Path = repoPathNormalized,
-				Sha256 = cached.Sha256,
-				Size = cached.Size
-			};
-
-			artifacts.Add( artifact );
-
-			if ( !uploadedHashes.Add( cached.Sha256 ) )
-			{
-				duplicateUploadCount++;
-				continue;
-			}
-
-			uniqueUploads.Add( (absolutePath, artifact) );
+			artifacts.Add( result );
 		}
 
-		if ( uniqueUploads.Count == 0 )
+		return artifacts;
+	}
+
+	/// <summary>
+	/// Adds each artifact to the manifest, first one wins for a path, and returns one artifact per unique blob.
+	/// </summary>
+	private static List<(string SourcePath, ArtifactFileInfo Artifact)> AddToManifest( IEnumerable<(string SourcePath, ArtifactFileInfo Artifact)> artifacts, List<ArtifactFileInfo> manifest )
+	{
+		var paths = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+		var hashes = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+		var unique = new List<(string SourcePath, ArtifactFileInfo Artifact)>();
+
+		foreach ( var (sourcePath, artifact) in artifacts )
 		{
-			Log.Info( $"No unique {artifactLabel} artifacts to upload" );
+			if ( !paths.Add( artifact.Path ) )
+			{
+				continue;
+			}
+
+			manifest.Add( artifact );
+
+			if ( hashes.Add( artifact.Sha256 ) )
+			{
+				unique.Add( (sourcePath, artifact) );
+			}
+		}
+
+		return unique;
+	}
+
+	private static bool TryUploadArtifacts( IReadOnlyCollection<(string SourcePath, ArtifactFileInfo Artifact)> uploads, string remoteBase, bool skipUpload )
+	{
+		if ( uploads.Count == 0 )
+		{
+			Log.Info( "No artifacts to upload" );
 			return true;
 		}
 
-		long batchBytes = 0;
-		foreach ( var upload in uniqueUploads )
-		{
-			batchBytes += upload.Artifact.Size;
-		}
+		var batchBytes = uploads.Sum( upload => upload.Artifact.Size );
 
 		if ( skipUpload )
 		{
-			Log.Info( $"Dry run: {uniqueUploads.Count} unique {artifactLabel} artifacts ({Utility.FormatSize( batchBytes )})" );
+			Log.Info( $"Dry run: {uploads.Count} unique artifacts ({Utility.FormatSize( batchBytes )})" );
 			return true;
 		}
 
-		Log.Info( $"Uploading {uniqueUploads.Count} {artifactLabel} artifacts ({Utility.FormatSize( batchBytes )})..." );
+		Log.Info( $"Uploading {uploads.Count} artifacts ({Utility.FormatSize( batchBytes )})..." );
 
-		if ( !BatchUploadArtifacts( uniqueUploads, remoteBase, artifactLabel ) )
+		if ( !BatchUploadArtifacts( uploads, remoteBase ) )
 		{
 			return false;
 		}
 
-		Log.Info( $"Uploaded {uniqueUploads.Count} {artifactLabel} artifacts ({Utility.FormatSize( batchBytes )})" );
+		Log.Info( $"Uploaded {uploads.Count} artifacts ({Utility.FormatSize( batchBytes )})" );
 
 		return true;
 	}
 
-	private static bool BatchUploadArtifacts( IReadOnlyCollection<(string AbsolutePath, ArtifactFileInfo Artifact)> uploads, string remoteBase, string artifactLabel )
+	private static bool BatchUploadArtifacts( IReadOnlyCollection<(string SourcePath, ArtifactFileInfo Artifact)> uploads, string remoteBase )
 	{
 		var stagingDir = Path.Combine( Path.GetTempPath(), $"sbox-upload-{Guid.NewGuid():N}" );
 		Directory.CreateDirectory( stagingDir );
 
-		Log.Info( $"Staging {uploads.Count} {artifactLabel} artifact(s) for batch upload..." );
+		Log.Info( $"Staging {uploads.Count} artifact(s) for batch upload..." );
 
 		try
 		{
-			foreach ( var (absolutePath, artifact) in uploads )
+			foreach ( var (sourcePath, artifact) in uploads )
 			{
 				var destPath = Path.Combine( stagingDir, artifact.Sha256 );
-				File.Copy( absolutePath, destPath, overwrite: true );
+				File.Copy( sourcePath, destPath, overwrite: true );
 			}
 
 			var remoteArtifactsPath = $"{remoteBase}/artifacts";
 			var args = $"copy \"{stagingDir}\" \"{remoteArtifactsPath}\" --ignore-existing --transfers {MAX_PARALLEL_UPLOADS} --checkers {MAX_PARALLEL_UPLOADS} -q";
 			if ( !Utility.RunProcess( "rclone", args, timeoutMs: 3600000 ) )
 			{
-				Log.Error( $"Failed to batch upload {artifactLabel} artifacts" );
+				Log.Error( "Failed to batch upload artifacts" );
 				return false;
 			}
 
