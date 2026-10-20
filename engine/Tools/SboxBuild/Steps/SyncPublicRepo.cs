@@ -38,6 +38,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 	private const string PUBLIC_BRANCH = "master";
 	private const string SHALLOW_EXCLUDE_TAG = "public-history-root";
 	private const int MAX_PARALLEL_UPLOADS = 32;
+	private const int PREVIOUS_MANIFEST_SEARCH = 20;
 
 	internal ExitCode Run()
 	{
@@ -509,6 +510,21 @@ internal class SyncPublicRepo( bool dryRun = false )
 
 	private static string GetLfsObjectsDirectory()
 	{
+		var gitDirectory = GetGitCommonDirectory();
+		if ( gitDirectory is null )
+		{
+			Log.Error( "Failed to find the git directory for LFS objects" );
+			return null;
+		}
+
+		return Path.Combine( gitDirectory, "lfs", "objects" );
+	}
+
+	/// <summary>
+	/// The repository's .git directory, shared by all of its worktrees.
+	/// </summary>
+	private static string GetGitCommonDirectory()
+	{
 		string gitDirectory = null;
 		Utility.RunProcess( "git", "rev-parse --git-common-dir", onDataReceived: ( _, e ) =>
 		{
@@ -516,13 +532,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 				gitDirectory ??= e.Data.Trim();
 		} );
 
-		if ( string.IsNullOrEmpty( gitDirectory ) )
-		{
-			Log.Error( "Failed to find the git directory for LFS objects" );
-			return null;
-		}
-
-		return Path.Combine( Path.GetFullPath( gitDirectory ), "lfs", "objects" );
+		return string.IsNullOrEmpty( gitDirectory ) ? null : Path.GetFullPath( gitDirectory );
 	}
 
 	private bool RunFilterRepo( string relativeRepoPath )
@@ -827,11 +837,21 @@ internal class SyncPublicRepo( bool dryRun = false )
 		return unique;
 	}
 
-	private static bool TryUploadArtifacts( IReadOnlyCollection<(string SourcePath, ArtifactFileInfo Artifact)> uploads, string remoteBase, bool skipUpload )
+	private static bool TryUploadArtifacts( IReadOnlyCollection<(string SourcePath, ArtifactFileInfo Artifact)> artifacts, string remoteBase, bool skipUpload )
 	{
+		var totalBytes = artifacts.Sum( artifact => artifact.Artifact.Size );
+		Log.Info( $"{artifacts.Count} unique artifacts ({Utility.FormatSize( totalBytes )})" );
+
+		var (previousCommit, previousHashes) = GetPreviouslyUploadedHashes();
+		var uploads = artifacts.Where( artifact => !previousHashes.Contains( artifact.Artifact.Sha256 ) ).ToList();
+		if ( previousCommit is not null )
+		{
+			Log.Info( $"{artifacts.Count - uploads.Count} already uploaded with {previousCommit}" );
+		}
+
 		if ( uploads.Count == 0 )
 		{
-			Log.Info( "No artifacts to upload" );
+			Log.Info( "No new artifacts to upload" );
 			return true;
 		}
 
@@ -839,7 +859,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 
 		if ( skipUpload )
 		{
-			Log.Info( $"Dry run: {uploads.Count} unique artifacts ({Utility.FormatSize( batchBytes )})" );
+			Log.Info( $"Dry run: would upload {uploads.Count} artifacts ({Utility.FormatSize( batchBytes )})" );
 			return true;
 		}
 
@@ -855,23 +875,87 @@ internal class SyncPublicRepo( bool dryRun = false )
 		return true;
 	}
 
+	/// <summary>
+	/// Artifact hashes from the newest manifest of a recent ancestor. Manifests are only uploaded once all
+	/// their artifacts are, so these are already in the bucket. Empty if none is found, uploading everything.
+	/// </summary>
+	private static (string Commit, HashSet<string> Hashes) GetPreviouslyUploadedHashes()
+	{
+		var hashes = new HashSet<string>( StringComparer.OrdinalIgnoreCase );
+
+		// Skip HEAD itself, its manifest is about to be written and a 404 for it could get cached
+		var commits = new List<string>();
+		Utility.RunProcess( "git", $"rev-list --first-parent --max-count={PREVIOUS_MANIFEST_SEARCH} HEAD~1", onDataReceived: ( _, e ) =>
+		{
+			if ( !string.IsNullOrWhiteSpace( e.Data ) )
+				commits.Add( e.Data.Trim() );
+		} );
+
+		try
+		{
+			using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds( 30 ) };
+			foreach ( var commit in commits )
+			{
+				using var response = httpClient.GetAsync( $"{R2.PublicBaseUrl}/manifests/{commit}.json" ).GetAwaiter().GetResult();
+				if ( response.StatusCode == System.Net.HttpStatusCode.NotFound )
+				{
+					continue;
+				}
+
+				response.EnsureSuccessStatusCode();
+
+				using var stream = response.Content.ReadAsStream();
+				var manifest = JsonSerializer.Deserialize<ArtifactManifest>( stream );
+				foreach ( var file in manifest?.Files ?? [] )
+				{
+					if ( !string.IsNullOrEmpty( file?.Sha256 ) )
+						hashes.Add( file.Sha256 );
+				}
+
+				return (commit, hashes);
+			}
+		}
+		catch ( Exception ex )
+		{
+			Log.Warning( $"Failed to fetch a previous manifest, uploading every artifact: {ex.Message}" );
+			return (null, new HashSet<string>( StringComparer.OrdinalIgnoreCase ));
+		}
+
+		Log.Info( $"No manifest found for the last {commits.Count} commit(s), uploading every artifact" );
+		return (null, hashes);
+	}
+
 	private static bool BatchUploadArtifacts( IReadOnlyCollection<(string SourcePath, ArtifactFileInfo Artifact)> uploads, string remoteBase )
 	{
-		var stagingDir = Path.Combine( Path.GetTempPath(), $"sbox-upload-{Guid.NewGuid():N}" );
+		// Next to the repository so staging can hard link rather than copy
+		var stagingDir = Path.Combine( GetGitCommonDirectory() ?? Path.GetTempPath(), $"sbox-upload-{Guid.NewGuid():N}" );
 		Directory.CreateDirectory( stagingDir );
 
 		Log.Info( $"Staging {uploads.Count} artifact(s) for batch upload..." );
 
 		try
 		{
+			var copied = 0;
 			foreach ( var (sourcePath, artifact) in uploads )
 			{
 				var destPath = Path.Combine( stagingDir, artifact.Sha256 );
-				File.Copy( sourcePath, destPath, overwrite: true );
+
+				// Read-only files are copied, deleting a link to one would need the shared attribute cleared
+				if ( File.GetAttributes( sourcePath ).HasFlag( FileAttributes.ReadOnly ) || !Utility.TryCreateHardLink( destPath, sourcePath ) )
+				{
+					File.Copy( sourcePath, destPath, overwrite: true );
+					copied++;
+				}
 			}
 
+			if ( copied > 0 )
+			{
+				Log.Info( $"Copied {copied} artifact(s) that couldn't be hard linked" );
+			}
+
+			// --no-traverse checks each file rather than listing every artifact in the bucket
 			var remoteArtifactsPath = $"{remoteBase}/artifacts";
-			var args = $"copy \"{stagingDir}\" \"{remoteArtifactsPath}\" --ignore-existing --transfers {MAX_PARALLEL_UPLOADS} --checkers {MAX_PARALLEL_UPLOADS} -q";
+			var args = $"copy \"{stagingDir}\" \"{remoteArtifactsPath}\" --ignore-existing --no-traverse --transfers {MAX_PARALLEL_UPLOADS} --checkers {MAX_PARALLEL_UPLOADS} --stats-one-line --stats 30s -v";
 			if ( !Utility.RunProcess( "rclone", args, timeoutMs: 3600000 ) )
 			{
 				Log.Error( "Failed to batch upload artifacts" );
@@ -884,6 +968,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 		{
 			try
 			{
+				// Plain delete: clearing read-only on a hard link would change the source file too
 				Directory.Delete( stagingDir, true );
 			}
 			catch ( Exception ex )
