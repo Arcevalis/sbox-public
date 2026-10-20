@@ -304,7 +304,7 @@ internal class SyncPublicRepo( bool dryRun = false )
 			{
 				Thread.Sleep( 500 ); // Give any pending file handles a moment to close
 				Log.Info( "Cleaning up temporary filtered repository..." );
-				Directory.Delete( filteredRepoPath, true );
+				DeleteDirectory( filteredRepoPath );
 			}
 			catch ( Exception ex )
 			{
@@ -327,6 +327,26 @@ internal class SyncPublicRepo( bool dryRun = false )
 
 		Log.Error( "Failed to create clone" );
 		return null;
+	}
+
+	/// <summary>
+	/// Deletes a directory tree, including the read-only files git leaves in .git (packs, commit-graph)
+	/// that make Directory.Delete fail on Windows.
+	/// </summary>
+	private static void DeleteDirectory( string path )
+	{
+		if ( !Directory.Exists( path ) )
+			return;
+
+		var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+		foreach ( var file in Directory.EnumerateFiles( path, "*", options ) )
+		{
+			var attributes = File.GetAttributes( file );
+			if ( attributes.HasFlag( FileAttributes.ReadOnly ) )
+				File.SetAttributes( file, attributes & ~FileAttributes.ReadOnly );
+		}
+
+		Directory.Delete( path, true );
 	}
 
 	private static bool CleanIgnoredFiles( string relativeRepoPath )
