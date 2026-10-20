@@ -448,8 +448,8 @@ internal class SyncPublicRepo( bool dryRun = false )
 			return null;
 		}
 
-		var artifacts = new List<(string SourcePath, ArtifactFileInfo Artifact)>();
-		foreach ( var path in lfsPaths.Where( p => RepoFileFilter().Match( p ).HasMatches ) )
+		var paths = lfsPaths.Where( p => RepoFileFilter().Match( p ).HasMatches ).ToList();
+		foreach ( var path in paths )
 		{
 			var extension = Path.GetExtension( path );
 			if ( !string.IsNullOrEmpty( extension ) && ForbiddenArtifactExtensions.Contains( extension ) )
@@ -457,23 +457,41 @@ internal class SyncPublicRepo( bool dryRun = false )
 				Log.Error( $"Encountered forbidden artifact extension ({extension}): {path}" );
 				return null;
 			}
+		}
 
+		// In parallel, first opens of the freshly checked out pointers are slow (virus scanning)
+		var results = new (string SourcePath, ArtifactFileInfo Artifact, string Error)[paths.Count];
+		Parallel.For( 0, paths.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
+		{
+			var path = paths[i];
 			var pointerPath = Path.Combine( repoRoot, path.Replace( '/', Path.DirectorySeparatorChar ) );
 			if ( !TryReadLfsPointer( pointerPath, out var oid, out var size ) )
 			{
-				Log.Error( $"Expected an LFS pointer in the clone: {path}" );
-				return null;
+				results[i].Error = $"Expected an LFS pointer in the clone: {path}";
+				return;
 			}
 
 			var objectPath = Path.Combine( objectsDirectory, oid[..2], oid[2..4], oid );
 			var objectInfo = new FileInfo( objectPath );
 			if ( !objectInfo.Exists || objectInfo.Length != size )
 			{
-				Log.Error( $"LFS object {oid} for {path} is missing from {objectsDirectory}" );
+				results[i].Error = $"LFS object {oid} for {path} is missing from {objectsDirectory}";
+				return;
+			}
+
+			results[i] = (objectPath, new ArtifactFileInfo { Path = path, Sha256 = oid, Size = size }, null);
+		} );
+
+		var artifacts = new List<(string SourcePath, ArtifactFileInfo Artifact)>( results.Length );
+		foreach ( var (sourcePath, artifact, error) in results )
+		{
+			if ( error is not null )
+			{
+				Log.Error( error );
 				return null;
 			}
 
-			artifacts.Add( (objectPath, new ArtifactFileInfo { Path = path, Sha256 = oid, Size = size }) );
+			artifacts.Add( (sourcePath, artifact) );
 		}
 
 		Log.Info( $"Found {artifacts.Count} LFS artifact(s)" );
