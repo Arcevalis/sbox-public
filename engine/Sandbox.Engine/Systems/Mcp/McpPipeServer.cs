@@ -14,8 +14,6 @@ namespace Editor.Mcp;
 /// </summary>
 internal static class McpPipeServer
 {
-	// Walking this during a hotload reaches the pending pipe read's cancellation callback and
-	// replaces it with a throwing stub; the listener ends with no log line of its own. Keep it a leaf.
 	[SkipHotload]
 	static CancellationTokenSource lifetime;
 
