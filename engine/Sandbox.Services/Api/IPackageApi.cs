@@ -189,6 +189,12 @@ public struct PublishManifest
 	public bool Publish { get; set; }
 	public int EngineApi { get; set; }
 	public string Meta { get; set; }
+
+	/// <summary>
+	/// Have the backend compile the code before it publishes. It answers <c>compiling</c> until that's done, and
+	/// 400 with the compiler errors when it doesn't compile.
+	/// </summary>
+	public bool VerifyCompile { get; set; }
 }
 
 public record struct ManifestFile( string Name, int Size, string Hash );
