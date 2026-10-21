@@ -12,6 +12,11 @@ public partial class Shader : Resource
 
 	public override bool IsValid => native.IsValid;
 
+	/// <summary>
+	/// Compiled from a string with no name, nothing can find it by its path. Materials are given it directly.
+	/// </summary>
+	internal bool IsAnonymous { get; set; }
+
 	private Shader( CVfx native, string name )
 	{
 		if ( native.IsNull ) throw new Exception( "Shader pointer cannot be null!" );
