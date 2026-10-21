@@ -1,4 +1,5 @@
-﻿using Sandbox.Engine;
+﻿using NativeEngine;
+using Sandbox.Engine;
 using Sandbox.Engine.Settings;
 using Sandbox.Rendering;
 using Sandbox.VR;
@@ -954,18 +955,31 @@ public sealed partial class SceneCamera : IDisposable, IManagedCamera
 		//
 		// Adds the views to the scene system
 		//
-		var setup = new CameraRenderer( "RenderToCubeTexture", _cameraId );
+		using var setup = new CameraRenderer( "RenderToCubeTexture", _cameraId );
 		setup.Configure( this, config );
 		setup.Native.EnableUI = false;
 
-		for ( int i = 0; i < CubeRotations.Length; i++ )
+		// All six faces share one scene submission and one bindless descriptor set.
+		// Join an existing frame bracket when the caller already has one open.
+		bool ownsBatch = !CSceneSystem.IsRenderingViews();
+		// Standalone captures preserve the main frame's performance stats.
+		if ( ownsBatch ) CSceneSystem.BeginRenderingViews( false );
+		try
 		{
-			// Override rotation for each face
-			setup.Native.CameraRotation = (Rotation * CubeRotations[i]).Angles();
-			setup.Native.RenderToCubeTexture( texture.native, i );
+			for ( int i = 0; i < CubeRotations.Length; i++ )
+			{
+				setup.Native.CameraRotation = (Rotation * CubeRotations[i]).Angles();
+				setup.Native.RenderToCubeTexture( texture.native, i );
+			}
 		}
-
-		setup.Dispose();
+		finally
+		{
+			if ( ownsBatch )
+			{
+				CSceneSystem.FinishRenderingViews();
+				CSceneSystem.WaitForRenderingToComplete();
+			}
+		}
 	}
 
 	private void RenderStereo( in ViewSetup config = default )
