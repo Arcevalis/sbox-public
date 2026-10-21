@@ -9,7 +9,6 @@ static class Diagnostics
 	public static DiagnosticDescriptor AuthorityAttribute = Warning( "SBOX002", "Replace [Authority] with [Rpc.Owner]", "The [Authority] attribute has been moved to [Rpc.Owner] and [Rpc.Host]." );
 	public static DiagnosticDescriptor GpuBuffer = Warning( "SBOX003", "Replace ComputeBuffer with GpuBuffer", "The ComputeBuffer class has been moved to GpuBuffer." );
 	public static DiagnosticDescriptor HostSyncAttribute = Warning( "SBOX004", "Replace [HostSync] with [Sync( SyncFlags.FromHost )]", "The [HostSync] attribute has been merged with [Sync] to make functionality expandable with SyncFlags." );
-	public static DiagnosticDescriptor SyncQuery = Warning( "SBOX005", "Replace Query with SyncFlags.Query in [Sync]", "[Sync] attributes should have SyncFlags.Query set instead of the Query property." );
 	public static DiagnosticDescriptor ConCmdAttribute = Warning( "SBOX006", "Make ConCmd Method Static", "[ConCmd] methods need to be static to function." );
 	public static DiagnosticDescriptor ConVarAttribute = Warning( "SBOX007", "Make ConVar Property Static", "[ConVar] properties need to be static to function." );
 	public static DiagnosticDescriptor GenericStaticMembersUnsupported = Warning( "SB3000", "Add [SkipHotload] to Static Member in Generic Type", "Static members in generic types won't be processed during hotloads, so should be explicitly marked with [SkipHotload]" );
