@@ -110,6 +110,23 @@ native static class ShaderTools
 		return VFX_SHADER_RESOURCE_VERSION;
 	}
 
+	// The VCS version compiled programs are written with, and the oldest that still loads
+	inline static int GetVcsVersion()
+	{
+		return VFX_VCS_VERSION;
+	}
+
+	inline static int GetMinVcsVersion()
+	{
+		return VFX_VCS_VERSION_MIN_SUPPORTED;
+	}
+
+	// Compiled programs from any other ABI epoch don't load
+	inline static int GetAbiVersion()
+	{
+		return VFX_ABI_CURRENT_VERSION;
+	}
+
 	inline static string GetShaderSource( string pShaderFile )
 	{
 		CUtlBuffer shaderFileBuf;

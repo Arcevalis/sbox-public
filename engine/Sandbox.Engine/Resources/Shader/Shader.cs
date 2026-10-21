@@ -48,6 +48,7 @@ public partial class Shader : Resource
 	const int VFX_LOAD_STATIC_COMBO_DATA = (1 << 1);
 	const int VFX_LOAD_FEATURES_ONLY = (1 << 2);
 	const int VFX_COMPUTE_MD5_CHECKSUMS = (1 << 4);
+	const int VFX_ALLOW_OTHER_ABI = (1 << 5);
 
 	/// <summary>
 	/// Loads from the compiled resource, unless it's out of date by comparing the md5
@@ -66,10 +67,11 @@ public partial class Shader : Resource
 
 	/// <summary>
 	/// Loads the shader from an already-compiled <c>.shader_c</c> so it can be recompiled, WITHOUT loading the per-static-combo compiled data.
+	/// Programs from an older ABI epoch load too, since bringing them up to date is the point.
 	/// </summary>
 	internal bool LoadCompiledForRecompile( string filename )
 	{
-		return native.CreateFromResourceFile( filename, NativeEngine.VfxCompileTarget_t.SM_6_0_VULKAN, 0, true );
+		return native.CreateFromResourceFile( filename, NativeEngine.VfxCompileTarget_t.SM_6_0_VULKAN, VFX_ALLOW_OTHER_ABI, true );
 	}
 
 	/// <summary>
