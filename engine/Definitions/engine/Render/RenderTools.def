@@ -30,7 +30,7 @@ native static class RenderTools as NativeEngine.RenderTools
 	bool DrawDynamicSceneObject( IRenderContext renderContext, CSceneObject sceneObject, StringToken nShaderMode );
 	bool ModelMeshHasMorphs( IModel hModel, int nMesh );
 	int QueueModelMeshMorph( CSceneObject sceneObject, IModel hModel, int nMesh );
-	void GenerateMorphs();
+	void GenerateMorphs( IRenderContext context );
 	void GetMorphSubrect( int nHandle, CastTo[Vector4D*] void* pSubrect );
 	void* CreateConstantBuffer( int nSize );
 	void SetConstantBufferData( IRenderContext renderContext, CRenderAttributes attributes, StringToken nName, void* hBuffer, void* pData, int nSize );

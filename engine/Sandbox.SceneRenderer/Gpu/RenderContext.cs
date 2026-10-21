@@ -518,9 +518,14 @@ internal sealed class RenderContext : IDisposable
 	public static int QueueMorph( SceneObject sceneObject, Model model, int modelMesh ) => RenderTools.QueueModelMeshMorph( sceneObject, model.native, modelMesh );
 
 	/// <summary>
-	/// Composite queued morphs before managed submission; native's end-of-frame update is too late (<c>GenerateCompositeMorphTextureAtlas</c>).
+	/// Record queued morphs into this setup context, before skinning, sharing the frame's descriptor set.
 	/// </summary>
-	public static void GenerateMorphs() => RenderTools.GenerateMorphs();
+	public void GenerateMorphs()
+	{
+		RenderTools.GenerateMorphs( context );
+		boundValid = false;
+		ResetMaterialBind();
+	}
 
 	/// <summary>
 	/// Where a queued morph is in the atlas, once generated: u offset, u range, v offset, v range, for the mesh's morph entry.
