@@ -85,6 +85,13 @@ Hammer and identify nodes by integer id. `hammer_status`, `hammer_open_map`, `ha
 `hammer_list_commands`, `hammer_build_map`, `hammer_build_status`, `hammer_compiled_map_stats`,
 `hammer_undo`, `hammer_redo`, and optimisation helpers.
 
+## Publishing
+
+`publishing_preview` builds the same asset preview as Project Settings > Publishing, optionally
+with proposed rules. It returns a summary and a local JSON report path instead of thousands of
+rows. No settings are saved or content uploaded; included assets may compile into build caches.
+For the full review workflow read `sbox-cli --skill sbox-publishing`.
+
 ## Patterns
 
 **Find, then act by id.** Tools chain: `find_game_objects` / `scene_tree` return GUIDs that
