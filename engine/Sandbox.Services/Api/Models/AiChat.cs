@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Sandbox.Services;
 
@@ -123,13 +122,6 @@ public class AiChatInput
 	/// Results for all tool calls requested by the previous assistant response.
 	/// </summary>
 	public List<AiToolResult> ToolResults { get; set; } = [];
-
-	/// <summary>
-	/// Optional JSON Schema for this query's final response. Tool calls remain available before that response.
-	/// Omit for plain text.
-	/// </summary>
-	[JsonIgnore( Condition = JsonIgnoreCondition.WhenWritingNull )]
-	public JsonElement? JsonSchema { get; set; }
 }
 
 /// <summary>
