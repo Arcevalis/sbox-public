@@ -118,6 +118,8 @@ public partial class GameTransform
 		if ( _targetLocal == value )
 			return;
 
+		GameObject._net?.MarkTransformDirty( _targetLocal, value );
+
 		var before = _targetLocal;
 
 		// Headless never interpolates, but sends what it would show
@@ -146,6 +148,7 @@ public partial class GameTransform
 		if ( _targetLocal == value )
 			return false;
 
+		GameObject._net?.MarkTransformDirty( _targetLocal, value );
 		GameObject?._net?.OnLocalTransformSet( _targetLocal, value, false );
 		_interpolatedLocal = value;
 		_targetLocal = value;
@@ -165,6 +168,8 @@ public partial class GameTransform
 			&& _targetLocal.Rotation.Equals( value.Rotation )
 			&& _targetLocal.Scale.Equals( value.Scale ) )
 			return;
+
+		GameObject._net?.MarkTransformDirty( _targetLocal, value );
 
 		_hasPositionSet = true;
 		GameObject?._net?.OnLocalTransformSet( _targetLocal, value, false );
