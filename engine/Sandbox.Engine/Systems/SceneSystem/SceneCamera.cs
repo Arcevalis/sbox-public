@@ -21,6 +21,11 @@ public sealed partial class SceneCamera : IDisposable, IManagedCamera
 	private readonly Lazy<Cmaa2Renderer> _cmaa2Renderer = new( () => new Cmaa2Renderer(), isThreadSafe: true );
 
 	/// <summary>
+	/// Last frame's depth chain, for the native renderer's occlusion culling.
+	/// </summary>
+	internal IDisposable OcclusionHistory;
+
+	/// <summary>
 	/// This is a c++ object with a ton of useful shit.
 	/// Don't access it directly because it might be dirty.
 	/// </summary>
@@ -224,6 +229,13 @@ public sealed partial class SceneCamera : IDisposable, IManagedCamera
 
 			if ( _cmaa2Renderer.IsValueCreated )
 				EngineLoop.DisposeAtFrameEnd( _cmaa2Renderer.Value );
+
+			if ( OcclusionHistory != null )
+			{
+				// A view queued to render may still read it
+				EngineLoop.DisposeAtFrameEnd( OcclusionHistory );
+				OcclusionHistory = null;
+			}
 
 			// Release native CStrongHandle copies held by texture tracking
 			// in our RenderAttributes. Without this, the handles survive until
