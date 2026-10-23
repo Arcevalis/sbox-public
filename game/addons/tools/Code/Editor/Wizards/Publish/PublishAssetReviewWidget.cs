@@ -152,25 +152,33 @@ internal sealed class PublishAssetReviewWidget : Widget
 		estimateNotice.ToolTip = WebUtility.HtmlEncode( "Sizes and dependency counts show the known amounts; some content could not be measured. Excluded assets are not compiled for the preview.\n"
 			+ string.Join( "\n", estimateIssues.Take( 16 ).Select( x => $"{x.Path}: {x.Reason}" ) )
 			+ (estimateIssues.Count > 16 ? $"\n… and {estimateIssues.Count - 16:n0} more paths." : "") );
-		var files = manifest.Assets.ToArray();
+		var files = manifest.Assets.GroupBy( x => ReviewAssetPath( x.Name ), StringComparer.OrdinalIgnoreCase ).Select( group =>
+			new FileEntry( group.Key, group.Sum( x => (long)x.Size ),
+				Dependencies: manifest.GetDependencySummary( group.Select( x => x.Name ) ),
+				Note: string.Join( "\n", group.Select( x => manifest.IncludedExclusionReasons.GetValueOrDefault( x.Name.TrimStart( '/' ) ) ).Where( x => x is not null ).Distinct() ),
+				Files: group.Select( x => x.Name ).ToArray() ) ).ToArray();
+		var excludedFiles = manifest.ExcludedAssets.GroupBy( ReviewAssetPath, StringComparer.OrdinalIgnoreCase ).Select( group =>
+			new FileEntry( group.Key, Impact: manifest.GetPublishImpact( group ), Dependencies: manifest.GetDependencySummary( group ),
+				Note: string.Join( "\n", group.Where( manifest.ExcludedByRules.ContainsKey ).Select( x => $"Excluded by {manifest.ExcludedByRules[x]}. Click + to add an inclusion after it." ).Distinct() ),
+				Files: group.ToArray() ) ).ToArray();
 		if ( manifest.ExclusionOverrides.Count > 0 )
 		{
 			var kept = content.Layout.Add( new PublishSection( content, $"Required despite exclusions · {manifest.ExclusionOverrides.Count:n0}", Theme.Yellow, "info" ) );
 			kept.Layout.Add( new Label.Body( "These files still ship because they are configured, in Resources, or required by included content." ) );
 			var list = kept.Layout.Add( new FilePathList( kept, null, details: true ) { FixedHeight = Math.Min( manifest.ExclusionOverrides.Count, 3 ) * 40 + 4 } );
-			list.SetItems( manifest.ExclusionOverrides.Select( x => new FileEntry( x.Path, x.Size, Note: $"{x.Rule} overridden: {x.Reason}" ) ) );
+			list.SetItems( manifest.ExclusionOverrides.Select( x => new FileEntry( ReviewAssetPath( x.Path ), x.Size, Note: $"{x.Rule} overridden: {x.Reason}" ) ) );
 		}
 
 		foreach ( var message in manifest.Errors )
 			content.Layout.Add( new WarningBox( WebUtility.HtmlEncode( message ), content ) );
 
 		var warningEntries = manifest.SceneWarnings.Select( scene => new WarningEntry(
-			$"{(scene.Missing ? "Missing scene" : "Excluded scene")}: {scene.Path}",
+			$"{(scene.Missing ? "Missing scene" : "Excluded scene")}: {ReviewAssetPath( scene.Path )}",
 			scene.Missing ? "Update Game Setup or restore this configured scene." : "Include this scene if your game loads it. Leave development-only scenes excluded.",
 			scene.Missing ? null : scene.Path, scene.Missing ? 0 : 1,
 			scene.Missing ? null : manifest.GetPublishImpact( [scene.Path] ),
 			scene.Missing ? null : manifest.GetDependencySummary( [scene.Path] ) ) )
-			.Concat( manifest.CodeAssetWarnings.Select( warning => new WarningEntry(
+			.Concat( manifest.CodeAssetWarnings.DistinctBy( x => ReviewAssetPath( x.Pattern ), StringComparer.OrdinalIgnoreCase ).Select( warning => new WarningEntry(
 				WarningTitle( warning ), $"{WarningReason( warning )} · {warning.ExcludedPaths.Length:n0} excluded matches",
 				warning.Pattern, 2, manifest.GetPublishImpact( warning.ExcludedPaths ), manifest.GetDependencySummary( warning.ExcludedPaths ), warning ) ) ).ToArray();
 		var warningCount = warningEntries.Select( x => x.GroupKey ?? $"entry:{x.Title}" ).Distinct().Count();
@@ -228,16 +236,16 @@ internal sealed class PublishAssetReviewWidget : Widget
 		var columns = content.Layout.AddRow( 1 );
 		columns.Spacing = 12;
 		columns.Add( FileList( $"Included · {files.Length:n0}", Theme.Green, "check_circle",
-			"Publish size · uncompressed", files.Select( x => new FileEntry( x.Name, x.Size, Dependencies: manifest.GetDependencySummary( [x.Name] ), Note: manifest.IncludedExclusionReasons.GetValueOrDefault( x.Name.TrimStart( '/' ) ) ) ), false ), 1 );
-		columns.Add( FileList( $"Excluded · {manifest.ExcludedAssets.Count:n0}", Theme.TextLight, "remove_circle_outline",
-			"Estimated additional publish size", manifest.ExcludedAssets.Select( x => new FileEntry( x, Impact: manifest.GetPublishImpact( [x] ), Dependencies: manifest.GetDependencySummary( [x] ), Note: manifest.ExcludedByRules.TryGetValue( x, out var rule ) ? $"Excluded by {rule}. Click + to add an inclusion after it." : null ) ), true ), 1 );
+			"Publish size · uncompressed", files, false ), 1 );
+		columns.Add( FileList( $"Excluded · {excludedFiles.Length:n0}", Theme.TextLight, "remove_circle_outline",
+			"Estimated additional publish size", excludedFiles, true ), 1 );
 	}
 
 	Widget FileList( string title, Color accent, string icon, string description, IEnumerable<FileEntry> paths, bool excluded )
 	{
 		var page = new PublishSection( content, title, accent, icon ) { MinimumHeight = 240 };
 		var entries = paths.ToArray();
-		var totalImpact = excluded ? Manifest.GetPublishImpact( entries.Select( x => x.Path ) ) : null;
+		var totalImpact = excluded ? Manifest.GetPublishImpact( entries.SelectMany( x => x.Paths ) ) : null;
 		var bytes = totalImpact is null ? entries.Sum( x => x.Size ) : totalImpact.DirectBytes + totalImpact.TransitiveBytes;
 		var sizeText = bytes == 0 && totalImpact is { TotalBytes: null } ? "Unavailable" : bytes.FormatBytes();
 		page.Header.Add( new SizeDisplay( page, sizeText, description, accent,
@@ -258,7 +266,7 @@ internal sealed class PublishAssetReviewWidget : Widget
 			var matches = groups.Select( group =>
 			{
 				var matches = group.Entries.Where( x => group.Title.Contains( query, StringComparison.OrdinalIgnoreCase ) || x.Path.Contains( query, StringComparison.OrdinalIgnoreCase ) ).ToArray();
-				return new FileGroupHeader( group, matches, excluded ? Manifest.GetPublishImpact( matches.Select( x => x.Path ) ) : null, Manifest.GetDependencySummary( matches.Select( x => x.Path ) ), !expanded.Contains( group.Key ) );
+				return new FileGroupHeader( group, matches, excluded ? Manifest.GetPublishImpact( matches.SelectMany( x => x.Paths ) ) : null, Manifest.GetDependencySummary( matches.SelectMany( x => x.Paths ) ), !expanded.Contains( group.Key ) );
 			} )
 				.Where( x => x.Matches.Length > 0 );
 			foreach ( var header in SortItems( matches, sort, x => x.Group.Title, x => x.SortSize, x => x.Dependencies ) )
@@ -351,8 +359,16 @@ internal sealed class PublishAssetReviewWidget : Widget
 		}
 	}
 
-	sealed record FileEntry( string Path, long Size = 0, PublishImpact Impact = null, string Note = null, DependencySummary Dependencies = null )
+	// Show logical assets while retaining every physical file for size and dependency calculations.
+	static string ReviewAssetPath( string path )
 	{
+		if ( path.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) path = path[..^2];
+		return AssetSystem.FindByPath( path )?.Path ?? path;
+	}
+
+	sealed record FileEntry( string Path, long Size = 0, PublishImpact Impact = null, string Note = null, DependencySummary Dependencies = null, string[] Files = null )
+	{
+		public IEnumerable<string> Paths => Files ?? [Path];
 		public long? SortSize => Impact is null ? Size : Impact.TotalBytes;
 	}
 	sealed record FileGroup( string Key, string Title, string[] Rules, FileEntry[] Entries );
@@ -362,7 +378,7 @@ internal sealed class PublishAssetReviewWidget : Widget
 		public long? SortSize => Impact is null ? Size : Impact.TotalBytes;
 	}
 
-	const string DependencyTooltip = "Sort by most unique transitive assets, including dependencies already published. Selected roots, raw source inputs and duplicate paths are not counted. Groups count shared dependencies once. The preview notice lists incomplete metadata; affected counts are lower bounds. Source and compiled rows for the same asset share a count.";
+	const string DependencyTooltip = "Sort by most unique transitive assets, including dependencies already published. Selected roots, raw source inputs and duplicate paths are not counted. Groups count shared dependencies once. The preview notice lists incomplete metadata; affected counts are lower bounds. Each asset appears once; sizes include its published files.";
 	static string DependencyText( DependencySummary summary ) => summary is null ? "Dependencies unknown" : $"{summary.Count:n0} dependencies";
 
 	const string ImpactTooltip = "Estimated additional uncompressed size from existing compiled files and references. Already included files are omitted; shared dependencies count once per row or group. No excluded assets are compiled. The preview notice lists paths with incomplete metadata. Values show the known amounts. Recompilation and generated thumbnails can change the final size.";
@@ -565,8 +581,12 @@ internal sealed class PublishAssetReviewWidget : Widget
 			? $"query:{Source.SourceFile}\n{Source.Line}\n{Source.Usage}" : null;
 	}
 
-	static string WarningTitle( CodeAssetWarning warning ) => warning.Usage is null ? warning.Pattern
-		: warning.Usage.Contains( warning.Pattern, StringComparison.OrdinalIgnoreCase ) ? warning.Usage : $"{warning.Usage} · {warning.Pattern}";
+	static string WarningTitle( CodeAssetWarning warning )
+	{
+		var path = ReviewAssetPath( warning.Pattern );
+		return warning.Usage is null ? path : warning.Usage.Contains( warning.Pattern, StringComparison.OrdinalIgnoreCase )
+			? warning.Usage.Replace( warning.Pattern, path, StringComparison.OrdinalIgnoreCase ) : $"{warning.Usage} · {path}";
+	}
 
 	static string WarningReason( CodeAssetWarning warning ) => warning.ExclusionRule is not null ? $"Excluded by {warning.ExclusionRule}" : warning.Recommended ? "Recommended: exact path in code"
 		: warning.Usage is not null ? "Review cached-resource query" : "Review possible runtime path";

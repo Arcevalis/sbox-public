@@ -47,7 +47,7 @@ public partial class ProjectPublisher
 				foreach ( var alias in new[] { asset.RelativePath, source, compiled }.Where( x => !string.IsNullOrWhiteSpace( x ) ) )
 					reviewAssetAliases.TryAdd( ReviewPath( alias ), assetPath );
 				if ( IncludeSourceFiles ) AddFileSize( source, asset.GetSourceFile( true ) );
-				else if ( !string.IsNullOrEmpty( source ) && ReviewPath( source ) == ReviewPath( asset.Path ) && LooseFileAllowed( source, false ) )
+				else if ( string.IsNullOrEmpty( compiled ) && !asset.IsCompileFailed && !string.IsNullOrEmpty( source ) && ReviewPath( source ) == ReviewPath( asset.Path ) && LooseFileAllowed( source, false ) )
 					rootFiles[ReviewPath( source )] = ReadReviewFileSize( asset.GetSourceFile( true ) );
 
 				foreach ( var file in asset.GetAdditionalGameFiles() ) AddFileSize( file, FileSystem.Mounted.GetFullPath( file ) );

@@ -91,16 +91,6 @@ public partial class ProjectPublisher
 			IsPreview = previewOnly;
 			publishingOptions = options ?? new( project.Config.PublishUsedAssetsOnly, project.Config.Resources );
 
-			if ( !string.IsNullOrWhiteSpace( publishingOptions.Resources ) )
-			{
-				cancel.ThrowIfCancellationRequested();
-
-				foreach ( var path in AllAssetPaths( project ) )
-				{
-					await IncludeFiles( path, publishingOptions.Resources, cancel, matchAssetAliases: publishingOptions.PublishUsedAssetsOnly, legacyRules: !publishingOptions.PublishUsedAssetsOnly );
-				}
-			}
-
 			//
 			// Collect localization files
 			//
@@ -251,6 +241,17 @@ public partial class ProjectPublisher
 				assets = await FindAssetsToPublish( project, assets, cancel );
 
 			await CollectAssets( assets, cancel, referencesCollected: project.Config.Type == "game" && publishingOptions.PublishUsedAssetsOnly );
+
+			// Compile selected assets before copying loose resources, so a clean build cannot ship their sources.
+			if ( !string.IsNullOrWhiteSpace( publishingOptions.Resources ) )
+			{
+				cancel.ThrowIfCancellationRequested();
+
+				foreach ( var path in AllAssetPaths( project ) )
+				{
+					await IncludeFiles( path, publishingOptions.Resources, cancel, matchAssetAliases: true, legacyRules: !publishingOptions.PublishUsedAssetsOnly );
+				}
+			}
 
 			if ( project.Config.Type == "game" )
 			{
@@ -544,9 +545,15 @@ public partial class ProjectPublisher
 			{
 				cancel.ThrowIfCancellationRequested();
 				await YieldPreview( cancel );
-				// A compiled sidecar must not bypass an exclusion matching its source alias.
-				if ( matchAssetAliases && matches.HasExclusions && AssetSystem.FindByPath( absolute ) is { } asset
-					&& !matches.Matches( AssetPaths( asset ).Where( x => !string.IsNullOrWhiteSpace( x ) ).Select( NormalizePublishPath ) ) ) continue;
+				if ( matchAssetAliases && AssetSystem.FindByPath( absolute ) is { } asset )
+				{
+					// A compiled sidecar must not bypass an exclusion matching its source alias.
+					if ( matches.HasExclusions && !matches.Matches( AssetPaths( asset ).Where( x => !string.IsNullOrWhiteSpace( x ) ).Select( NormalizePublishPath ) ) ) continue;
+					// Resource rules select assets; only the source option should also publish their source files.
+					var compiled = asset.GetCompiledFile();
+					if ( !IncludeSourceFiles && (asset.IsCompileFailed || !string.IsNullOrEmpty( compiled ))
+						&& !string.Equals( NormalizePublishPath( relative ), string.IsNullOrEmpty( compiled ) ? null : NormalizePublishPath( compiled ), StringComparison.OrdinalIgnoreCase ) ) continue;
+				}
 				await AddFile( absolute, relative );
 			}
 		}
