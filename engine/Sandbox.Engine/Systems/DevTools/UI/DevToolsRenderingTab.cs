@@ -8,7 +8,7 @@ namespace Sandbox.Diagnostics;
 /// What the renderer submitted last frame, what it threw away, and the resources and effects it leaned on. Numbers in
 /// tables, coloured where they're out of line, with what's out of line listed first.
 /// </summary>
-internal sealed class HubRenderingTab : HubTab
+internal sealed class DevToolsRenderingTab : DevToolsTab
 {
 	public override string TabId => "rendering";
 	public override string Title => "Rendering";
@@ -28,45 +28,45 @@ internal sealed class HubRenderingTab : HubTab
 
 	const string Columns = "minmax(0, 1fr) 72px minmax(0, 1fr)";
 
-	readonly HubFacts _context;
-	readonly HubFindings _findings;
-	readonly HubTable _submission;
-	readonly HubTable _visibility;
-	readonly HubTable _occlusion;
-	readonly HubTable _lights;
-	readonly HubTable _textures;
-	readonly HubTable _postProcess;
+	readonly DevToolsFacts _context;
+	readonly DevToolsFindings _findings;
+	readonly DevToolsTable _submission;
+	readonly DevToolsTable _visibility;
+	readonly DevToolsTable _occlusion;
+	readonly DevToolsTable _lights;
+	readonly DevToolsTable _textures;
+	readonly DevToolsTable _postProcess;
 	readonly Panel _managedPane;
-	readonly HubTable _managedPhases;
-	readonly HubTable _managedDraws;
+	readonly DevToolsTable _managedPhases;
+	readonly DevToolsTable _managedDraws;
 	readonly Panel _deviceLines;
-	readonly List<PerfHub.Issue> _issues = new();
+	readonly List<DevTools.Issue> _issues = new();
 	string _deviceKey;
 
-	public HubRenderingTab()
+	public DevToolsRenderingTab()
 	{
-		_context = AddChild( new HubFacts() );
-		_findings = AddChild( new HubFindings() );
+		_context = AddChild( new DevToolsFacts() );
+		_findings = AddChild( new DevToolsFindings() );
 
 		var split = AddChild( new Panel( null, "split" ) );
 
-		_submission = Pane( split, "render-submission" ).AddChild( new HubTable( Columns, "Submission", "#count", "" ).Banded() );
+		_submission = Pane( split, "render-submission" ).AddChild( new DevToolsTable( Columns, "Submission", "#count", "" ).Banded() );
 		var visibility = Pane( split );
-		_visibility = visibility.AddChild( new HubTable( "minmax(0, 1fr) 64px 40px 64px", "Visibility", "#objects", "#%", "" ).Banded() );
-		_occlusion = visibility.AddChild( new HubTable( "minmax(0, 1fr) 64px", "GPU occlusion", "#count" ).Banded() );
-		_lights = Pane( split ).AddChild( new HubTable( "minmax(0, 1fr) 64px", "Lights and shadows", "#count" ).Banded() );
-		_textures = Pane( split ).AddChild( new HubTable( "minmax(0, 1fr) minmax(0, 130px) 64px", "Texture pool", "#", "" ).Banded() );
+		_visibility = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 64px 40px 64px", "Visibility", "#objects", "#%", "" ).Banded() );
+		_occlusion = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 64px", "GPU occlusion", "#count" ).Banded() );
+		_lights = Pane( split ).AddChild( new DevToolsTable( "minmax(0, 1fr) 64px", "Lights and shadows", "#count" ).Banded() );
+		_textures = Pane( split ).AddChild( new DevToolsTable( "minmax(0, 1fr) minmax(0, 130px) 64px", "Texture pool", "#", "" ).Banded() );
 
-		_postProcess = Pane( split, "span-all" ).AddChild( new HubTable( "minmax(0, 1fr) minmax(0, 1fr) 48px minmax(0, 1fr)", "Post-processing", "stage", "#order", "flags" ).Banded() );
+		_postProcess = Pane( split, "span-all" ).AddChild( new DevToolsTable( "minmax(0, 1fr) minmax(0, 1fr) 48px minmax(0, 1fr)", "Post-processing", "stage", "#order", "flags" ).Banded() );
 
 		_managedPane = Pane( split, "span-all" );
 		var managed = _managedPane.AddChild( new Panel( null, "split" ) );
-		_managedPhases = Pane( managed ).AddChild( new HubTable( "minmax(0, 1fr) 56px 64px", "Managed renderer", "#ms", "" ).Banded() );
-		_managedDraws = Pane( managed ).AddChild( new HubTable( "minmax(0, 1fr) 64px 64px", "Draws by pass", "#draws", "" ).Banded() );
-		_managedPane.AddChild( new HubSection( "Frame plan" ).Collapsible( body =>
-			body.AddChild( new HubOverlayView( ( Painter p, ref Vector2 pos ) => DebugOverlay.ScenePlan.Draw( p, ref pos, 1 ) ) ) ) );
+		_managedPhases = Pane( managed ).AddChild( new DevToolsTable( "minmax(0, 1fr) 56px 64px", "Managed renderer", "#ms", "" ).Banded() );
+		_managedDraws = Pane( managed ).AddChild( new DevToolsTable( "minmax(0, 1fr) 64px 64px", "Draws by pass", "#draws", "" ).Banded() );
+		_managedPane.AddChild( new DevToolsSection( "Frame plan" ).Collapsible( body =>
+			body.AddChild( new DevToolsOverlayView( ( Painter p, ref Vector2 pos ) => DebugOverlay.ScenePlan.Draw( p, ref pos, 1 ) ) ) ) );
 
-		var device = split.AddChild( new HubSection( "Device report", "span-all" ) );
+		var device = split.AddChild( new DevToolsSection( "Device report", "span-all" ) );
 		_deviceLines = new Panel( null, "device-lines" );
 		device.Collapsible( body => body.AddChild( _deviceLines ) );
 	}
@@ -78,7 +78,7 @@ internal sealed class HubRenderingTab : HubTab
 		return pane;
 	}
 
-	public override void Refresh( PerfHub.Summary s )
+	public override void Refresh( DevTools.Summary s )
 	{
 		var f = FrameStats.Current;
 		var m = f.Managed;
@@ -130,7 +130,7 @@ internal sealed class HubRenderingTab : HubTab
 	/// <summary>
 	/// What's out of line in last frame's rendering numbers, worst first.
 	/// </summary>
-	internal static void FindIssues( FrameStats f, List<PerfHub.Issue> into )
+	internal static void FindIssues( FrameStats f, List<DevTools.Issue> into )
 	{
 		var isManaged = f.Managed.Renders > 0;
 		var drawCalls = isManaged ? f.Managed.TotalDraws : f.DrawCalls;
@@ -140,28 +140,28 @@ internal sealed class HubRenderingTab : HubTab
 		into.Clear();
 
 		if ( drawCalls >= DrawCallsWarn )
-			into.Add( new( drawCalls >= DrawCallsBad ? PerfHub.Severity.Bad : PerfHub.Severity.Warning, "Draw calls",
+			into.Add( new( drawCalls >= DrawCallsBad ? DevTools.Severity.Bad : DevTools.Severity.Warning, "Draw calls",
 				$"{drawCalls:N0}, over {DrawCallsWarn:N0}. Merge meshes, instance repeats, use LODs", null ) );
 
 		if ( batchingMatters && trisPerDraw < TrisPerDrawWarn )
-			into.Add( new( PerfHub.Severity.Warning, "Small draws",
+			into.Add( new( DevTools.Severity.Warning, "Small draws",
 				$"{trisPerDraw:N0} triangles per draw, under {TrisPerDrawWarn:N0}", null ) );
 
 		if ( !isManaged )
 		{
 			var matPerDraw = Ratio( f.MaterialChanges + f.ShadowMaterialChanges, f.DrawCalls );
 			if ( batchingMatters && matPerDraw > MatChangesPerDrawWarn )
-				into.Add( new( PerfHub.Severity.Info, "Material changes",
+				into.Add( new( DevTools.Severity.Info, "Material changes",
 					$"{matPerDraw:0.00} per draw, over {MatChangesPerDrawWarn}. Share materials so draws batch", null ) );
 		}
 
 		var pool = Percent( f.TexturePoolUsedBytes, f.TexturePoolLimitBytes );
 		if ( pool >= TexturePoolWarn )
-			into.Add( new( pool >= TexturePoolBad ? PerfHub.Severity.Bad : PerfHub.Severity.Warning, "Texture pool",
-				$"{pool:0}% used, {HubFormat.BytesOf( f.TexturePoolUsedBytes, f.TexturePoolLimitBytes )}", null ) );
+			into.Add( new( pool >= TexturePoolBad ? DevTools.Severity.Bad : DevTools.Severity.Warning, "Texture pool",
+				$"{pool:0}% used, {DevToolsFormat.BytesOf( f.TexturePoolUsedBytes, f.TexturePoolLimitBytes )}", null ) );
 
 		if ( f.PendingStreamingRequests > StreamingWarn )
-			into.Add( new( PerfHub.Severity.Info, "Streaming backlog", $"{f.PendingStreamingRequests:N0} pending", null ) );
+			into.Add( new( DevTools.Severity.Info, "Streaming backlog", $"{f.PendingStreamingRequests:N0} pending", null ) );
 
 		into.Sort( static ( a, b ) => b.Severity.CompareTo( a.Severity ) );
 	}
@@ -172,38 +172,38 @@ internal sealed class HubRenderingTab : HubTab
 		t.Begin();
 
 		t.Row( "draws", ["Draw calls", N( $"{drawCalls:N0}", Grade( drawCalls, DrawCallsWarn, DrawCallsBad ) ),
-			HubTable.Note( isManaged ? $"{m.Draws:N0} forward, {m.DepthDraws:N0} depth, {m.ShadowDraws:N0} shadow" : "" )] );
-		t.Row( "tris", ["Triangles", N( HubFormat.Count( triangles ) ), HubTable.Note( $"{trisPerDraw:N0} per draw" )] );
+			DevToolsTable.Note( isManaged ? $"{m.Draws:N0} forward, {m.DepthDraws:N0} depth, {m.ShadowDraws:N0} shadow" : "" )] );
+		t.Row( "tris", ["Triangles", N( DevToolsFormat.Count( triangles ) ), DevToolsTable.Note( $"{trisPerDraw:N0} per draw" )] );
 
 		if ( isManaged )
 		{
-			t.Row( "instances", ["Instances", N( $"{m.Instances:N0}" ), HubTable.Note( $"{m.Objects:N0} objects, {m.ObjectsVisible:N0} visible" )] );
+			t.Row( "instances", ["Instances", N( $"{m.Instances:N0}" ), DevToolsTable.Note( $"{m.Objects:N0} objects, {m.ObjectsVisible:N0} visible" )] );
 			t.End();
 			return;
 		}
 
 		var batchDensity = Ratio( f.ObjectsRendered, f.RenderBatchDraws );
-		t.Row( "batches", ["Batches", N( $"{f.RenderBatchDraws:N0}", batchingMatters && batchDensity < BatchDensityWarn ? PerfHub.Severity.Warning : null ),
-			HubTable.Note( $"{batchDensity:N1} objects each" )] );
+		t.Row( "batches", ["Batches", N( $"{f.RenderBatchDraws:N0}", batchingMatters && batchDensity < BatchDensityWarn ? DevTools.Severity.Warning : null ),
+			DevToolsTable.Note( $"{batchDensity:N1} objects each" )] );
 
 		var matChanges = f.MaterialChanges + f.ShadowMaterialChanges;
 		var matPerDraw = Ratio( matChanges, f.DrawCalls );
-		t.Row( "matchanges", ["Material changes", N( $"{matChanges:N0}", batchingMatters && matPerDraw > MatChangesPerDrawWarn ? PerfHub.Severity.Warning : null ),
-			HubTable.Note( $"{matPerDraw:0.00} per draw, {f.ShadowMaterialChanges:N0} in shadows" )] );
+		t.Row( "matchanges", ["Material changes", N( $"{matChanges:N0}", batchingMatters && matPerDraw > MatChangesPerDrawWarn ? DevTools.Severity.Warning : null ),
+			DevToolsTable.Note( $"{matPerDraw:0.00} per draw, {f.ShadowMaterialChanges:N0} in shadows" )] );
 
 		var sets = f.FullMaterialSets + f.SimilarMaterialSets;
-		t.Row( "sets", ["Material sets", N( $"{sets:N0}" ), HubTable.Note( $"{f.SimilarMaterialSets:N0} similar ({Percent( f.SimilarMaterialSets, sets ):0}%)" )] );
+		t.Row( "sets", ["Material sets", N( $"{sets:N0}" ), DevToolsTable.Note( $"{f.SimilarMaterialSets:N0} similar ({Percent( f.SimilarMaterialSets, sets ):0}%)" )] );
 
 		var prims = f.BaseObjectDraws + f.AnimatableObjectDraws + f.AggregateObjectDraws;
-		t.Row( "aggregated", ["Aggregated", N( $"{f.AggregateObjectDraws:N0}" ), HubTable.Note( $"of {prims:N0} primitives ({Percent( f.AggregateObjectDraws, prims ):0}%)" )] );
+		t.Row( "aggregated", ["Aggregated", N( $"{f.AggregateObjectDraws:N0}" ), DevToolsTable.Note( $"of {prims:N0} primitives ({Percent( f.AggregateObjectDraws, prims ):0}%)" )] );
 		if ( f.UnbatchableMaterialDraws > 0 )
-			t.Row( "unbatchable", ["Unbatchable", N( $"{f.UnbatchableMaterialDraws:N0}" ), HubTable.Note( "materials that can't batch" )] );
+			t.Row( "unbatchable", ["Unbatchable", N( $"{f.UnbatchableMaterialDraws:N0}" ), DevToolsTable.Note( "materials that can't batch" )] );
 
-		t.Row( "cbuffers", ["Constant buffers", N( $"{f.ConstantBufferUpdates:N0}" ), HubTable.Note( $"{HubFormat.Bytes( f.ConstantBufferBytes )} uploaded" )] );
-		t.Row( "contexts", ["Contexts", N( $"{f.PrimaryContexts + f.SecondaryContexts:N0}" ), HubTable.Note( $"{f.PrimaryContexts:N0} primary, {f.SecondaryContexts:N0} secondary" )] );
-		t.Row( "displaylists", ["Display lists", N( $"{f.DisplayLists:N0}" ), HubTable.Note( "" )] );
+		t.Row( "cbuffers", ["Constant buffers", N( $"{f.ConstantBufferUpdates:N0}" ), DevToolsTable.Note( $"{DevToolsFormat.Bytes( f.ConstantBufferBytes )} uploaded" )] );
+		t.Row( "contexts", ["Contexts", N( $"{f.PrimaryContexts + f.SecondaryContexts:N0}" ), DevToolsTable.Note( $"{f.PrimaryContexts:N0} primary, {f.SecondaryContexts:N0} secondary" )] );
+		t.Row( "displaylists", ["Display lists", N( $"{f.DisplayLists:N0}" ), DevToolsTable.Note( "" )] );
 		if ( f.UniqueMaterials > 0 )
-			t.Row( "materials", ["Unique materials", N( $"{f.UniqueMaterials:N0}" ), HubTable.Note( "" )] );
+			t.Row( "materials", ["Unique materials", N( $"{f.UniqueMaterials:N0}" ), DevToolsTable.Note( "" )] );
 
 		t.End();
 	}
@@ -256,11 +256,11 @@ internal sealed class HubRenderingTab : HubTab
 		t.End();
 	}
 
-	static void Part( HubTable t, string name, double count, double total, bool always = false, string tooltip = null )
+	static void Part( DevToolsTable t, string name, double count, double total, bool always = false, string tooltip = null )
 	{
 		if ( count <= 0 && !always ) return;
 		var share = Ratio( count, total );
-		t.Row( name, [name, N( $"{count:N0}" ), new( $"{share * 100:0}", "number dim" ), HubTable.BarOf( share )], tooltip: tooltip );
+		t.Row( name, [name, N( $"{count:N0}" ), new( $"{share * 100:0}", "number dim" ), DevToolsTable.BarOf( share )], tooltip: tooltip );
 	}
 
 	void RefreshLights( FrameStats f, ManagedFrameCounters m, bool isManaged )
@@ -295,19 +295,19 @@ internal sealed class HubRenderingTab : HubTab
 		var pool = Percent( used, limit );
 		var severity = Grade( pool, TexturePoolWarn, TexturePoolBad );
 
-		t.Row( "used", ["Used", N( limit > 0 ? HubFormat.BytesOf( used, limit ) : HubFormat.Bytes( used ), severity ), HubTable.BarOf( Ratio( used, limit ), severity )] );
+		t.Row( "used", ["Used", N( limit > 0 ? DevToolsFormat.BytesOf( used, limit ) : DevToolsFormat.Bytes( used ), severity ), DevToolsTable.BarOf( Ratio( used, limit ), severity )] );
 
 		// What the used part is made of - more telling than how much of a big pool is free
 		var pinned = (double)f.TexturePoolNonEvictableBytes;
-		t.Row( "pinned", ["Pinned", N( HubFormat.Bytes( pinned ) ), HubTable.BarOf( Ratio( pinned, limit ) )], tooltip: "Can't be evicted to make room" );
-		t.Row( "evictable", ["Evictable", N( HubFormat.Bytes( Math.Max( 0, used - pinned ) ) ), HubTable.BarOf( Ratio( Math.Max( 0, used - pinned ), limit ) )] );
-		t.Row( "pending", ["Streaming", N( $"{f.PendingStreamingRequests:N0}", f.PendingStreamingRequests > StreamingWarn ? PerfHub.Severity.Warning : null ), ""] );
+		t.Row( "pinned", ["Pinned", N( DevToolsFormat.Bytes( pinned ) ), DevToolsTable.BarOf( Ratio( pinned, limit ) )], tooltip: "Can't be evicted to make room" );
+		t.Row( "evictable", ["Evictable", N( DevToolsFormat.Bytes( Math.Max( 0, used - pinned ) ) ), DevToolsTable.BarOf( Ratio( Math.Max( 0, used - pinned ), limit ) )] );
+		t.Row( "pending", ["Streaming", N( $"{f.PendingStreamingRequests:N0}", f.PendingStreamingRequests > StreamingWarn ? DevTools.Severity.Warning : null ), ""] );
 
 		if ( GpuProfilerStats.VideoMemoryBudget > 0 )
 		{
 			var vram = GpuProfilerStats.VideoMemoryUsageFraction;
-			var vramSeverity = vram > 0.95f ? PerfHub.Severity.Bad : vram > 0.8f ? PerfHub.Severity.Warning : (PerfHub.Severity?)null;
-			t.Row( "vram", ["Video memory", N( HubFormat.BytesOf( GpuProfilerStats.VideoMemoryUsed, GpuProfilerStats.VideoMemoryBudget ), vramSeverity ), HubTable.BarOf( vram, vramSeverity )], rowClass: "total" );
+			var vramSeverity = vram > 0.95f ? DevTools.Severity.Bad : vram > 0.8f ? DevTools.Severity.Warning : (DevTools.Severity?)null;
+			t.Row( "vram", ["Video memory", N( DevToolsFormat.BytesOf( GpuProfilerStats.VideoMemoryUsed, GpuProfilerStats.VideoMemoryBudget ), vramSeverity ), DevToolsTable.BarOf( vram, vramSeverity )], rowClass: "total" );
 		}
 
 		t.End();
@@ -360,9 +360,9 @@ internal sealed class HubRenderingTab : HubTab
 		Phase( t, "Sync", m.SyncMs, total );
 		Phase( t, "Setup", m.SetupMs, total );
 		Phase( t, "Submit", m.SubmitMs, total );
-		t.Row( "total", ["Main thread", N( HubFormat.Ms( total ) ), ""], rowClass: "total" );
-		t.Row( "workers", [new( "Workers recording", "dim" ), new( HubFormat.Ms( m.WorkerRecordMs ), "number dim" ), ""], tooltip: "Overlaps the main thread" );
-		t.Row( "wait", [new( "Waiting on workers", "dim" ), new( HubFormat.Ms( m.RecordWaitMs ), "number dim" ), ""] );
+		t.Row( "total", ["Main thread", N( DevToolsFormat.Ms( total ) ), ""], rowClass: "total" );
+		t.Row( "workers", [new( "Workers recording", "dim" ), new( DevToolsFormat.Ms( m.WorkerRecordMs ), "number dim" ), ""], tooltip: "Overlaps the main thread" );
+		t.Row( "wait", [new( "Waiting on workers", "dim" ), new( DevToolsFormat.Ms( m.RecordWaitMs ), "number dim" ), ""] );
 		t.End();
 
 		var d = _managedDraws;
@@ -376,13 +376,13 @@ internal sealed class HubRenderingTab : HubTab
 		d.End();
 	}
 
-	static void Phase( HubTable t, string name, double ms, double total ) =>
-		t.Row( name, [name, N( HubFormat.Ms( ms ) ), HubTable.BarOf( Ratio( ms, total ) )] );
+	static void Phase( DevToolsTable t, string name, double ms, double total ) =>
+		t.Row( name, [name, N( DevToolsFormat.Ms( ms ) ), DevToolsTable.BarOf( Ratio( ms, total ) )] );
 
-	static void Pass( HubTable t, string name, double draws, double total )
+	static void Pass( DevToolsTable t, string name, double draws, double total )
 	{
 		if ( draws <= 0 ) return;
-		t.Row( name, [name, N( $"{draws:N0}" ), HubTable.BarOf( Ratio( draws, total ) )] );
+		t.Row( name, [name, N( $"{draws:N0}" ), DevToolsTable.BarOf( Ratio( draws, total ) )] );
 	}
 
 	void RefreshDevice( FrameStats f )
@@ -398,10 +398,10 @@ internal sealed class HubRenderingTab : HubTab
 			_deviceLines.AddChild( new Label( line.TrimEnd( '\r' ) ) );
 	}
 
-	static HubTable.Cell N( string text, PerfHub.Severity? severity = null ) => HubTable.Number( text, severity );
+	static DevToolsTable.Cell N( string text, DevTools.Severity? severity = null ) => DevToolsTable.Number( text, severity );
 
-	static PerfHub.Severity? Grade( double value, double warn, double bad ) =>
-		value >= bad ? PerfHub.Severity.Bad : value >= warn ? PerfHub.Severity.Warning : null;
+	static DevTools.Severity? Grade( double value, double warn, double bad ) =>
+		value >= bad ? DevTools.Severity.Bad : value >= warn ? DevTools.Severity.Warning : null;
 
 	static double Ratio( double a, double b ) => b > 0 ? a / b : 0;
 

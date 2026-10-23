@@ -7,11 +7,11 @@ using Sandbox.UI;
 namespace Editor.Mcp;
 
 /// <summary>
-/// The performance hub's numbers as data, so an agent can read them instead of opening the hub and screenshotting it.
-/// Each tool is one of the hub's tabs; they read what the tabs read (<see cref="PerfHub"/>), whether or not the hub is
+/// The dev tools's numbers as data, so an agent can read them instead of opening the dev tools and screenshotting it.
+/// Each tool is one of the dev tools' tabs; they read what the tabs read (<see cref="DevTools"/>), whether or not the dev tools is
 /// open. Times are milliseconds, memory is MiB.
 /// </summary>
-[McpToolset( "perf", "Performance numbers from the performance hub (perf_hub): frame times, what limits the frame rate, CPU scopes, GPU passes, memory and GC, rendering counters, network and UI costs" )]
+[McpToolset( "perf", "Performance numbers from the dev tools (devtools): frame times, what limits the frame rate, CPU scopes, GPU passes, memory and GC, rendering counters, network and UI costs" )]
 internal static class PerfTools
 {
 	/// <summary>
@@ -20,12 +20,12 @@ internal static class PerfTools
 	const float Linger = 30;
 
 	[McpTool.ReadOnly( "perf_overview" )]
-	[Description( "Start here. Frame rate and frame time stats over the last ~2 seconds (avg/p50/p99/max for the frame, CPU work, GPU and cap wait), what's limiting the frame rate, hitches, the issues the performance hub flags, the top main thread and GPU costs, and memory/GC headlines. Each issue names the perf_* tool with the detail. Takes about a second the first time, while GPU timings warm up." )]
+	[Description( "Start here. Frame rate and frame time stats over the last ~2 seconds (avg/p50/p99/max for the frame, CPU work, GPU and cap wait), what's limiting the frame rate, hitches, the issues the dev tools flags, the top main thread and GPU costs, and memory/GC headlines. Each issue names the perf_* tool with the detail. Takes about a second the first time, while GPU timings warm up." )]
 	internal static async Task<object> Overview()
 	{
 		await WarmGpu();
 
-		var s = PerfHub.Summarise();
+		var s = DevTools.Summarise();
 		var second = PerformanceStats.LastSecond;
 		var f = FrameStats.Current;
 
@@ -42,7 +42,7 @@ internal static class PerfTools
 			CpuWork = Stat( s.CpuTime ),
 			Gpu = s.GpuAvg > 0 ? Stat( s.GpuTime ) : null,
 			CapWait = Stat( s.WaitTime ),
-			PerfHubWindow = PerfHub.IsOpen ? Stat( s.HubTime ) : null,
+			DevToolsWindow = DevTools.IsOpen ? Stat( s.SelfTime ) : null,
 			Hitches = Hitches( s ),
 			Issues = Issues( s.Issues ),
 			MainThread = Costs( s.TopCpu, 8 ),
@@ -61,10 +61,10 @@ internal static class PerfTools
 	}
 
 	[McpTool.ReadOnly( "perf_frames" )]
-	[Description( "Per-frame timings, newest first: the whole frame, the engine's work on it (frame minus cap wait and the performance hub's own cost), the GPU frame time, and the cap wait. Use it to find hitches and pacing problems the averages in perf_overview hide. GPU times arrive a few frames late." )]
+	[Description( "Per-frame timings, newest first: the whole frame, the engine's work on it (frame minus cap wait and the dev tools's own cost), the GPU frame time, and the cap wait. Use it to find hitches and pacing problems the averages in perf_overview hide. GPU times arrive a few frames late." )]
 	internal static object Frames( [Description( "How many frames, newest first. Default 120, max 512." )] int count = 120 )
 	{
-		var frames = PerfHub.Frames;
+		var frames = DevTools.Frames;
 		count = Math.Clamp( count, 1, Math.Max( 1, frames.Count ) );
 		if ( frames.Count == 0 ) return new { Count = 0 };
 
@@ -87,13 +87,13 @@ internal static class PerfTools
 	[Description( "Main thread detail: frame pacing, what caps the frame rate (fps_max, vsync, display mode), time by category, and every named timing scope. Scopes nest, so they overlap - a category includes the scopes inside it." )]
 	internal static object Cpu( [Description( "How many scopes to return, biggest first. Default 30, max 200." )] int limit = 30 )
 	{
-		var s = PerfHub.Summarise();
+		var s = DevTools.Summarise();
 		var rs = RenderSettings.Instance;
 		var surface = GameSurface.Current;
 		var cap = EngineLoop.FrameRateLimit;
 
-		var scopes = new List<PerfHub.Cost>();
-		PerfHub.GetScopes( scopes );
+		var scopes = new List<DevTools.Cost>();
+		DevTools.GetScopes( scopes );
 
 		return new
 		{
@@ -127,9 +127,9 @@ internal static class PerfTools
 	{
 		await WarmGpu();
 
-		var s = PerfHub.Summarise();
-		var passes = new List<PerfHub.GpuPass>();
-		PerfHub.GetGpuPasses( passes );
+		var s = DevTools.Summarise();
+		var passes = new List<DevTools.GpuPass>();
+		DevTools.GetGpuPasses( passes );
 
 		var tree = passes.Where( x => x.BranchMs >= 0.01f ).ToList();
 
@@ -164,8 +164,8 @@ internal static class PerfTools
 		{
 			allocationSeconds = Math.Clamp( allocationSeconds, 2, 60 );
 
-			// A window of exactly what was asked for, unless the hub is already tracking for its own tab
-			if ( !PerfHub.IsCollecting( "memory" ) ) DebugOverlay.Allocations.Disabled();
+			// A window of exactly what was asked for, unless the dev tools is already tracking for its own tab
+			if ( !DevTools.IsCollecting( "memory" ) ) DebugOverlay.Allocations.Disabled();
 			await CollectFor( "memory", allocationSeconds, linger: 5 );
 
 			var (g0, g1, g2) = DebugOverlay.Allocations.Collections;
@@ -225,7 +225,7 @@ internal static class PerfTools
 	}
 
 	[McpTool.ReadOnly( "perf_rendering" )]
-	[Description( "Rendering detail for the last frame: which renderer drew it, resolution and AA, the rendering issues the performance hub flags (draw calls, batching, texture pool), every scene system counter (draws, triangles, batches, material changes, culling, lights and shadows, texture pool, device report), the managed renderer's phases and draws when it rendered, and the active camera's post-processing layers." )]
+	[Description( "Rendering detail for the last frame: which renderer drew it, resolution and AA, the rendering issues the dev tools flags (draw calls, batching, texture pool), every scene system counter (draws, triangles, batches, material changes, culling, lights and shadows, texture pool, device report), the managed renderer's phases and draws when it rendered, and the active camera's post-processing layers." )]
 	internal static object Rendering()
 	{
 		var f = FrameStats.Current;
@@ -233,8 +233,8 @@ internal static class PerfTools
 		var isManaged = m.Renders > 0;
 		var rs = RenderSettings.Instance;
 
-		var issues = new List<PerfHub.Issue>();
-		HubRenderingTab.FindIssues( f, issues );
+		var issues = new List<DevTools.Issue>();
+		DevToolsRenderingTab.FindIssues( f, issues );
 
 		var camera = Application.GetActiveScene()?.Camera;
 		var layers = camera?.PostProcess.Layers;
@@ -305,7 +305,7 @@ internal static class PerfTools
 		{
 			seconds = Math.Clamp( seconds, 1, 60 );
 
-			if ( NetworkDebugSystem.Current is { } before && !PerfHub.IsCollecting( "network" ) ) before.Reset();
+			if ( NetworkDebugSystem.Current is { } before && !DevTools.IsCollecting( "network" ) ) before.Reset();
 			await CollectFor( "network", seconds, linger: 5 );
 
 			messages = Messages( NetworkDebugSystem.Current, seconds, limit );
@@ -336,18 +336,18 @@ internal static class PerfTools
 	}
 
 	[McpTool.ReadOnly( "perf_ui" )]
-	[Description( "UI cost for the last frame: every root panel that rendered (game and menu, not the performance hub's own) with its panel count, layout, command build and submit time, and draw calls, plus the totals." )]
+	[Description( "UI cost for the last frame: every root panel that rendered (game and menu, not the dev tools's own) with its panel count, layout, command build and submit time, and draw calls, plus the totals." )]
 	internal static object Ui()
 	{
 		var total = new RootPanel.RenderStatistics();
 		var gpuBuffers = 0;
 		var roots = new List<object>();
 
-		foreach ( var (name, root) in HubUiTab.RenderedRoots() )
+		foreach ( var (name, root) in DevToolsUiTab.RenderedRoots() )
 		{
 			var r = root.Stats;
-			total = HubUiTab.Sum( total, r );
-			gpuBuffers += HubUiTab.GpuBuffers( root );
+			total = DevToolsUiTab.Sum( total, r );
+			gpuBuffers += DevToolsUiTab.GpuBuffers( root );
 			roots.Add( UiStats( name, r ) );
 		}
 
@@ -416,9 +416,9 @@ internal static class PerfTools
 	/// </summary>
 	static async Task WarmGpu()
 	{
-		if ( PerfHub.WantsGpuTimings && GpuProfilerStats.RowCount > 0 )
+		if ( DevTools.WantsGpuTimings && GpuProfilerStats.RowCount > 0 )
 		{
-			PerfHub.CollectFor( "gpu", Linger );
+			DevTools.CollectFor( "gpu", Linger );
 			return;
 		}
 
@@ -430,18 +430,18 @@ internal static class PerfTools
 	/// </summary>
 	static async Task CollectFor( string tab, float seconds, float linger )
 	{
-		PerfHub.CollectFor( tab, seconds + linger );
+		DevTools.CollectFor( tab, seconds + linger );
 		await Task.Delay( TimeSpan.FromSeconds( seconds ), McpSession.Current?.Cancellation ?? default );
 		await MainThread.Wait();
 	}
 
-	static object Window( PerfHub.Summary s ) => new { s.Frames, Seconds = Round( s.WindowMs / 1000, 2 ) };
+	static object Window( DevTools.Summary s ) => new { s.Frames, Seconds = Round( s.WindowMs / 1000, 2 ) };
 
-	static object Stat( PerfHub.Stat stat ) => new { AvgMs = Round( stat.Avg ), P50Ms = Round( stat.P50 ), P99Ms = Round( stat.P99 ), MaxMs = Round( stat.Max ) };
+	static object Stat( DevTools.Stat stat ) => new { AvgMs = Round( stat.Avg ), P50Ms = Round( stat.P50 ), P99Ms = Round( stat.P99 ), MaxMs = Round( stat.Max ) };
 
-	static object Hitches( PerfHub.Summary s ) => new { Count = s.Spikes, OverMs = Round( s.HitchMs, 1 ), WorstMs = Round( s.WorstSpikeMs, 1 ) };
+	static object Hitches( DevTools.Summary s ) => new { Count = s.Spikes, OverMs = Round( s.HitchMs, 1 ), WorstMs = Round( s.WorstSpikeMs, 1 ) };
 
-	static object Issues( List<PerfHub.Issue> issues ) => issues.Select( x => new
+	static object Issues( List<DevTools.Issue> issues ) => issues.Select( x => new
 	{
 		x.Severity,
 		x.Title,
@@ -449,7 +449,7 @@ internal static class PerfTools
 		MoreIn = x.Tab is null ? null : $"perf_{x.Tab}",
 	} ).ToList();
 
-	static object Costs( List<PerfHub.Cost> costs, int limit ) => costs.Take( limit ).Select( x => new
+	static object Costs( List<DevTools.Cost> costs, int limit ) => costs.Take( limit ).Select( x => new
 	{
 		x.Name,
 		AvgMs = Round( x.AvgMs ),
@@ -459,7 +459,7 @@ internal static class PerfTools
 	/// <summary>
 	/// GPU costs carry the pass's parent, since leaf names like "Bloom" or "Clear" repeat under different parents.
 	/// </summary>
-	static object GpuCosts( List<PerfHub.Cost> costs, int limit ) => costs.Take( limit ).Select( x => new
+	static object GpuCosts( List<DevTools.Cost> costs, int limit ) => costs.Take( limit ).Select( x => new
 	{
 		x.Name,
 		AvgMs = Round( x.AvgMs ),

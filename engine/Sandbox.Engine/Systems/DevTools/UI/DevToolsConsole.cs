@@ -3,27 +3,55 @@ using Sandbox.UI;
 namespace Sandbox.Diagnostics;
 
 /// <summary>
-/// The engine console, for the hub's own window: the log, a filter, and a command line with autocomplete. Commands
+/// The console, first of the tabs.
+/// </summary>
+internal sealed class DevToolsConsoleTab : DevToolsTab
+{
+	public override string TabId => DevTools.ConsoleTabId;
+	public override string Title => "Console";
+	public override bool FillsPage => true;
+
+	public DevToolsConsoleTab()
+	{
+		AddChild( new DevToolsConsole() );
+	}
+
+	public override void Refresh( DevTools.Summary summary ) { }
+}
+
+/// <summary>
+/// The engine console, for the dev tools' own window: the log, a filter, and a command line with autocomplete. Commands
 /// run with the local console's privileges. History lasts the session - there's no game to keep cookies for.
 /// </summary>
-internal sealed class HubConsole : Panel
+internal sealed class DevToolsConsole : Panel
 {
 	readonly VirtualList _output;
 	readonly TextEntry _input;
 	readonly TextEntry _filter;
 	readonly List<LogEvent> _lines = new();
 
-	public HubConsole()
+	/// <summary>
+	/// Selected log text: a light grey, like the rest of the selection here.
+	/// </summary>
+	static readonly Color SelectionColor = Color.White.WithAlpha( 0.2f );
+
+	public DevToolsConsole()
 	{
 		AddClass( "console" );
 
+		// Clicking the log focuses the console, so Ctrl+C copies what's selected in it
+		AcceptsFocus = true;
+
 		var bar = AddChild( new Panel( null, "console-bar" ) );
-		bar.AddChild( new Label( "Console", "console-title" ) );
 
 		_filter = bar.AddChild( new TextEntry() );
 		_filter.AddClass( "console-filter" );
 		_filter.Placeholder = "Filter";
 		_filter.AddEventListener( "onchange", Refilter );
+
+		var copy = bar.AddChild( new Label( "content_copy", "icon-button material" ) );
+		copy.Tooltip = "Copy every line shown";
+		copy.AddEventListener( "onclick", CopyAll );
 
 		var clear = bar.AddChild( new Label( "delete_sweep", "icon-button material" ) );
 		clear.Tooltip = "Clear";
@@ -37,10 +65,16 @@ internal sealed class HubConsole : Panel
 		_output.AddClass( "console-output" );
 		_output.ItemHeight = 17;
 		_output.PreferScrollToBottom = true;
+
+		// Dragging across the log selects its text instead of scrolling it
+		_output.AllowChildSelection = true;
+		_output.CanDragScroll = false;
+
 		_output.OnCreateCell = ( cell, data ) =>
 		{
 			var line = (LogEvent)data;
-			cell.AddChild( new Label( Format( line ), $"console-line {LevelClass( line.Level )}" ) );
+			var label = cell.AddChild( new Label( Format( line ), $"console-line {LevelClass( line.Level )}" ) );
+			label.SelectionColor = SelectionColor;
 		};
 
 		_input = AddChild( new TextEntry() );
@@ -49,14 +83,35 @@ internal sealed class HubConsole : Panel
 		_input.AddEventListener( "onsubmit", Submit );
 		_input.AutoComplete = Complete;
 
-		foreach ( var line in PerfHub.Log ) AddEvent( line );
-		PerfHub.OnLog += AddEvent;
+		foreach ( var line in DevTools.Log ) AddEvent( line );
+		DevTools.OnLog += AddEvent;
 	}
 
 	public override void OnDeleted()
 	{
-		PerfHub.OnLog -= AddEvent;
+		DevTools.OnLog -= AddEvent;
 		base.OnDeleted();
+	}
+
+	/// <summary>
+	/// The selected text in the log, a line per row. The rows are laid out by position rather than in order, so they're
+	/// put back in order here.
+	/// </summary>
+	public override string GetClipboardValue( bool cut )
+	{
+		var selected = _output.Descendants.OfType<Label>()
+			.Where( x => x.HasSelection() )
+			.OrderBy( x => x.Box.Rect.Top )
+			.Select( x => x.GetSelectedText() )
+			.ToList();
+
+		return selected.Count > 0 ? string.Join( "\n", selected ) : null;
+	}
+
+	void CopyAll()
+	{
+		var text = string.Join( "\n", _lines.Where( Matches ).Select( Format ) );
+		NativeEngine.Sdl.SetClipboardText( text );
 	}
 
 	static string Format( LogEvent line ) => string.IsNullOrEmpty( line.Logger )
@@ -95,9 +150,9 @@ internal sealed class HubConsole : Panel
 		if ( Matches( line ) ) _output.AddItem( line );
 
 		// Trim in batches, so a busy log doesn't rebuild the list every line
-		if ( _lines.Count > PerfHub.LogCapacity * 2 )
+		if ( _lines.Count > DevTools.LogCapacity * 2 )
 		{
-			_lines.RemoveRange( 0, _lines.Count - PerfHub.LogCapacity );
+			_lines.RemoveRange( 0, _lines.Count - DevTools.LogCapacity );
 			Refilter();
 		}
 	}
@@ -154,12 +209,12 @@ internal sealed class HubConsole : Panel
 /// The GPU timeline, hosted in a panel. It's interactive - hover a pass for its details, freeze the frame - so it's
 /// given this panel's own cursor and button, in its drawing units, rather than reading the game's mouse.
 /// </summary>
-internal sealed class HubTimelineView : Panel
+internal sealed class DevToolsTimelineView : Panel
 {
 	float _height = 120f;
 	bool _down;
 
-	public HubTimelineView()
+	public DevToolsTimelineView()
 	{
 		AddClass( "overlay-view" );
 		Style.Height = _height;

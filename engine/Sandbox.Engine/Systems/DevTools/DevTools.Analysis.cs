@@ -3,7 +3,7 @@ using Sandbox.Engine.Settings;
 
 namespace Sandbox.Diagnostics;
 
-internal static partial class PerfHub
+internal static partial class DevTools
 {
 	/// <summary>
 	/// What's most likely limiting the frame rate right now. An inference from the timings we have, not a measurement.
@@ -60,7 +60,7 @@ internal static partial class PerfHub
 	internal readonly record struct Stat( float Avg, float P50, float P99, float Max );
 
 	/// <summary>
-	/// Everything the hub shows, worked out a few times a second from the raw stats. Panels read this rather than the
+	/// Everything the dev tools shows, worked out a few times a second from the raw stats. Panels read this rather than the
 	/// stats themselves, so they all agree and none of them does the maths twice.
 	/// </summary>
 	internal sealed class Summary
@@ -79,9 +79,9 @@ internal static partial class PerfHub
 		public float Fps;
 
 		/// <summary>
-		/// The same, per series: the frame, the engine's work on it, the GPU, the cap wait and the hub.
+		/// The same, per series: the frame, the engine's work on it, the GPU, the cap wait and the dev tools.
 		/// </summary>
-		public Stat FrameTime, CpuTime, GpuTime, WaitTime, HubTime;
+		public Stat FrameTime, CpuTime, GpuTime, WaitTime, SelfTime;
 
 		/// <summary>
 		/// How much frame times spread around their average - pacing, where the percentiles are about the tail.
@@ -89,16 +89,16 @@ internal static partial class PerfHub
 		public float FrameStdDev;
 
 		/// <summary>
-		/// Frame time minus the cap wait and the hub's own measured cost - the engine's work on the frame.
+		/// Frame time minus the cap wait and the dev tools' own measured cost - the engine's work on the frame.
 		/// </summary>
 		public float CpuWorkAvg;
 		public float CapWaitAvg;
 		public float GpuAvg;
 
 		/// <summary>
-		/// What the hub itself costs a frame, on the main thread.
+		/// What the dev tools itself costs a frame, on the main thread.
 		/// </summary>
-		public float HubAvg;
+		public float SelfAvg;
 
 		/// <summary>
 		/// The frame time we're aiming for, and where that number came from.
@@ -135,6 +135,37 @@ internal static partial class PerfHub
 		public readonly List<Cost> TopCpu = new();
 		public readonly List<Cost> TopGpu = new();
 		public readonly List<Issue> Issues = new();
+
+		/// <summary>
+		/// Each of the <see cref="Categories"/> over the window, frame by frame - what's typical for it, to hold a single
+		/// frame up against.
+		/// </summary>
+		public readonly Stat[] CategoryTime = new Stat[Categories.Length];
+
+		/// <summary>
+		/// Managed allocation per frame over the window, in KiB.
+		/// </summary>
+		public Stat AllocKb;
+
+		/// <summary>
+		/// The worst an issue pointing at this tab gets, if any does.
+		/// </summary>
+		public Severity? TabSeverity( string tab )
+		{
+			Severity? worst = null;
+			foreach ( var issue in Issues )
+			{
+				if ( issue.Tab != tab || issue.Severity < Severity.Warning ) continue;
+				if ( worst is null || issue.Severity > worst ) worst = issue.Severity;
+			}
+
+			if ( !MeetingTarget && Frames > 0 && (tab == "cpu" && Limiter == Limiter.Cpu || tab == "gpu" && Limiter == Limiter.Gpu) )
+				worst = worst is { } w && w > Rating ? w : Rating;
+
+			return worst;
+		}
+
+		public int CountIssues( Severity severity ) => Issues.Count( x => x.Severity == severity );
 	}
 
 	/// <summary>
@@ -143,7 +174,7 @@ internal static partial class PerfHub
 	internal static Summary Current { get; private set; } = new();
 
 	/// <summary>
-	/// Hold everything the hub shows where it is. Collection carries on underneath; resuming picks up live.
+	/// Hold everything the dev tools shows where it is. Collection carries on underneath; resuming picks up live.
 	/// </summary>
 	internal static bool Paused
 	{
@@ -154,6 +185,9 @@ internal static partial class PerfHub
 			field = value;
 			_frozenFrames = value ? Frames.Clone() : null;
 			PausedAt = value ? DateTime.Now : default;
+
+			// A selected frame is only somewhere in the frozen frames
+			if ( !value ) SelectedFrame = null;
 		}
 	}
 
@@ -162,7 +196,7 @@ internal static partial class PerfHub
 	static FrameHistory _frozenFrames;
 
 	/// <summary>
-	/// The frames to draw: the live ring, or the copy taken when the hub was paused.
+	/// The frames to draw: the live ring, or the copy taken when the dev tools was paused.
 	/// </summary>
 	internal static FrameHistory ShownFrames => _frozenFrames ?? Frames;
 
@@ -189,10 +223,11 @@ internal static partial class PerfHub
 
 		_sinceAnalysis = 0;
 		Current = Summarise();
+		UpdateGpuTimeline();
 	}
 
 	/// <summary>
-	/// A fresh analysis of the live frames, whether or not the hub is open or paused.
+	/// A fresh analysis of the live frames, whether or not the dev tools is open or paused.
 	/// </summary>
 	internal static Summary Summarise()
 	{
@@ -313,7 +348,10 @@ internal static partial class PerfHub
 		s.CpuTime = Measure( n, frames.BusyMs );
 		s.WaitTime = Measure( n, frames.IdleMs );
 		s.GpuTime = Measure( n, frames.GpuMs, skipZero: true );
-		s.HubTime = Measure( n, frames.HubMs );
+		s.SelfTime = Measure( n, frames.SelfMs );
+		s.AllocKb = Measure( n, frames.AllocKb );
+		for ( int c = 0; c < Categories.Length; c++ )
+			s.CategoryTime[c] = Measure( n, age => frames.CategoryMs( age, c ) );
 
 		for ( int i = 0; i < n; i++ ) s.WindowMs += frames.FrameMs( i );
 		double variance = 0;
@@ -326,7 +364,7 @@ internal static partial class PerfHub
 		s.CpuWorkAvg = s.CpuTime.Avg;
 		s.CapWaitAvg = s.WaitTime.Avg;
 		s.GpuAvg = s.GpuTime.Avg;
-		s.HubAvg = s.HubTime.Avg;
+		s.SelfAvg = s.SelfTime.Avg;
 		s.Fps = s.FrameAvg > 0 ? 1000f / s.FrameAvg : 0;
 
 		// A hitch is a frame you'd feel: twice the usual, and well over what we're aiming for
@@ -381,9 +419,9 @@ internal static partial class PerfHub
 	/// </summary>
 	static void Judge( Summary s )
 	{
-		// Judge the work as it would be without the hub open - an estimate, since the hub's cost isn't the only thing
+		// Judge the work as it would be without the dev tools open - an estimate, since the dev tools' cost isn't the only thing
 		// that would change
-		var frame = MathF.Max( 0, s.FrameAvg - s.HubAvg );
+		var frame = MathF.Max( 0, s.FrameAvg - s.SelfAvg );
 		var gpu = s.GpuAvg;
 		var vsync = GameSurface.Current?.VSync ?? RenderSettings.Instance.VSync;
 		var refresh = GameSurface.Current?.RefreshRate ?? 0;
@@ -459,7 +497,7 @@ internal static partial class PerfHub
 	/// <summary>
 	/// A stable colour for a GPU pass family - children share their parent's, so related passes read as one.
 	/// </summary>
-	static Color GpuColor( uint familyId ) => HubStyles.Series[familyId % (uint)HubStyles.Series.Length];
+	static Color GpuColor( uint familyId ) => DevToolsStyles.Series[familyId % (uint)DevToolsStyles.Series.Length];
 
 	static void FindIssues( Summary s )
 	{
@@ -485,7 +523,7 @@ internal static partial class PerfHub
 		if ( allocPerSecond > 20 * 1024 * 1024 )
 		{
 			issues.Add( new Issue( allocPerSecond > 100 * 1024 * 1024 ? Severity.Bad : Severity.Warning, "Allocations",
-				$"{HubFormat.Bytes( allocPerSecond )}/s managed", "memory" ) );
+				$"{DevToolsFormat.Bytes( allocPerSecond )}/s managed", "memory" ) );
 		}
 
 		if ( GpuProfilerStats.VideoMemoryBudget > 0 )
@@ -494,7 +532,7 @@ internal static partial class PerfHub
 			if ( vram > 0.8f )
 			{
 				issues.Add( new Issue( vram > 0.95f ? Severity.Bad : Severity.Warning, "Video memory",
-					$"{HubFormat.BytesOf( GpuProfilerStats.VideoMemoryUsed, GpuProfilerStats.VideoMemoryBudget )} ({vram * 100:0}%)", "memory" ) );
+					$"{DevToolsFormat.BytesOf( GpuProfilerStats.VideoMemoryUsed, GpuProfilerStats.VideoMemoryBudget )} ({vram * 100:0}%)", "memory" ) );
 			}
 		}
 
@@ -502,7 +540,7 @@ internal static partial class PerfHub
 		if ( stats.TexturePoolLimitBytes > 0 && stats.TexturePoolUsedBytes > stats.TexturePoolLimitBytes * 0.95 )
 		{
 			issues.Add( new Issue( Severity.Warning, "Texture pool full",
-				$"{HubFormat.BytesOf( stats.TexturePoolUsedBytes, stats.TexturePoolLimitBytes )}, streaming will drop mips", "rendering" ) );
+				$"{DevToolsFormat.BytesOf( stats.TexturePoolUsedBytes, stats.TexturePoolLimitBytes )}, streaming will drop mips", "rendering" ) );
 		}
 
 		if ( stats.PendingStreamingRequests > 32 )
@@ -535,9 +573,9 @@ internal static partial class PerfHub
 }
 
 /// <summary>
-/// Number formatting the hub shares.
+/// Number formatting the dev tools shares.
 /// </summary>
-internal static class HubFormat
+internal static class DevToolsFormat
 {
 	/// <summary>
 	/// Bytes in binary units, the way memory is counted: 842 MiB, 22.19 GiB.

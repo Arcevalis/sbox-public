@@ -1,9 +1,9 @@
 namespace Sandbox.Diagnostics;
 
-internal static partial class PerfHub
+internal static partial class DevTools
 {
 	/// <summary>
-	/// How many log lines the hub's console keeps.
+	/// How many log lines the dev tools' console keeps.
 	/// </summary>
 	internal const int LogCapacity = 2000;
 

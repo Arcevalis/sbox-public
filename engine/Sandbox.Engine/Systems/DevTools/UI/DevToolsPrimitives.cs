@@ -5,14 +5,14 @@ namespace Sandbox.Diagnostics;
 /// <summary>
 /// A header band - a title, an optional summary on the right - then the content under it.
 /// </summary>
-internal sealed class HubSection : Panel
+internal sealed class DevToolsSection : Panel
 {
 	public Panel Head { get; }
 	public Label TitleLabel { get; }
 	public Label Aside { get; }
 	public Panel Body { get; }
 
-	public HubSection( string title, string classes = null )
+	public DevToolsSection( string title, string classes = null )
 	{
 		AddClass( "section" );
 		if ( classes is not null ) AddClass( classes );
@@ -26,18 +26,18 @@ internal sealed class HubSection : Panel
 	/// <summary>
 	/// Clicking the band opens another tab.
 	/// </summary>
-	public HubSection LinkTo( string tab )
+	public DevToolsSection LinkTo( string tab )
 	{
 		AddClass( "link" );
 		Head.AddChild( new Label( "chevron_right", "section-link" ) );
-		Head.AddEventListener( "onclick", () => PerfHub.ActiveTab = tab );
+		Head.AddEventListener( "onclick", () => DevTools.ActiveTab = tab );
 		return this;
 	}
 
 	/// <summary>
 	/// Open and close from the band. Closed to start with; the content is made the first time it opens.
 	/// </summary>
-	public HubSection Collapsible( Action<Panel> build )
+	public DevToolsSection Collapsible( Action<Panel> build )
 	{
 		AddClass( "collapsible" );
 		AddClass( "collapsed" );
@@ -67,7 +67,7 @@ internal sealed class HubSection : Panel
 	/// <summary>
 	/// Pad the body, for content that isn't a table.
 	/// </summary>
-	public HubSection Padded()
+	public DevToolsSection Padded()
 	{
 		Body.AddClass( "padded" );
 		return this;
@@ -77,11 +77,11 @@ internal sealed class HubSection : Panel
 /// <summary>
 /// Label and value pairs in a grid of cells - the facts a page is about, before the detail.
 /// </summary>
-internal sealed class HubFacts : Panel
+internal sealed class DevToolsFacts : Panel
 {
 	readonly Dictionary<string, (Panel Cell, Label Value)> _facts = new();
 
-	public HubFacts()
+	public DevToolsFacts()
 	{
 		AddClass( "facts" );
 	}
@@ -89,7 +89,7 @@ internal sealed class HubFacts : Panel
 	/// <summary>
 	/// Set a fact, adding it the first time. Facts stay in the order they were first set.
 	/// </summary>
-	public void Set( string key, string value, PerfHub.Severity? severity = null, string tooltip = null )
+	public void Set( string key, string value, DevTools.Severity? severity = null, string tooltip = null )
 	{
 		if ( !_facts.TryGetValue( key, out var fact ) )
 		{
@@ -102,8 +102,8 @@ internal sealed class HubFacts : Panel
 		fact.Cell.SetClass( "hidden", false );
 		fact.Cell.Tooltip = tooltip;
 		fact.Value.Text = value;
-		fact.Value.SetClass( "warning", severity == PerfHub.Severity.Warning );
-		fact.Value.SetClass( "bad", severity == PerfHub.Severity.Bad );
+		fact.Value.SetClass( "warning", severity == DevTools.Severity.Warning );
+		fact.Value.SetClass( "bad", severity == DevTools.Severity.Bad );
 	}
 
 	/// <summary>
@@ -119,7 +119,7 @@ internal sealed class HubFacts : Panel
 /// A table made of grid rows that share one column definition. Rows are keyed, so a refresh updates them in place:
 /// call <see cref="Begin"/>, then <see cref="Row"/> and <see cref="Group"/> in order, then <see cref="End"/>.
 /// </summary>
-internal sealed class HubTable : Panel
+internal sealed class DevToolsTable : Panel
 {
 	/// <summary>
 	/// One cell: its text and the classes it takes - "number", "note", a severity. A cell with a
@@ -171,7 +171,7 @@ internal sealed class HubTable : Panel
 
 	/// <param name="columns">The grid-template-columns every row uses.</param>
 	/// <param name="headers">Column titles; a title starting with '#' is a number column, right aligned.</param>
-	public HubTable( string columns, params string[] headers )
+	public DevToolsTable( string columns, params string[] headers )
 	{
 		AddClass( "table" );
 		_columns = columns;
@@ -195,7 +195,7 @@ internal sealed class HubTable : Panel
 	/// <summary>
 	/// The header row is the table's title band: the first column names the table, the rest name their columns.
 	/// </summary>
-	public HubTable Banded()
+	public DevToolsTable Banded()
 	{
 		AddClass( "banded" );
 		return this;
@@ -311,17 +311,24 @@ internal sealed class HubTable : Panel
 	/// <summary>
 	/// A table of costs, biggest first: name, average, max, and a bar for its share of <c>total</c>.
 	/// </summary>
-	public static HubTable ForCosts( string title ) =>
-		new HubTable( "minmax(0, 1fr) 52px 52px 56px", title, "#avg", "#max", "" ).Banded();
+	public static DevToolsTable ForCosts( string title, bool compact = false ) => compact
+		? new DevToolsTable( "minmax(0, 1fr) 46px 40px", title, "#avg", "" ) { _compact = true }.Banded()
+		: new DevToolsTable( "minmax(0, 1fr) 52px 52px 56px", title, "#avg", "#max", "" ).Banded();
 
-	public void SetCosts( IReadOnlyList<PerfHub.Cost> costs, int limit, float total, string tab, string empty, bool swatches = false )
+	/// <summary>
+	/// A cost table without the max column, for a narrow column.
+	/// </summary>
+	bool _compact;
+
+	public void SetCosts( IReadOnlyList<DevTools.Cost> costs, int limit, float total, string tab, string empty, bool swatches = false )
 	{
 		Begin();
 		for ( int i = 0; i < Math.Min( limit, costs.Count ); i++ )
 		{
 			var c = costs[i];
-			Row( c.Name, [new( c.Name, null, swatches ? c.Color : (Color?)null ), Number( HubFormat.Ms( c.AvgMs ) ), new( HubFormat.Ms( c.MaxMs ), "number dim" ), BarOf( total > 0 ? c.AvgMs / total : 0 )],
-				tab is null ? null : () => PerfHub.ActiveTab = tab, c.Tooltip ?? $"{c.Name}: {c.AvgMs:0.00} ms avg, {c.MaxMs:0.00} ms max" );
+			Cell[] cells = [new( c.Name, null, swatches ? c.Color : (Color?)null ), Number( DevToolsFormat.Ms( c.AvgMs ) ), new( DevToolsFormat.Ms( c.MaxMs ), "number dim" ), BarOf( total > 0 ? c.AvgMs / total : 0 )];
+			if ( _compact ) cells = [cells[0], cells[1], cells[3]];
+			Row( c.Name, cells, tab is null ? null : () => DevTools.ActiveTab = tab, c.Tooltip ?? $"{c.Name}: {c.AvgMs:0.00} ms avg, {c.MaxMs:0.00} ms max" );
 		}
 		End( empty );
 	}
@@ -329,25 +336,25 @@ internal sealed class HubTable : Panel
 	/// <summary>
 	/// A number cell, coloured when it's out of line.
 	/// </summary>
-	public static Cell Number( string text, PerfHub.Severity? severity = null ) => new( text, severity switch
+	public static Cell Number( string text, DevTools.Severity? severity = null ) => new( text, severity switch
 	{
-		PerfHub.Severity.Warning => "number warning",
-		PerfHub.Severity.Bad => "number bad",
+		DevTools.Severity.Warning => "number warning",
+		DevTools.Severity.Bad => "number bad",
 		_ => "number",
 	} );
 
 	/// <summary>
 	/// A bar filled to <paramref name="fraction"/>, coloured when it's out of line.
 	/// </summary>
-	public static Cell BarOf( double fraction, PerfHub.Severity? severity = null ) => new( null, severity switch
+	public static Cell BarOf( double fraction, DevTools.Severity? severity = null ) => new( null, severity switch
 	{
-		PerfHub.Severity.Warning => "warning",
-		PerfHub.Severity.Bad => "bad",
+		DevTools.Severity.Warning => "warning",
+		DevTools.Severity.Bad => "bad",
 		_ => null,
 	}, null, (float)fraction );
 
 	/// <summary>
-	/// A dimmed cell that says what's behind the number next to it. Dropped when the hub is narrow.
+	/// A dimmed cell that says what's behind the number next to it. Dropped when the dev tools is narrow.
 	/// </summary>
 	public static Cell Note( string text ) => new( text, "note hide-narrow" );
 }
@@ -355,7 +362,7 @@ internal sealed class HubTable : Panel
 /// <summary>
 /// What's out of line, one line each: what it is, the numbers, and where to look. Nothing when there's nothing.
 /// </summary>
-internal sealed class HubFindings : Panel
+internal sealed class DevToolsFindings : Panel
 {
 	readonly List<Row> _rows = new();
 	readonly Label _more;
@@ -380,19 +387,19 @@ internal sealed class HubFindings : Panel
 			Link = AddChild( new Label( "", "finding-link" ) );
 			AddEventListener( "onclick", () =>
 			{
-				if ( Tab is not null && PerfHub.ShowAdvanced ) PerfHub.ActiveTab = Tab;
+				if ( Tab is not null && DevTools.ShowAdvanced ) DevTools.ActiveTab = Tab;
 			} );
 		}
 	}
 
-	public HubFindings()
+	public DevToolsFindings()
 	{
 		AddClass( "findings" );
 		_more = AddChild( new Label( "", "findings-more" ) );
 		_more.AddEventListener( "onclick", () => _showAll = !_showAll );
 	}
 
-	public void Set( IReadOnlyList<PerfHub.Issue> issues )
+	public void Set( IReadOnlyList<DevTools.Issue> issues )
 	{
 		while ( _rows.Count < issues.Count )
 		{
@@ -410,7 +417,7 @@ internal sealed class HubFindings : Panel
 			if ( i >= issues.Count ) continue;
 
 			var issue = issues[i];
-			var linked = issue.Tab is not null && PerfHub.ShowAdvanced && issue.Tab != PerfHub.ActiveTab;
+			var linked = issue.Tab is not null && DevTools.ShowAdvanced && issue.Tab != DevTools.ActiveTab;
 			row.Tab = issue.Tab;
 			row.SetClass( "link", linked );
 			row.Title.Text = issue.Title;
@@ -418,8 +425,8 @@ internal sealed class HubFindings : Panel
 			row.Detail.Tooltip = issue.Detail;
 			row.Link.Text = linked ? TabTitle( issue.Tab ) : "";
 
-			foreach ( var s in Enum.GetValues<PerfHub.Severity>() )
-				row.SetClass( HubStyles.ClassFor( s ), issue.Severity == s );
+			foreach ( var s in Enum.GetValues<DevTools.Severity>() )
+				row.SetClass( DevToolsStyles.ClassFor( s ), issue.Severity == s );
 		}
 
 		SetClass( "hidden", issues.Count == 0 );
@@ -442,224 +449,28 @@ internal sealed class HubFindings : Panel
 }
 
 /// <summary>
-/// The frames in the ring as a time series, newest on the right. Each bar is the observed frame interval, split into
-/// CPU work, cap wait and the hub's own cost; GPU time is a separate trace, because it overlaps the CPU's rather than
-/// adding to it. Hitches are marked, the target is a line, and hovering a frame reads it out.
-/// </summary>
-internal sealed class HubFrameChart : Panel
-{
-	readonly Panel _plot;
-	readonly Label _covered;
-	float _scaleMs = 20f;
-
-	public HubFrameChart()
-	{
-		AddClass( "chart" );
-		_plot = AddChild( new Plot( this ) );
-
-		var legend = AddChild( new Panel( null, "chart-legend" ) );
-		Key( legend, "CPU work", HubStyles.Cpu );
-		Key( legend, "GPU", HubStyles.Gpu );
-		Key( legend, "Cap wait", HubStyles.CapWait );
-		Key( legend, "Hub", HubStyles.HubWork );
-		Key( legend, "Hitch", HubStyles.Bad );
-		legend.AddChild( new Panel( null, "grow" ) );
-		_covered = legend.AddChild( new Label( "", "legend-note" ) );
-	}
-
-	static void Key( Panel legend, string text, Color color )
-	{
-		var key = legend.AddChild( new Panel( null, "legend-key" ) );
-		key.AddChild( new Panel( null, "swatch" ) ).Style.BackgroundColor = color;
-		key.AddChild( new Label( text ) );
-	}
-
-	public override void Tick()
-	{
-		base.Tick();
-
-		var frames = PerfHub.ShownFrames;
-		var count = Math.Min( frames.Count, BarCount );
-		float total = 0;
-		for ( int i = 0; i < count; i++ ) total += frames.FrameMs( i );
-		_covered.Text = count > 0 ? $"{count} frames, {total / 1000:0.0} s" : "";
-	}
-
-	const float BarWidth = 2f;
-	int BarCount => Math.Max( 1, (int)(_plot.Box.Rect.Width / _plot.ScaleToScreen / BarWidth) );
-
-	sealed class Plot : Panel
-	{
-		readonly HubFrameChart _chart;
-
-		public Plot( HubFrameChart chart )
-		{
-			_chart = chart;
-			AddClass( "chart-plot" );
-		}
-
-		public override void OnDraw( Painter painter ) => _chart.DrawPlot( painter, this );
-	}
-
-	void DrawPlot( Painter painter, Panel plot )
-	{
-		var frames = PerfHub.ShownFrames;
-		var summary = PerfHub.Current;
-		var scale = plot.ScaleToScreen;
-		var w = plot.Box.Rect.Width / scale;
-		var h = plot.Box.Rect.Height / scale;
-		if ( w < 8 || h < 8 ) return;
-
-		using var state = painter.Scope();
-		painter.Scale( scale );
-		painter.Stroke = Stroke.None;
-
-		const float Left = 36f, Top = 8f, Bottom = 2f;
-		var plotW = w - Left - 6;
-		var plotH = h - Top - Bottom;
-		var count = Math.Min( frames.Count, (int)(plotW / BarWidth) );
-		var target = summary.TargetMs > 0 ? summary.TargetMs : 16.67f;
-
-		// Scale to the frames that matter, not the worst one: a single loading hitch would flatten everything else.
-		// Frames past the top are clipped there, and they're marked as hitches anyway.
-		var typical = summary.FrameP99 > 0 ? summary.FrameP99 : target;
-		var wanted = MathF.Max( typical * 1.3f, target * 1.4f );
-		_scaleMs = _scaleMs.LerpTo( wanted, Time.Delta * 4f );
-		if ( _scaleMs < wanted * 0.8f || _scaleMs > wanted * 3f ) _scaleMs = wanted;
-
-		var pxPerMs = plotH / _scaleMs;
-		var baseY = Top + plotH;
-
-		// Gridlines and axis labels, skipping a label that would sit on top of the one before
-		ReadOnlySpan<float> marks = [0f, target, _scaleMs];
-		var lastLabelY = float.MaxValue;
-		foreach ( var ms in marks )
-		{
-			var y = baseY - ms * pxPerMs;
-			painter.Fill = Color.White.WithAlpha( ms == target ? 0.0f : 0.05f );
-			painter.Rect( new Rect( Left, y, plotW, 1 ) );
-			if ( lastLabelY - y < 12 ) continue;
-			Text( painter, $"{ms:0.#}", new Rect( 0, y - 7, Left - 6, 14 ), TextFlag.RightCenter, ms == target ? HubStyles.Text : HubStyles.Faint );
-			lastLabelY = y;
-		}
-
-		var hovered = -1;
-		if ( plot.HasHovered )
-		{
-			var mouse = plot.MousePosition / scale;
-			var age = (int)((Left + plotW - mouse.x) / BarWidth);
-			if ( mouse.x >= Left && age >= 0 && age < count ) hovered = age;
-		}
-
-		for ( int i = 0; i < count; i++ )
-		{
-			var x = Left + plotW - (i + 1) * BarWidth;
-			var frame = frames.FrameMs( i );
-			var work = MathF.Min( frames.BusyMs( i ) * pxPerMs, plotH );
-			var hub = MathF.Min( frames.HubMs( i ) * pxPerMs, plotH - work );
-			var wait = MathF.Min( frames.IdleMs( i ) * pxPerMs, plotH - work - hub );
-			var hitch = summary.Frames > 0 && frame >= summary.HitchMs;
-			var y = baseY;
-
-			painter.Fill = (hitch ? HubStyles.Bad : HubStyles.Cpu).WithAlpha( i == hovered ? 1f : 0.8f );
-			painter.Rect( new Rect( x, y - work, BarWidth - 0.5f, work ) );
-			y -= work;
-
-			if ( hub > 0.3f )
-			{
-				painter.Fill = HubStyles.HubWork;
-				painter.Rect( new Rect( x, y - hub, BarWidth - 0.5f, hub ) );
-				y -= hub;
-			}
-
-			if ( wait > 0.3f )
-			{
-				painter.Fill = HubStyles.CapWait;
-				painter.Rect( new Rect( x, y - wait, BarWidth - 0.5f, wait ) );
-			}
-
-			var gpu = MathF.Min( frames.GpuMs( i ), _scaleMs );
-			if ( gpu > 0 )
-			{
-				painter.Fill = HubStyles.Gpu;
-				painter.Rect( new Rect( x, baseY - gpu * pxPerMs - 1, BarWidth - 0.5f, 2 ) );
-			}
-
-			if ( hitch )
-			{
-				painter.Fill = HubStyles.Bad;
-				painter.Rect( new Rect( x - 1, 0, BarWidth + 1, 4 ) );
-			}
-		}
-
-		// Target line on top of the bars
-		var targetY = baseY - target * pxPerMs;
-		painter.Fill = HubStyles.Text.WithAlpha( 0.6f );
-		for ( float x = Left; x < Left + plotW; x += 6 )
-			painter.Rect( new Rect( x, targetY, 3, 1 ) );
-
-		if ( hovered >= 0 ) DrawReadout( painter, frames, hovered, Left + plotW - (hovered + 1) * BarWidth, w, h );
-	}
-
-	static void DrawReadout( Painter painter, PerfHub.FrameHistory frames, int age, float x, float w, float h )
-	{
-		painter.Fill = Color.White.WithAlpha( 0.25f );
-		painter.Rect( new Rect( x, 0, BarWidth, h ) );
-
-		var lines = new[]
-		{
-			("frame", frames.FrameMs( age ), HubStyles.Text),
-			("cpu", frames.BusyMs( age ), HubStyles.Cpu),
-			("gpu", frames.GpuMs( age ), HubStyles.Gpu),
-			("wait", frames.IdleMs( age ), HubStyles.Dim),
-			("hub", frames.HubMs( age ), HubStyles.Dim),
-		};
-
-		const float BoxW = 120, LineH = 14;
-		var boxH = (lines.Length + 1) * LineH + 8;
-		var bx = x + 8 + BoxW > w ? x - BoxW - 8 : x + 8;
-		var box = new Rect( bx, 4, BoxW, boxH );
-
-		painter.Fill = Color.Parse( "#1C1C1C" ).Value;
-		painter.Stroke = Stroke.Solid( HubStyles.Line, 1 );
-		painter.Rect( box );
-		painter.Stroke = Stroke.None;
-
-		for ( int i = 0; i < lines.Length; i++ )
-		{
-			var row = new Rect( bx + 8, 8 + i * LineH, BoxW - 16, LineH );
-			Text( painter, lines[i].Item1, row, TextFlag.LeftCenter, HubStyles.Dim );
-			Text( painter, $"{lines[i].Item2:0.00}", row, TextFlag.RightCenter, lines[i].Item3 );
-		}
-
-		Text( painter, $"-{age} frames", new Rect( bx + 8, 8 + lines.Length * LineH, BoxW - 16, LineH ), TextFlag.LeftCenter, HubStyles.Faint );
-	}
-
-	static void Text( Painter painter, string text, Rect rect, TextFlag flags, Color color )
-	{
-		var scope = new TextRendering.Scope( text, color, 11, "Roboto Mono", 500 );
-		DebugOverlay.DrawText( painter, scope, rect, flags );
-	}
-}
-
-/// <summary>
 /// How the frame times in the analysis window are spread: a bar per bucket, the target as a line, and the buckets
 /// past the hitch threshold in red. A tight spike is even pacing; a long tail is stutter.
 /// </summary>
-internal sealed class HubHistogram : Panel
+internal sealed class DevToolsHistogram : Panel
 {
 	const int Buckets = 48;
 	readonly int[] _counts = new int[Buckets];
 
-	public HubHistogram()
+	/// <summary>
+	/// The axis labels under the bars. Off for a chart too small to read them.
+	/// </summary>
+	public bool ShowLabels { get; set; } = true;
+
+	public DevToolsHistogram()
 	{
 		AddClass( "histogram" );
 	}
 
 	public override void OnDraw( Painter painter )
 	{
-		var frames = PerfHub.ShownFrames;
-		var summary = PerfHub.Current;
+		var frames = DevTools.ShownFrames;
+		var summary = DevTools.Current;
 		var scale = ScaleToScreen;
 		var w = Box.Rect.Width / scale;
 		var h = Box.Rect.Height / scale;
@@ -669,7 +480,7 @@ internal sealed class HubHistogram : Panel
 		painter.Scale( scale );
 		painter.Stroke = Stroke.None;
 
-		const float Left = 10f, Right = 10f, Top = 6f, Bottom = 16f;
+		var (Left, Right, Top, Bottom) = ShowLabels ? (10f, 10f, 6f, 16f) : (0f, 0f, 1f, 1f);
 		var plotW = w - Left - Right;
 		var plotH = h - Top - Bottom;
 		var target = summary.TargetMs > 0 ? summary.TargetMs : 16.67f;
@@ -691,21 +502,23 @@ internal sealed class HubHistogram : Panel
 			// Square root, so a handful of slow frames still shows next to hundreds of good ones
 			var bh = MathF.Max( 1, MathF.Sqrt( _counts[b] / (float)most ) * plotH );
 			var ms = (b + 0.5f) * range / Buckets;
-			painter.Fill = ms >= summary.HitchMs ? HubStyles.Bad : HubStyles.Cpu.WithAlpha( 0.8f );
+			painter.Fill = ms >= summary.HitchMs ? DevToolsStyles.Bad : DevToolsStyles.Cpu.WithAlpha( 0.8f );
 			painter.Rect( new Rect( Left + b * barW, Top + plotH - bh, MathF.Max( 1, barW - 1 ), bh ) );
 		}
 
-		painter.Fill = HubStyles.Line;
+		painter.Fill = DevToolsStyles.Line;
 		painter.Rect( new Rect( Left, Top + plotH, plotW, 1 ) );
 
 		var tx = Left + target / range * plotW;
-		painter.Fill = HubStyles.Text.WithAlpha( 0.6f );
+		painter.Fill = DevToolsStyles.Text.WithAlpha( 0.6f );
 		for ( float y = Top; y < Top + plotH; y += 6 )
 			painter.Rect( new Rect( tx, y, 1, 3 ) );
 
-		Label( painter, "0", Left, TextFlag.LeftTop, HubStyles.Faint, Top + plotH + 2 );
-		Label( painter, $"{target:0.#}", tx, TextFlag.CenterTop, HubStyles.Text, Top + plotH + 2 );
-		Label( painter, $"{range:0.#}+ ms", Left + plotW, TextFlag.RightTop, HubStyles.Faint, Top + plotH + 2 );
+		if ( !ShowLabels ) return;
+
+		Label( painter, "0", Left, TextFlag.LeftTop, DevToolsStyles.Faint, Top + plotH + 2 );
+		Label( painter, $"{target:0.#}", tx, TextFlag.CenterTop, DevToolsStyles.Text, Top + plotH + 2 );
+		Label( painter, $"{range:0.#}+ ms", Left + plotW, TextFlag.RightTop, DevToolsStyles.Faint, Top + plotH + 2 );
 	}
 
 	static void Label( Painter painter, string text, float x, TextFlag flags, Color color, float y )

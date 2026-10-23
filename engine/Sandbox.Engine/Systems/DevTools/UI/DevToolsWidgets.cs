@@ -6,14 +6,14 @@ namespace Sandbox.Diagnostics;
 /// One of the <see cref="DebugOverlay"/> drawers, hosted in a panel. The drawers lay themselves out from a position and say
 /// how far down they got, so the panel takes that as its height for the next frame.
 /// </summary>
-internal sealed class HubOverlayView : Panel
+internal sealed class DevToolsOverlayView : Panel
 {
 	internal delegate void DrawOverlay( Painter painter, ref Vector2 position );
 
 	readonly DrawOverlay _draw;
 	float _height = 40f;
 
-	public HubOverlayView( DrawOverlay draw )
+	public DevToolsOverlayView( DrawOverlay draw )
 	{
 		_draw = draw;
 		AddClass( "overlay-view" );
