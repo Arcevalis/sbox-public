@@ -301,6 +301,43 @@ public class NetworkDormancyTest
 	}
 
 	[TestMethod]
+	[DataRow( false )]
+	[DataRow( true )]
+	public void EnablingAlwaysTransmitWakesHiddenObject( bool refresh )
+	{
+		var (go, _) = CreateDormantHiddenObject();
+		Assert.IsFalse( go._net.IsDirty, "Precondition: the hidden object has settled" );
+		var clearGeneration = go._net.LocalSnapshotState.ClearGeneration;
+		_peers.Client.Messages.Clear();
+
+		if ( refresh )
+		{
+			var json = go.Serialize();
+			json[GameObject.JsonKeys.AlwaysTransmit] = true;
+			go.NetworkRefresh( json );
+		}
+		else
+		{
+			go.Network.AlwaysTransmit = true;
+		}
+
+		Assert.IsTrue( go._net.IsDirty, "Changing transmit policy must schedule the hidden object" );
+		Assert.IsTrue( go._net.LocalSnapshotState.ClearGeneration > clearGeneration, "Old acknowledgements must not suppress transmission to previously culled peers" );
+		UpdateScene();
+
+		Assert.IsFalse( go._net.IsDeltaDormant );
+		var uncullReceived = false;
+		_peers.Client.ProcessMessages( InternalMessageType.SetCullState, reader =>
+		{
+			Assert.AreEqual( go.Id, reader.Read<Guid>() );
+			Assert.IsFalse( reader.Read<bool>() );
+			uncullReceived = true;
+		} );
+		Assert.IsTrue( uncullReceived, "The client must be told the object is visible again" );
+		Assert.IsTrue( ClusterCount( _peers.Client ) > 0, "The previously hidden state must be sent immediately" );
+	}
+
+	[TestMethod]
 	public void RefreshWakesSettledObject()
 	{
 		var go = new GameObject();
@@ -555,6 +592,26 @@ public class NetworkDormancyTest
 		Settle();
 
 		Assert.IsFalse( subject._net.IsDirty );
+	}
+
+	[TestMethod]
+	public void WorkerTransformAfterNetworkUpdateIsSentInTheSameFrame()
+	{
+		var go = new GameObject();
+		go.NetworkSpawn();
+		Settle();
+		Assert.IsFalse( go._net.IsDirty, "Precondition: the object has settled" );
+
+		_scene._nextNetworkUpdate = double.NegativeInfinity;
+		_scene.SceneNetworkUpdate();
+		_peers.Client.Messages.Clear();
+
+		// Animation workers finish after the start-of-frame network update, before snapshots are captured.
+		Task.Run( () => go.Transform.SetLocalTransformFast( new Transform( Vector3.Up * 128f ) ) ).GetAwaiter().GetResult();
+		_scene.SceneNetworkSnapshots();
+
+		Assert.IsTrue( go._net.IsDirty, "The worker wake must be applied before this frame's capture" );
+		Assert.IsTrue( ClusterCount( _peers.Client ) > 0, "The moved object must replicate without waiting for another network tick" );
 	}
 
 	[TestMethod]

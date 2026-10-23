@@ -51,9 +51,15 @@ public partial class Scene : GameObject
 
 	/// <summary>
 	/// Wake an object from a worker thread. The pending set belongs to the main thread, so this is applied
-	/// at the start of the next <see cref="SceneNetworkUpdate"/>.
+	/// at the start of the next network update and before end-of-frame snapshot capture.
 	/// </summary>
 	internal void QueueWorkerThreadNetworkWake( NetworkObject obj ) => _workerThreadNetworkWakes.Enqueue( obj );
+
+	private void DrainWorkerThreadNetworkWakes()
+	{
+		while ( _workerThreadNetworkWakes.TryDequeue( out var woken ) )
+			woken.MarkDirty();
+	}
 
 	internal void RegisterNetworkedObject( NetworkObject obj )
 	{
@@ -90,8 +96,7 @@ public partial class Scene : GameObject
 	/// </summary>
 	internal void SceneNetworkUpdate()
 	{
-		while ( _workerThreadNetworkWakes.TryDequeue( out var woken ) )
-			woken.MarkDirty();
+		DrainWorkerThreadNetworkWakes();
 
 		_networkMapInstanceCache.Clear();
 		GetAll( _networkMapInstanceCache );
@@ -129,6 +134,9 @@ public partial class Scene : GameObject
 
 		if ( SceneNetworkSystem.Instance is not { } system )
 			return;
+
+		// Animation workers can wake sleeping objects after SceneNetworkUpdate has run.
+		DrainWorkerThreadNetworkWakes();
 
 		system.DeltaSnapshots.UpdateTime();
 

@@ -107,7 +107,10 @@ public partial class GameObject
 			if ( field == value ) return;
 			field = value;
 			if ( _net is not null )
+			{
 				Scene?.UpdateNetworkCullRegistration( _net );
+				_net.TransmitStateChanged();
+			}
 		}
 	} = true;
 
@@ -248,7 +251,6 @@ public partial class GameObject
 	void Msg_UpdateAlwaysTransmit( bool alwaysTransmit )
 	{
 		AlwaysTransmit = alwaysTransmit;
-		_net?.TransmitStateChanged();
 	}
 
 	internal bool IsNetworkCulled { get; set; }
