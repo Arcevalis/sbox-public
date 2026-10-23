@@ -724,6 +724,8 @@
     "menu.notifications.these_come_from_sbox_game_so_the_site_shows_you_the_same_list": "These come from sbox.game, so the site shows you the same list.",
     "menu.notifications.worth_knowing": "Worth knowing",
     "menu.notifications.your_inbox": "Your inbox",
+    "menu.overlay.open_url": "Open external link?",
+    "menu.overlay.open_url_confirm": "Open Link",
     "menu.party.add_more_server_slots_in_party_settings": "Add more server slots in party settings",
     "menu.party.back_to_party": "Back to party",
     "menu.party.checking_party": "Checking party…",
