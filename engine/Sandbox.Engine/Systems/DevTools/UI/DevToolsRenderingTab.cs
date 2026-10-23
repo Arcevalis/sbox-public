@@ -33,6 +33,7 @@ internal sealed class DevToolsRenderingTab : DevToolsTab
 	readonly DevToolsTable _submission;
 	readonly DevToolsTable _visibility;
 	readonly DevToolsTable _occlusion;
+	readonly DevToolsTable _occlusionSettings;
 	readonly DevToolsTable _lights;
 	readonly DevToolsTable _textures;
 	readonly DevToolsTable _postProcess;
@@ -53,7 +54,8 @@ internal sealed class DevToolsRenderingTab : DevToolsTab
 		_submission = Pane( split, "render-submission" ).AddChild( new DevToolsTable( Columns, "Submission", "#count", "" ).Banded() );
 		var visibility = Pane( split );
 		_visibility = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 64px 40px 64px", "Visibility", "#objects", "#%", "" ).Banded() );
-		_occlusion = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 64px", "GPU occlusion", "#count" ).Banded() );
+		_occlusion = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 64px 40px 64px", "GPU occlusion", "#count", "#%", "" ).Banded() );
+		_occlusionSettings = visibility.AddChild( new DevToolsTable( "minmax(0, 1fr) 96px", "Occlusion settings", "" ).Banded() );
 		_lights = Pane( split ).AddChild( new DevToolsTable( "minmax(0, 1fr) 64px", "Lights and shadows", "#count" ).Banded() );
 		_textures = Pane( split ).AddChild( new DevToolsTable( "minmax(0, 1fr) minmax(0, 130px) 64px", "Texture pool", "#", "" ).Banded() );
 
@@ -94,6 +96,7 @@ internal sealed class DevToolsRenderingTab : DevToolsTab
 		RefreshSubmission( f, m, isManaged, drawCalls, triangles, trisPerDraw, batchingMatters );
 		RefreshVisibility( f, m, isManaged );
 		RefreshOcclusion( f, m, isManaged );
+		RefreshOcclusionSettings( isManaged );
 		RefreshLights( f, m, isManaged );
 		RefreshTextures( f );
 		RefreshPostProcess();
@@ -162,6 +165,13 @@ internal sealed class DevToolsRenderingTab : DevToolsTab
 
 		if ( f.PendingStreamingRequests > StreamingWarn )
 			into.Add( new( DevTools.Severity.Info, "Streaming backlog", $"{f.PendingStreamingRequests:N0} pending", null ) );
+
+		// Debug settings that change what renders, easy to forget about
+		if ( OcclusionDebug.Freeze )
+			into.Add( new( DevTools.Severity.Warning, "Occlusion frozen", "r_occlusion_freeze is on, culling ignores the camera", null ) );
+
+		if ( OcclusionDebug.EarlyCull != OcclusionEarlyCull.On )
+			into.Add( new( DevTools.Severity.Info, "Early occlusion cull", $"r_occlusion_early is {OcclusionDebug.EarlyMode}", null ) );
 
 		into.Sort( static ( a, b ) => b.Severity.CompareTo( a.Severity ) );
 	}
@@ -250,17 +260,69 @@ internal sealed class DevToolsRenderingTab : DevToolsTab
 		var count = isManaged ? m.ObjectsOcclusionCulled : f.ObjectsCulledByOcclusion;
 		var t = _occlusion;
 		t.Begin();
-		t.Row( "hidden", [isManaged ? "Hidden objects" : "Hidden instances", N( $"{count:N0}" )],
+		t.Row( "hidden", [isManaged ? "Hidden objects" : "Hidden instances", N( $"{count:N0}" ), "", ""],
 			tooltip: isManaged ? "Read back from the GPU a few frames later."
 				: "An object counts once per material. Read back from the GPU a few frames later." );
+
+		// Aggregates are native only
+		if ( !isManaged && RenderPipeline.GetOcclusionCounts() is { Fragments: > 0 } c )
+		{
+			Part( t, "Hidden fragments", c.HiddenFragments, c.Fragments, always: true, tooltip: $"Of {c.Fragments:N0} aggregate fragments" );
+			Part( t, "Hidden triangles", c.HiddenTriangles, c.Triangles, always: true, text: DevToolsFormat.Count( c.HiddenTriangles ),
+				tooltip: $"Of {c.Triangles:N0} in aggregate fragments" );
+			Part( t, "Hidden but drawn", c.MissedTriangles, c.Triangles, text: DevToolsFormat.Count( c.MissedTriangles ),
+				tooltip: "Estimated hidden triangles in fragments that were still drawn" );
+			Part( t, "Too close to test", c.UntestedTriangles, c.Triangles, text: DevToolsFormat.Count( c.UntestedTriangles ) );
+		}
+
 		t.End();
 	}
 
-	static void Part( DevToolsTable t, string name, double count, double total, bool always = false, string tooltip = null )
+	static void Part( DevToolsTable t, string name, double count, double total, bool always = false, string tooltip = null, string text = null )
 	{
 		if ( count <= 0 && !always ) return;
 		var share = Ratio( count, total );
-		t.Row( name, [name, N( $"{count:N0}" ), new( $"{share * 100:0}", "number dim" ), DevToolsTable.BarOf( share )], tooltip: tooltip );
+		t.Row( name, [name, N( text ?? $"{count:N0}" ), new( $"{share * 100:0}", "number dim" ), DevToolsTable.BarOf( share )], tooltip: tooltip );
+	}
+
+	static readonly string[] OnOff = ["off", "on"];
+	static readonly string[] AggregateModes = ["off", "draw empty", "compact"];
+	static readonly string[] DebugModes = ["off", "hidden", "all", "on depth"];
+	static readonly string[] EarlyModes = ["off", "on", "reject all"];
+
+	// Clicking a row steps to the next value through the console, so cheat convars stay locked without sv_cheats
+	void RefreshOcclusionSettings( bool isManaged )
+	{
+		var t = _occlusionSettings;
+		t.Begin();
+
+		if ( isManaged )
+		{
+			Setting( t, "Culling", "r_managed_occlusion", ManagedSceneRendering.Occlusion ? 1 : 0, OnOff );
+		}
+		else
+		{
+			Setting( t, "Culling", "r_occlusion_culling", RenderPipeline.OcclusionCulling ? 1 : 0, OnOff );
+			Setting( t, "Aggregates", "r_occlusion_aggregates", RenderPipeline.AggregateMode, AggregateModes );
+		}
+
+		Setting( t, "Debug boxes", "r_occlusion_debug", OcclusionDebug.DebugMode, DebugModes, cheat: true );
+		Setting( t, "Freeze", "r_occlusion_freeze", OcclusionDebug.Freeze ? 1 : 0, OnOff, cheat: true );
+		Setting( t, "Early cull", "r_occlusion_early", OcclusionDebug.EarlyMode, EarlyModes, cheat: true );
+		t.End();
+	}
+
+	static void Setting( DevToolsTable t, string label, string convar, int value, string[] names, bool cheat = false )
+	{
+		var text = names[Math.Clamp( value, 0, names.Length - 1 )];
+		if ( cheat && !Game.CheatsEnabled )
+		{
+			t.Row( convar, [label, new( text, "number dim" )], tooltip: $"{convar} needs sv_cheats 1" );
+			return;
+		}
+
+		var next = (value + 1) % names.Length;
+		t.Row( convar, [label, N( text )], () => ConVarSystem.Run( $"{convar} {next}" ), convar );
 	}
 
 	void RefreshLights( FrameStats f, ManagedFrameCounters m, bool isManaged )

@@ -29,6 +29,13 @@ internal static partial class DebugOverlay
 		using var painter = Painter.Begin( CommandList );
 		Vector2 pos = new Vector2( 64, 64 );
 
+		// First, since its image covers the view
+		if ( OcclusionDebug.View != OcclusionDebugView.Off )
+		{
+			DebugOverlay.OcclusionCulling.Draw( painter, ref pos );
+			pos.y += OverlaySpacing;
+		}
+
 		// Show current render debug mode on screen when not default
 		if ( ToolsVisualization.mat_toolsvis != SceneCameraDebugMode.Normal )
 		{

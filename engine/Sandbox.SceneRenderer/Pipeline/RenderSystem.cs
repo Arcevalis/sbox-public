@@ -523,7 +523,8 @@ public sealed partial class RenderSystem : IDisposable
 		meshes.Occlusion = null;
 		OcclusionActive = wanted && Occlusion.InstanceCount > 0;
 		OcclusionHistory.BeginFrame( OcclusionActive, view.Viewport );
-		Occlusion.CullsEarly = OcclusionHistory.Valid;
+		Occlusion.Previous = OcclusionHistory.EarlyDepth;
+		Occlusion.RejectEarly = OcclusionHistory.RejectsEarly;
 
 		shadows.Prepare( world, mainPass, lightBinner, transforms, features.Count, Shadows, isSkybox );
 
