@@ -7,6 +7,8 @@ native enum PhysicsJointType_t is Sandbox.PhysicsJointType;
 native enum PhysicsShapeType_t is Sandbox.PhysicsShapeType;
 native enum PhysicsSimulation_t is Sandbox.PhysicsSimulationMode;
 native enum VPhysicsMotionType_t is Sandbox.PhysicsMotionType;
+native struct PhysicsBodySettings_t is Sandbox.PhysicsBodySettings;
+native struct PhysicsShapeSettings_t is Sandbox.PhysicsShapeSettings;
 
 delegate ProcessIntersectionsDelegate_t;
 delegate DebugDrawDelegate_t;
@@ -16,6 +18,7 @@ native class IPhysicsWorld
 {
 	// Bodies
 	IPhysicsBody AddBody();
+	IPhysicsBody AddBody( PhysicsBodySettings_t settings );
 	void RemoveBody( IPhysicsBody pBody );
 
 	IPhysicsBody GetWorldReferenceBody();
