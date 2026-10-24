@@ -1,5 +1,5 @@
 
-#include "vphysics2/iphysicsbody.h"
+#include "physics/iphysicsbody.h"
 
 //
 // Native Type
