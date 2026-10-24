@@ -11,13 +11,17 @@ public readonly ref partial struct Painter
 	public void Text( string text, Rect rect ) => DrawText( text, rect, TextStyle );
 
 	/// <summary>
-	/// Draws a texture within the given rectangle using bilinear sampling, matching Fill.Image's default.
+	/// Draws a texture within the given rectangle. Sampling defaults to bilinear, matching Fill.Image.
 	/// </summary>
 	/// <param name="texture">The texture to draw.</param>
 	/// <param name="rect">Destination rectangle in drawing coordinates.</param>
 	/// <param name="tint">Optional color tint applied to the texture. Defaults to <see cref="Color.White"/> (no tint).</param>
-	public void Texture( Texture texture, Rect rect, Color? tint = null )
-		=> Texture( texture, rect, tint ?? Color.White, FilterMode.Bilinear );
+	/// <param name="filter">Texture sampling filter. Use <see cref="FilterMode.Point"/> for crisp pixel art.</param>
+	public void Texture( Texture texture, Rect rect, Color? tint = null, FilterMode filter = FilterMode.Bilinear )
+	{
+		if ( !Enum.IsDefined( filter ) ) throw new ArgumentOutOfRangeException( nameof( filter ) );
+		Texture( texture, rect, tint ?? Color.White, filter );
+	}
 
 	/// <summary>
 	/// Draw an image with an explicit sampler using the current drawing state.
