@@ -79,6 +79,11 @@ public static class MenuHelpers
 	{
 		Assert.True( HasAuthority, "You do not have authority to start a game, only the party owner can do that." );
 
+		// List results (hover cards, shelves) come without the package's meta - LaunchMode, MaxPlayers,
+		// GameSettings - so get the full package before deciding how to launch it
+		if ( package.IsRemote )
+			package = await Package.FetchAsync( package.FullIdent, false ) ?? package;
+
 		// Your party isn't what it's made for - say so, and only go on if you want to
 		if ( !fitChecked && !ConfirmPartyFit( package, () => PlayGame( package, mapPackage, via, source, fitChecked: true ) ) )
 			return;
