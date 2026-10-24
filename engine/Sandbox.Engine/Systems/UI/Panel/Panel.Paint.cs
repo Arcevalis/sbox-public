@@ -33,7 +33,7 @@ public partial class Panel
 		{
 			if ( !LayoutTree.IsInlineParticipant )
 			{
-				if ( HasBackdropFilter ) painter.FilterBackdrop( Box.Rect, _paintCache.Backdrop, _paintCache.OuterRadii );
+				if ( HasBackdropFilter ) painter.FilterBackdrop( Box.Rect, _paintCache.Backdrop, _paintCache.OuterRadii, _paintCache.Background.Descriptor.BorderShapeData );
 				if ( layered || this is RootPanel ) DrawShadows( inset: false, painter );
 				DrawBackground( painter );
 				DrawContent( painter );
