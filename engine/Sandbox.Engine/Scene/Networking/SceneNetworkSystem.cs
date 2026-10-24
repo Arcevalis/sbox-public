@@ -983,6 +983,11 @@ public partial class SceneNetworkSystem : GameNetworkSystem
 		return Game.ActiveScene is null ? null : Game.ActiveScene.Push();
 	}
 
+	/// <summary>
+	/// Allocation-free version of <see cref="Push"/>.
+	/// </summary>
+	internal ScenePushScope PushScope() => new( Game.ActiveScene );
+
 	private void OnObjectDestroyDescendant( ObjectDestroyDescendantMsg message, Connection source )
 	{
 		var scene = Game.ActiveScene;
