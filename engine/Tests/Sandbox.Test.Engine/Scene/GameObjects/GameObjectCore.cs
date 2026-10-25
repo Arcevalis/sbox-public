@@ -378,6 +378,28 @@ public class GameObjectCoreTest : SceneTest
 	}
 
 	/// <summary>
+	/// An unbounded contributor (±float.MaxValue, e.g. a procedural mesh without Bounds)
+	/// is left out instead of turning the whole result into NaN.
+	/// </summary>
+	[TestMethod]
+	public void GetBoundsSkipsUnboundedContributors()
+	{
+		var scene = new Scene();
+		using var sceneScope = scene.Push();
+
+		var go = scene.CreateObject();
+		go.Components.Create<BoundsProbeComponent>();
+
+		var unbounded = new GameObject( go );
+		unbounded.Components.Create<BoundsProbeComponent>().LocalBounds = new BBox( new Vector3( -float.MaxValue ), new Vector3( float.MaxValue ) );
+
+		// Vector3/BBox equality is AlmostEqual, which accepts NaN, so check finiteness first
+		var bounds = go.GetBounds();
+		Assert.IsTrue( bounds.Mins.IsFinite && bounds.Maxs.IsFinite, $"{bounds}" );
+		Assert.AreEqual( BBox.FromPositionAndSize( Vector3.Zero, 20f ), bounds );
+	}
+
+	/// <summary>
 	/// With no IHasBounds components at all, GetBounds falls back to a zero-size
 	/// box at the object's world position.
 	/// </summary>
