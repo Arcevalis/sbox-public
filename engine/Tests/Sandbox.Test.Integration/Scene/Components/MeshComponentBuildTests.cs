@@ -205,6 +205,35 @@ public class MeshComponentBuildTests
 	}
 
 	[TestMethod]
+	public void EditorHideInGameTagsSceneObject()
+	{
+		var scene = Scene.CreateEditorScene();
+		try
+		{
+			using var scope = scene.Push();
+			var component = scene.CreateObject().AddComponent<MeshComponent>();
+			component.Mesh = CreateBox();
+			var so = scene.SceneWorld.SceneObjects.Single( x => x.Component == component && x.IsValid() );
+			Assert.IsFalse( so.Tags.Has( MeshComponent.HideInGameTag ) );
+
+			component.HideInGame = true;
+			Assert.IsTrue( so.Tags.Has( MeshComponent.HideInGameTag ) );
+
+			component.GameObject.Tags.Add( "test" );
+			Assert.IsTrue( so.Tags.Has( "test" ) );
+			Assert.IsTrue( so.Tags.Has( MeshComponent.HideInGameTag ) );
+			Assert.IsFalse( component.GameObject.Tags.Has( MeshComponent.HideInGameTag ) );
+
+			component.HideInGame = false;
+			Assert.IsFalse( so.Tags.Has( MeshComponent.HideInGameTag ) );
+		}
+		finally
+		{
+			scene.Destroy();
+		}
+	}
+
+	[TestMethod]
 	public void EditorReplacementRemovalAndReenable()
 	{
 		var scene = Scene.CreateEditorScene();
