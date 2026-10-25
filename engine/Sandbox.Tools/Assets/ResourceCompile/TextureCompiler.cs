@@ -32,6 +32,9 @@ public class TextureResourceCompiler : ResourceCompiler
 		var generator = ResourceGenerator.Create<Texture>( serialized.Value );
 		if ( generator is null || !generator.CacheToDisk ) return false;
 
+		foreach ( var read in generator.CompiledReads ) Context.AddCompiledReference( read );
+		if ( Context.Describing ) return true;
+
 		var texture = await generator.CreateAsync( new ResourceGenerator.Options { ForDisk = true, Compiler = this }, default );
 		if ( texture is null ) return false;
 

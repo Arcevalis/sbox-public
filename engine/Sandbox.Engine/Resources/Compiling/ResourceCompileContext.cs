@@ -69,6 +69,18 @@ public abstract class ResourceCompileContext
 	public abstract void AddGameFileReference( string path );
 
 	/// <summary>
+	/// Another asset's compiled output this compile reads (a texture copied into a generated one). A content
+	/// build compiles that asset first and rebuilds this one when it changes.
+	/// </summary>
+	internal abstract void AddCompiledReference( string path );
+
+	/// <summary>
+	/// A content build is asking what this compile reads, before anything is built: report compiled
+	/// references, skip the work. Anything written is discarded.
+	/// </summary>
+	internal abstract bool Describing { get; }
+
+	/// <summary>
 	/// Get the streaming data to write to
 	/// </summary>
 	public DataStream StreamingData { get; internal set; }

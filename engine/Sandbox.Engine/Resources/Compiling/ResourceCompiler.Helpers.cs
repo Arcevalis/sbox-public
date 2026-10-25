@@ -89,13 +89,19 @@ public abstract partial class ResourceCompiler
 
 		var absPath = fs.GetFullPath( transientPath );
 
+		// What the generator reads is known up front, so a content build can order it without generating
+		foreach ( var read in generator.CompiledReads ) Context.AddCompiledReference( read );
+
 		//
 		// generate a filename for the resource
 		//
-		var child = Context.CreateChild( absPath );
+		if ( !Context.Describing )
+		{
+			var child = Context.CreateChild( absPath );
 
-		child.SetInputData( JsonSerializer.Serialize( embed ) );
-		child.Compile();
+			child.SetInputData( JsonSerializer.Serialize( embed ) );
+			child.Compile();
+		}
 
 		//
 		// store it in the json, so the compiled json will load the resource

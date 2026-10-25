@@ -81,6 +81,10 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 	/// <summary>
 	/// Create a child resource
 	/// </summary>
+	internal override void AddCompiledReference( string path ) => _context.ReportBuildPrerequisite( path );
+
+	internal override bool Describing => _context.IsDescribeOnly();
+
 	public override Child CreateChild( string path )
 	{
 		var childContext = _context.CreateChildContext( path );

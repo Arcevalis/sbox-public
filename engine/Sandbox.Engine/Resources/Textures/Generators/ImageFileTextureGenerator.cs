@@ -199,6 +199,16 @@ public class ImageFileGenerator : TextureGenerator
 		}, ct );
 	}
 
+	internal override IEnumerable<string> CompiledReads
+	{
+		get
+		{
+			var path = FilePath?.Trim();
+			if ( path is not null && path.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) path = path[..^2];
+			if ( path is not null && path.EndsWith( ".vtex", StringComparison.OrdinalIgnoreCase ) ) yield return path;
+		}
+	}
+
 	protected override async ValueTask<Texture> CreateTexture( Options options, CancellationToken ct )
 	{
 		var filePath = FilePath;
@@ -220,18 +230,15 @@ public class ImageFileGenerator : TextureGenerator
 			return Texture.Load( filePath );
 		}
 
+		// Before reading: an image that isn't there yet rebuilds this once it is
+		options.Compiler?.Context.AddCompileReference( filePath, optional: true );
+
 		var bitmap = await LoadCached( filePath, settings.Cropping, ct );
 		if ( bitmap is null ) return Texture.Invalid;
 
 		try
 		{
 			ct.ThrowIfCancellationRequested();
-
-			// Native compiler and texture operations belong to the caller's context.
-			if ( options.Compiler is not null )
-			{
-				options.Compiler.Context.AddCompileReference( filePath );
-			}
 
 			await Task.Run( () =>
 			{
