@@ -18,7 +18,7 @@ public sealed class ManagedBuilder : IContentBuilder
 
 	internal Action<string> BeforeCommit { get; init; }
 
-	static readonly AssetTypeTable Types = new( Path.Combine( ContentFixture.Engine, "bin", "assettypes.txt" ) );
+	internal static readonly AssetTypeTable Types = new( Path.Combine( ContentFixture.Engine, "bin", "assettypes.txt" ) );
 
 	public static ResourceCompiler Compiler() => new( Path.Combine( ContentFixture.Engine, "bin", "win64", "resourcecompiler.exe" ), Types );
 

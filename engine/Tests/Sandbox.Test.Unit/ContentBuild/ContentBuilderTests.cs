@@ -528,6 +528,58 @@ public class ContentBuilderTests
 		Assert.IsTrue( fx.Exists( "shared.vtex_c" ) );
 	}
 
+	/// <summary>
+	/// Compiles a.vtex at once; every other compile waits until it is cancelled.
+	/// </summary>
+	sealed class WaitingCompiler : IAssetCompiler
+	{
+		public int Active;
+		public bool FinishedWhileActive;
+
+		public AssetKind Classify( string sourceExtension, out string outputExtension )
+		{
+			outputExtension = sourceExtension + "_c";
+			return sourceExtension == ".vtex" ? AssetKind.Compiled : AssetKind.None;
+		}
+
+		public CompileResult Compile( CompileJob job, CancellationToken token )
+		{
+			if ( Path.GetFileName( job.Source ) != "a.vtex" )
+			{
+				Interlocked.Increment( ref Active );
+				token.WaitHandle.WaitOne();
+				Interlocked.Decrement( ref Active );
+				return new CompileResult( false, "cancelled", [], [], [], [], [] );
+			}
+
+			var output = Path.Combine( job.Staging, job.Root.Mod, "a.vtex_c" );
+			Directory.CreateDirectory( Path.GetDirectoryName( output ) );
+			File.WriteAllText( output, "compiled" );
+			return new CompileResult( true, "", [output], [new InputFact( job.Source, true, Hashing.Checksum( job.Source ) )], [], [], [] );
+		}
+
+		public IReadOnlyList<uint?> Fingerprints( IReadOnlyList<SpecialDependency> dependencies ) => dependencies.Select( _ => (uint?)null ).ToArray();
+
+		public void Finished() => FinishedWhileActive = Volatile.Read( ref Active ) > 0;
+	}
+
+	[TestMethod]
+	public void ErrorSettlingAJobStopsTheOtherCompilesBeforeTheRootsAreFreed()
+	{
+		using var fx = new Fixture();
+		fx.Write( "a.vtex", "red" );
+		fx.Write( "b.vtex", "green" );
+		fx.Write( "c.vtex", "blue" );
+		var compiler = new WaitingCompiler();
+		var request = new BuildRequest { Roots = [new ContentRoot( "unit", fx.Root, fx.State )], MaxJobs = 3, BeforeCommit = _ => throw new InvalidOperationException( "crash" ) };
+
+		Assert.ThrowsException<InvalidOperationException>( () => ContentBuilder.Build( request, compiler ) );
+
+		Assert.AreEqual( 0, compiler.Active );
+		Assert.IsFalse( compiler.FinishedWhileActive );
+		Assert.IsNull( fx.Build( lockTimeout: TimeSpan.Zero ).Error, "the roots are free again" );
+	}
+
 	[TestMethod]
 	public void GeneratedFileInTheFallbackIsPresentAndNothingIsWrittenThere()
 	{
@@ -639,6 +691,44 @@ public class ContentBuilderTests
 		Assert.IsTrue( report.Success, report.Log.ToString() );
 		CollectionAssert.AreEquivalent( report.Changed.ToArray(), published.ToArray() );
 		Assert.IsTrue( published.IndexOf( Path.Combine( fx.Root, "a.vtex_c" ) ) < published.IndexOf( Path.Combine( fx.Root, "b.vmat_c" ) ) );
+	}
+
+	[TestMethod]
+	public void FirstBuildStartsTypicallySlowerTypesFirst()
+	{
+		// Nothing timed yet: materials typically take longer than textures, so b.vmat goes before a.vtex
+		using var fx = new Fixture();
+		fx.Write( "a.vtex", "red" );
+		fx.Write( "b.vmat", "blue" );
+
+		CollectionAssert.AreEqual( new[] { "b.vmat", "a.vtex" }, fx.Build( maxJobs: 1 ).Jobs.ToArray() );
+	}
+
+	[TestMethod]
+	public void OrderingNeverRunsACompileBeforeWhatItReads()
+	{
+		// The material is typically slowest, but it reads the texture, which compiles first; once ready, it goes before
+		// the sound
+		using var fx = new Fixture();
+		fx.Write( "t.vtex", "red" );
+		fx.Write( "m.vmat", "reads t.vtex" );
+		fx.Write( "z.wav", "wave" );
+
+		CollectionAssert.AreEqual( new[] { "t.vtex", "m.vmat", "z.wav" }, fx.Build( maxJobs: 1 ).Jobs.ToArray() );
+	}
+
+	[TestMethod]
+	public void WhatTookLongestLastTimeCompilesFirst()
+	{
+		// The first build goes by type (material before texture); after it, by what each actually took
+		using var fx = new Fixture();
+		fx.Write( "a.vmat", "red" );
+		fx.Write( "z.vtex", "blue", "sleep 300" );
+		CollectionAssert.AreEqual( new[] { "a.vmat", "z.vtex" }, fx.Build( maxJobs: 1 ).Jobs.ToArray() );
+
+		fx.Write( "a.vmat", "red", "edited" );
+		fx.Write( "z.vtex", "blue", "sleep 300", "edited" );
+		CollectionAssert.AreEqual( new[] { "z.vtex", "a.vmat" }, fx.Build( maxJobs: 1 ).Jobs.ToArray() );
 	}
 
 	[TestMethod]

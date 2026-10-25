@@ -232,6 +232,32 @@ static class Sources
 		""";
 
 	/// <summary>
+	/// A tenth of a second of a 16-bit mono sine wave.
+	/// </summary>
+	public static void WriteWav( ContentFixture fixture, string rel, int hz )
+	{
+		const int rate = 22050, samples = rate / 10;
+		var bytes = new byte[44 + samples * 2];
+		"RIFF"u8.CopyTo( bytes );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 4 ), 36 + samples * 2 );
+		"WAVEfmt "u8.CopyTo( bytes.AsSpan( 8 ) );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 16 ), 16 );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 20 ), (short)1 );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 22 ), (short)1 );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 24 ), rate );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 28 ), rate * 2 );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 32 ), (short)2 );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 34 ), (short)16 );
+		"data"u8.CopyTo( bytes.AsSpan( 36 ) );
+		BitConverter.TryWriteBytes( bytes.AsSpan( 40 ), samples * 2 );
+		for ( var i = 0; i < samples; i++ )
+			BitConverter.TryWriteBytes( bytes.AsSpan( 44 + i * 2 ), (short)( Math.Sin( 2 * Math.PI * hz * i / rate ) * 8000 ) );
+
+		Directory.CreateDirectory( Path.GetDirectoryName( fixture.Path( rel ) ) );
+		File.WriteAllBytes( fixture.Path( rel ), bytes );
+	}
+
+	/// <summary>
 	/// An uncompressed 32-bit TGA filled with one colour. Odd sizes get padded to a power of two by the
 	/// texture compiler, which records the original size as the display rect.
 	/// </summary>
