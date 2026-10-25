@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 
 namespace Sandbox.ContentBuild;
@@ -79,6 +81,16 @@ public sealed class BuildReport
 	public List<string> Described { get; } = [];
 
 	/// <summary>
+	/// Wall time of each phase of the build, in order.
+	/// </summary>
+	public List<(string Phase, TimeSpan Time)> Phases { get; } = [];
+
+	/// <summary>
+	/// Compiler jobs by source extension and mode (".vmdl compile"): how many, and their time added up.
+	/// </summary>
+	public Dictionary<string, (int Jobs, TimeSpan Time)> JobTime { get; } = [];
+
+	/// <summary>
 	/// Outputs built without this build (before it had a record of them, or by the editor compiling one asset
 	/// by itself) and still current: recorded, not compiled.
 	/// </summary>
@@ -148,8 +160,12 @@ public static class ContentBuilder
 		public bool Final => State is State.Clean or State.Committed or State.Failed or State.Blocked;
 	}
 
-	public static BuildReport Build( BuildRequest request, IAssetCompiler compiler, CancellationToken token = default ) =>
-		new Run( request, compiler, token ).Execute();
+	public static BuildReport Build( BuildRequest request, IAssetCompiler compiler, CancellationToken token = default )
+	{
+		using var run = new Run( request, compiler, token );
+		try { return run.Execute(); }
+		finally { compiler.Finished(); }
+	}
 
 	/// <summary>
 	/// The file a build holds exclusively, from any process, while it builds the root.
@@ -236,9 +252,14 @@ public static class ContentBuilder
 		}
 	}
 
-	sealed class Run( BuildRequest request, IAssetCompiler compiler, CancellationToken token )
+	sealed class Run( BuildRequest request, IAssetCompiler compiler, CancellationToken token ) : IDisposable
 	{
 		readonly BuildReport report = new();
+
+		// Cancels the compiles still running when the build stops on an error; the caller's token cancels them too
+		readonly CancellationTokenSource abort = CancellationTokenSource.CreateLinkedTokenSource( token );
+
+		public void Dispose() => abort.Dispose();
 		readonly List<RootState> roots = request.Roots.Select( x => new RootState( x, request.OutputRoots, request.OutputFallbacks ) ).ToList();
 		readonly Dictionary<(RootState, string), Node> nodes = new( new NodeKey() );
 		readonly Dictionary<SpecialDependency, uint?> fingerprints = [];
@@ -258,6 +279,13 @@ public static class ContentBuilder
 			// One build of a root at a time, from any process: recovery and publication rewrite its files.
 			// Every root is held for the whole build, taken in one order so two builds can't deadlock.
 			var locks = new List<FileStream>();
+			var phase = Stopwatch.StartNew();
+			void Phase( string name )
+			{
+				report.Phases.Add( (name, phase.Elapsed) );
+				phase.Restart();
+			}
+
 			try
 			{
 				foreach ( var root in roots.OrderBy( x => Path.GetFullPath( x.Def.StateDirectory ), StringComparer.OrdinalIgnoreCase ) )
@@ -295,12 +323,15 @@ public static class ContentBuilder
 				}
 
 				foreach ( var selected in request.Select ?? roots.Select( x => x.Def.Path ).ToList() ) Select( selected );
+				Phase( "inventory" );
 
 				Plan();
+				Phase( "describe and adopt" );
 				if ( token.IsCancellationRequested ) { report.Cancelled = true; return report; }
 
 				Schedule();
 				Settle();
+				Phase( "compile and publish" );
 				return report;
 			}
 			finally
@@ -617,8 +648,24 @@ public static class ContentBuilder
 		void Schedule()
 		{
 			var running = new Dictionary<Task<CompileResult>, (Node Node, CompileJob Job)>();
-			var queue = new List<Node>();
+			try
+			{
+				ScheduleUntilDone( running );
+			}
+			catch
+			{
+				// Settling a job went wrong: the compiles still running stop before the build lets go of its roots
+				abort.Cancel();
+				try { Task.WaitAll( [.. running.Keys] ); }
+				catch ( AggregateException ) { }
+				foreach ( var (_, job) in running.Values ) DeleteStaging( job.Staging );
+				throw;
+			}
+		}
 
+		void ScheduleUntilDone( Dictionary<Task<CompileResult>, (Node Node, CompileJob Job)> running )
+		{
+			var queue = new List<Node>();
 			while ( true )
 			{
 				// Producers a compile turned out to read are planned like the rest before they run
@@ -645,6 +692,9 @@ public static class ContentBuilder
 						queue.Add( node );
 					}
 				}
+
+				// What should take longest starts first, so it doesn't end the build alone; ties stay in name order
+				queue = [.. queue.OrderByDescending( Estimate )];
 
 				while ( running.Count < Math.Max( 1, request.MaxJobs ) && queue.Count > 0 && !token.IsCancellationRequested )
 				{
@@ -684,6 +734,33 @@ public static class ContentBuilder
 			}
 		}
 
+		/// <summary>
+		/// Rough seconds a compile of each source type took on the engine's own content, for sources nothing in the
+		/// build has timed yet. Sizes vary a lot within a type (a 4K sky material takes 100 s, most materials 4 s).
+		/// </summary>
+		static readonly Dictionary<string, double> TypicalSeconds = new( StringComparer.OrdinalIgnoreCase )
+		{
+			[".vmat"] = 3.9, [".ogg"] = 4, [".mp3"] = 2, [".vtex"] = 1.4, [".vmdl"] = 0.8, [".vanmgrph"] = 0.6, [".wav"] = 0.2,
+		};
+
+		Dictionary<string, double> recordedSeconds;
+
+		/// <summary>
+		/// How long a compile should take: its own last compile's time (launch to settle, so an estimate), else the
+		/// average of its type's recorded times in this build, else the typical time for its type.
+		/// </summary>
+		double Estimate( Node node )
+		{
+			if ( node.Record?.Seconds > 0 ) return node.Record.Seconds;
+
+			recordedSeconds ??= nodes.Values.Where( x => x.Record?.Seconds > 0 )
+				.GroupBy( x => Path.GetExtension( x.Source ), StringComparer.OrdinalIgnoreCase )
+				.ToDictionary( x => x.Key, x => x.Average( n => n.Record.Seconds ), StringComparer.OrdinalIgnoreCase );
+
+			var type = Path.GetExtension( node.Source );
+			return recordedSeconds.TryGetValue( type, out var seconds ) ? seconds : TypicalSeconds.GetValueOrDefault( type, 1 );
+		}
+
 		List<Node> Ready() => nodes.Values
 			.Where( x => x.State == State.Waiting && x.Prerequisites.All( p => p.Final ) )
 			.OrderBy( x => x.Name, StringComparer.OrdinalIgnoreCase )
@@ -703,9 +780,20 @@ public static class ContentBuilder
 		/// </summary>
 		CompileResult Compile( CompileJob job, bool keep = false )
 		{
-			try { return compiler.Compile( job, token ); }
+			var time = Stopwatch.StartNew();
+			try { return compiler.Compile( job, abort.Token ); }
 			catch ( Exception e ) { return new CompileResult( false, e.ToString(), [], [], [], [], [] ); }
-			finally { if ( !keep ) DeleteStaging( job.Staging ); }
+			finally
+			{
+				if ( !keep ) DeleteStaging( job.Staging );
+
+				var key = $"{Path.GetExtension( job.Source ).ToLowerInvariant()} {job.Mode.ToString().ToLowerInvariant()}";
+				lock ( report.JobTime )
+				{
+					var (jobs, total) = report.JobTime.GetValueOrDefault( key );
+					report.JobTime[key] = (jobs + 1, total + time.Elapsed);
+				}
+			}
 		}
 
 		List<CompileResult> ForEach( List<Node> items, Func<Node, CompileResult> run )
@@ -714,7 +802,8 @@ public static class ContentBuilder
 			void One( int i ) => results[i] = token.IsCancellationRequested ? new CompileResult( false, "cancelled", [], [], [], [], [] ) : run( items[i] );
 
 			if ( request.MaxJobs <= 1 ) for ( var i = 0; i < items.Count; i++ ) One( i );
-			else Parallel.For( 0, items.Count, new ParallelOptions { MaxDegreeOfParallelism = request.MaxJobs }, One );
+			// One at a time: ranges handed out in chunks queue slow neighbours (the citizen models) behind each other
+			else Parallel.ForEach( Partitioner.Create( Enumerable.Range( 0, items.Count ), EnumerablePartitionerOptions.NoBuffering ), new ParallelOptions { MaxDegreeOfParallelism = request.MaxJobs }, One );
 			return results.ToList();
 		}
 
@@ -754,6 +843,7 @@ public static class ContentBuilder
 
 			var staged = result.Outputs.DistinctBy( x => root.OutputKey( x, staging ), StringComparer.OrdinalIgnoreCase ).ToDictionary( x => root.OutputKey( x, staging ), x => x, StringComparer.OrdinalIgnoreCase );
 			var record = NewRecord( node, result, staged.ToDictionary( x => x.Key, x => Hashing.Stamp( x.Value ), StringComparer.OrdinalIgnoreCase ), reads.Select( x => x.Recorded ).ToList() );
+			record.Seconds = Math.Round( (DateTime.UtcNow - node.Launched).TotalSeconds, 2 );
 
 			var obsolete = node.Record is null ? [] : Unshared( root, node.Record.Outputs.Keys.Where( x => !staged.ContainsKey( x ) ), node.Source );
 			try { Changed( root.Store.Publish( node.Source, record.Job, record, staged, obsolete, request.BeforeCommit ) ); }

@@ -24,6 +24,11 @@ public interface IAssetCompiler
 	/// where it can't be calculated.
 	/// </summary>
 	IReadOnlyList<uint?> Fingerprints( IReadOnlyList<SpecialDependency> dependencies );
+
+	/// <summary>
+	/// The build is over: let go of anything kept between its jobs (worker processes).
+	/// </summary>
+	void Finished() { }
 }
 
 public enum AssetKind

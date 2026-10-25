@@ -43,6 +43,9 @@ internal class BuildContent( string onlyRoot = null )
 			Log.Info( $"{root.Mod}: {Count( report.Jobs )} compiled, {Count( report.Failed )} failed, {Count( report.Blocked )} blocked, {Count( report.Unsupported )} unsupported, {Count( report.Removed )} removed" );
 		}
 		Log.Info( $"{report.DescribeMisses} describe misses" );
+		Log.Info( $"Phases: {string.Join( ", ", report.Phases.Select( x => $"{x.Phase} {x.Time.TotalSeconds:F1}s" ) )}" );
+		Log.Info( $"Job time: {string.Join( ", ", report.JobTime.OrderByDescending( x => x.Value.Time ).Select( x => $"{x.Key} {x.Value.Jobs}x {x.Value.Time.TotalSeconds:F0}s" ) )}" );
+		Log.Info( $"{compiler.Launches} resourcecompiler workers started, {compiler.Evicted} replaced by one with other mounts" + (compiler.Ended.Count > 0 ? $", ended early: {string.Join( "; ", compiler.Ended.GroupBy( x => x ).Select( x => $"{x.Count()}x {x.Key}" ) )}" : "") );
 
 		return report.Success ? ExitCode.Success : ExitCode.Failure;
 	} );

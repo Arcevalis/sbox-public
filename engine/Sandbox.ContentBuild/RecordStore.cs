@@ -21,6 +21,11 @@ public sealed class AssetRecord
 	/// An input was edited while this compiled, so the output may be older than the inputs recorded.
 	/// </summary>
 	public bool ChangedWhileCompiling { get; set; }
+
+	/// <summary>
+	/// How long the compile took, so the longest start first when it compiles again.
+	/// </summary>
+	public double Seconds { get; set; }
 }
 
 public sealed record FileStamp( long Size, long Time, string Hash );
