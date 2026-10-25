@@ -38,6 +38,7 @@ internal partial class NetworkSystem
 		IsHostMigrationEnabled = msg.HostMigration;
 
 		source.UpdateFrom( msg.Host );
+		source.HostSteamId = msg.HostSteamId;
 		source.State = Connection.ChannelState.LoadingServerInformation;
 
 		Connection.Local = new LocalConnection( msg.Assigned.Id )

@@ -52,6 +52,7 @@ struct ServerInfo
 	public string ServerName { get; set; }
 	public string MapName { get; set; }
 	public ChannelInfo Host { get; set; }
+	public ulong HostSteamId { get; set; }
 	public ChannelInfo Assigned { get; set; }
 	public int MaxPlayers { get; set; }
 	public int EngineVersion { get; set; }

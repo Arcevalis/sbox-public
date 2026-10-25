@@ -98,6 +98,7 @@ internal partial class NetworkSystem
 			GamePackage = Application.GamePackage?.GetIdent( false, true ) ?? "",
 			Map = Application.Map,
 			Host = new ChannelInfo { Id = Connection.Local.Id },
+			HostSteamId = Connection.Local.SteamId,
 			Assigned = new ChannelInfo { Id = channel.Id },
 			IsDeveloperHost = IsDeveloperHost,
 			HostMigration = IsHostMigrationEnabled,
