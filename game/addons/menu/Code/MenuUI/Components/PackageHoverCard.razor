@@ -204,9 +204,30 @@
         Current = card;
 
         if ( package.TypeName == "game" )
+        {
+            _ = card.LoadPackage();
             _ = card.LoadJam();
+        }
 
         return card;
+    }
+
+    async Task LoadPackage()
+    {
+        // Shelf results can omit the game's declared player modes and limits. Use the
+        // same full package as the game page, keeping the preview visible while it loads.
+        try
+        {
+            var full = await Package.FetchAsync( Package.FullIdent, false );
+            if ( !this.IsValid() || IsDeleting || full is null ) return;
+
+            Package = full;
+            StateHasChanged();
+        }
+        catch ( Exception e )
+        {
+            Log.Warning( $"Couldn't fetch hover card details for {Package.FullIdent}: {e.Message}" );
+        }
     }
 
     async Task LoadJam()
@@ -557,7 +578,7 @@
         return n.ToString();
     }
 
-    protected override int BuildHash() => HashCode.Combine( Package?.FullIdent, Package?.Usage.UsersNow, showVideo, VideoUrl(), MenuHelpers.HasAuthority, ShowJam, HashCode.Combine( _nominated, _busy, Package?.Interaction.Rating, Package?.Interaction.Favourite, PlayerModes.PartySize ) );
+    protected override int BuildHash() => HashCode.Combine( Package?.FullIdent, Package?.Usage.UsersNow, showVideo, VideoUrl(), MenuHelpers.HasAuthority, ShowJam, HashCode.Combine( _nominated, _busy, Package?.Interaction.Rating, Package?.Interaction.Favourite, PlayerModes.PartySize, PlayerModes.For( Package ) ) );
 
     /// <summary>
     /// Rebuild composed text when translations change.

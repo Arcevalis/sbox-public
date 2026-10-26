@@ -117,8 +117,8 @@
     public const int VideoThumbsPerGrid = 4;
     /// <summary>Seconds a package video plays before handing over to the next card.</summary>
     public const float VideoThumbsSeconds = 10f;
-    // Past the card's 0.3s video start, so the preview inherits the card's video mid-fade.
-    const float HoverPreviewDelay = 0.4f;
+    // Let the tile's video start before opening a preview, and avoid popups while browsing past.
+    const float HoverPreviewDelay = 0.6f;
 	const float VideoActivationDelay = 0.3f;
 	bool showVideo;
 	float? videoRequestedAt;
