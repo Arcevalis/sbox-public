@@ -72,10 +72,12 @@ public partial class ProjectPublisher
 			ExclusionOverrides.Clear();
 			ExcludedByRules.Clear();
 			IncludedExclusionReasons.Clear();
+			inclusionReasons.Clear();
 			configuredPublishPaths.Clear();
 			reviewSizeGraph.Clear();
 			reviewIncludedFiles.Clear();
 			reviewImpactCache.Clear();
+			reviewFootprintCache.Clear();
 			reviewDependencyCache.Clear();
 			reviewAssetAliases.Clear();
 		}

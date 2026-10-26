@@ -10,6 +10,28 @@ using System.Reflection;
 public class PublishSourceFileTests
 {
 	[TestMethod]
+	public async Task SourceImageAliasesHaveTheSameNonzeroPublishEstimate()
+	{
+		var directory = Path.Combine( Path.GetTempPath(), $"publish_image_estimate_{Guid.NewGuid():N}" );
+		Directory.CreateDirectory( directory );
+		try
+		{
+			var asset = new PublishAsset( directory, "image.png", "unused.compiled", "image.jpg" );
+			File.WriteAllBytes( asset.AbsolutePath, new byte[123] );
+			var manifest = new ProjectPublisher.PackageManifest();
+			var build = typeof( ProjectPublisher.PackageManifest ).GetMethod( "BuildReviewSizes", BindingFlags.Instance | BindingFlags.NonPublic );
+			await (Task)build.Invoke( manifest, [new Asset[] { asset }, new HashSet<string>(), System.Threading.CancellationToken.None] );
+			Assert.AreEqual( 123L, manifest.GetPublishImpact( ["image.jpg"] ).TotalBytes );
+			Assert.AreEqual( 123L, manifest.GetPublishImpact( ["image.png"] ).TotalBytes );
+			Assert.AreEqual( 123L, manifest.GetPublishImpact( ["image.jpg", "image.png"] ).TotalBytes );
+		}
+		finally
+		{
+			Directory.Delete( directory, true );
+		}
+	}
+
+	[TestMethod]
 	[DataRow( "exact", true )]
 	[DataRow( "wildcard", true )]
 	[DataRow( "folder", true )]
@@ -54,18 +76,18 @@ public class PublishSourceFileTests
 				_ => ""
 			};
 			foreach ( var preview in new[] { false, true } )
-			foreach ( var sources in new[] { false, true } )
-			{
-				// Start without compiler output each time: checking for an existing _c before collection is insufficient.
-				foreach ( var asset in assets ) File.Delete( asset.AbsoluteCompiledPath );
-				var manifest = new ProjectPublisher.PackageManifest { IncludeSourceFiles = sources };
-				await manifest.BuildFromAssets( project, previewOnly: preview );
-				CollectionAssert.AreEqual( Array.Empty<string>(), manifest.Errors.ToArray() );
-				var expected = new List<string> { $"{folder}/rounds.scene_c", $"{folder}/music.vsnd_c", "material.vmat_c", $"{folder}/data.json", $"{folder}/icon.png" };
-				if ( sources ) expected.AddRange( assets.Select( x => x.RelativePath ) );
-				CollectionAssert.AreEquivalent( expected, manifest.Assets.Select( x => x.Name ).ToList(), $"{selection}, usedOnly={usedOnly}, preview={preview}, sources={sources}" );
-				Assert.AreEqual( preview, manifest.Assets.All( x => x.Hash is null ) );
-			}
+				foreach ( var sources in new[] { false, true } )
+				{
+					// Start without compiler output each time: checking for an existing _c before collection is insufficient.
+					foreach ( var asset in assets ) File.Delete( asset.AbsoluteCompiledPath );
+					var manifest = new ProjectPublisher.PackageManifest { IncludeSourceFiles = sources };
+					await manifest.BuildFromAssets( project, previewOnly: preview );
+					CollectionAssert.AreEqual( Array.Empty<string>(), manifest.Errors.ToArray() );
+					var expected = new List<string> { $"{folder}/rounds.scene_c", $"{folder}/music.vsnd_c", "material.vmat_c", $"{folder}/data.json", $"{folder}/icon.png" };
+					if ( sources ) expected.AddRange( assets.Select( x => x.RelativePath ) );
+					CollectionAssert.AreEquivalent( expected, manifest.Assets.Select( x => x.Name ).ToList(), $"{selection}, usedOnly={usedOnly}, preview={preview}, sources={sources}" );
+					Assert.AreEqual( preview, manifest.Assets.All( x => x.Hash is null ) );
+				}
 		}
 		finally
 		{
@@ -79,9 +101,10 @@ public class PublishSourceFileTests
 	sealed class PublishAsset : MountAsset
 	{
 		public List<Asset> References { get; } = [];
-		public PublishAsset( string root, string source, string compiled ) : base( BitConverter.ToUInt64( Guid.NewGuid().ToByteArray() ), null, null )
+		public PublishAsset( string root, string source, string compiled, string logicalPath = null ) : base( BitConverter.ToUInt64( Guid.NewGuid().ToByteArray() ), null, null )
 		{
-			Path = RelativePath = source;
+			Path = logicalPath ?? source;
+			RelativePath = source;
 			AbsolutePath = AbsoluteSourcePath = System.IO.Path.Combine( root, source ).Replace( '\\', '/' );
 			AbsoluteCompiledPath = System.IO.Path.Combine( root, compiled ).Replace( '\\', '/' );
 			CompiledPath = compiled;
