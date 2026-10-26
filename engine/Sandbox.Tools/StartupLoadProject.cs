@@ -213,7 +213,15 @@ static class StartupLoadProject
 
 			Log.Info( $"AssetSystem.InstallAsync" );
 			// Install into asset system so we can use prefabs, gameresources, etc.
-			await AssetSystem.InstallAsync( parentPackage, false );
+			try
+			{
+				await AssetSystem.InstallAsync( parentPackage, false );
+			}
+			catch ( AggregateException ex )
+			{
+				// The game is already loaded. Missing editor assets should not prevent opening the project.
+				Log.Error( ex, $"Failed to install editor assets for {parentPackage}. Some assets may be unavailable." );
+			}
 
 			Log.Info( $"MountAsync" );
 			// Mount our current project, and load the source!
