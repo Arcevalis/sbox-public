@@ -139,7 +139,7 @@ native accessor qApp as Native.QApp
 
 	inline QWidget HoveredWidget()
 	{
-		return qApp->widgetAt( QCursor::pos() );
+		return CQUtils::GetWidgetUnderCursor();
 	}
 
     inline int ScreenCount() 
