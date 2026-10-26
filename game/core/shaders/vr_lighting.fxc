@@ -704,7 +704,7 @@ void CalculateIndirectLighting( inout LightingTerms_t lightingTerms, const Final
 			{
 				flTargetLuminanceOfCubemap = RelativeLuminance( SampleIrradiance( vAmbientCube, vNormalWs.xyz ) );
 				lightingTerms.vIndirectDiffuse.rgb = SampleIrradiance( vAmbientCube, vNormalWs.xyz );
-				lightingTerms.vTransmissive.rgb += SampleIrradiance( vAmbientCube, -vNormalWs.xyz );
+				lightingTerms.vTransmissive.rgb += vTransmissiveMask.rgb * SampleIrradiance( vAmbientCube, -vNormalWs.xyz );
 			}
 			else
 			#if ( S_SUBSURFACE_SCATTERING == SUBSURFACE_SCATTERING_PREINTEGRATED )
