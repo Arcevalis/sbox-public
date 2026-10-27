@@ -877,6 +877,58 @@ public class ManagedContentBuild : ContentBuildScenarios
 		fx.AssertMatchesCleanBuild( Builder );
 	} );
 
+	/// <summary>
+	/// A DXT5 texture two materials generate from the same normal map, built from nothing: one set of bytes whichever
+	/// parent makes it, in a build (several jobs at once or one worker for all) or compiled by itself as the editor
+	/// does, then nothing to do. DXT5 is compressed on the CPU, so it doesn't depend on a GPU or on build order.
+	/// </summary>
+	[TestMethod]
+	public void SharedGeneratedDxt5TextureIsTheSameWhoeverMakesIt() => Scenario( fx =>
+	{
+		fx.CopyShipped( "core/materials/default/default_normal.tga", "materials/n.tga" );
+		fx.CopyShipped( Sources.ImageA, "materials/c.tga" );
+		// The generic shader's normal map is DXT5 (the complex shader's is BC7), as core's dev materials have it
+		fx.Write( "materials/a.vmat", Sources.Material( "shaders/generic.shader", ["TextureNormal", "materials/n.tga"] ) );
+		fx.Write( "materials/b.vmat", Sources.Material( "shaders/generic.shader", ["TextureNormal", "materials/n.tga", "TextureColor", "materials/c.tga"] ) );
+
+		var run = Build( fx );
+		AssertSucceeded( run );
+		var child = fx.Child( "materials/n.tga" );
+		Assert.IsNotNull( child, run.ToString() );
+		var built = fx.Read( child );
+		Assert.AreEqual( (2, 4, 4), TextureFormat( built ), "a 4x4 DXT5 (BC3) texture" );
+		AssertWroteExactly( Build( fx ) );
+
+		foreach ( var parent in new[] { "materials/b.vmat", "materials/a.vmat" } )
+		{
+			fx.Delete( child );
+			fx.Delete( parent + "_c" );
+			CompileInPlace( fx, parent );
+			CollectionAssert.AreEqual( built, fx.Read( child ), $"{parent} compiled by itself" );
+		}
+
+		fx.AssertMatchesCleanBuild( Builder );
+		fx.AssertMatchesCleanBuild( new ManagedBuilder { MaxJobs = 1 } );
+	} );
+
+	/// <summary>
+	/// A compiled texture's format (VTEX_Format_t) and size, from the header in its DATA block.
+	/// </summary>
+	static (int Format, int Width, int Height) TextureFormat( byte[] file )
+	{
+		int Offset( int field ) => field + BitConverter.ToInt32( file, field );
+		var blocks = Offset( 8 );
+		for ( var i = 0; i < BitConverter.ToInt32( file, 12 ); i++ )
+		{
+			var block = blocks + i * 12;
+			if ( BitConverter.ToUInt32( file, block ) != 0x41544144 ) continue; // DATA
+
+			var header = Offset( block + 4 );
+			return (file[header + 26], BitConverter.ToUInt16( file, header + 20 ), BitConverter.ToUInt16( file, header + 22 ));
+		}
+		return default;
+	}
+
 	[TestMethod]
 	public void AssetTheEditorCompilesWithNothingChangedStaysCurrent() => Scenario( fx =>
 	{
