@@ -42,9 +42,10 @@ static class WorkshopUtils
 		var addon = asset.Publishing.CreateTemporaryProject();
 
 		// The content is just a json file with data in it
-		DeleteTemporaryFolder( asset.Name );
-		Editor.FileSystem.Transient.CreateDirectory( asset.Name );
-		Editor.FileSystem.Transient.WriteJson( $"{asset.Name}/item.json", new WorkshopItemMetaData()
+		var folderName = $"workshop/{asset.Name}";
+		DeleteTemporaryFolder( folderName );
+		Editor.FileSystem.ProjectTemporary.CreateDirectory( folderName );
+		Editor.FileSystem.ProjectTemporary.WriteJson( $"{folderName}/item.json", new WorkshopItemMetaData()
 		{
 			PackageIdent = addon.Config.FullIdent,
 			Title = addon.Config.Title,
@@ -53,7 +54,7 @@ static class WorkshopUtils
 
 		try
 		{
-			var itemId = await Upload( asset.MetaData.Get( "WorkshopId", 0UL ), Editor.FileSystem.Transient.GetFullPath( asset.Name ), true, item =>
+			var itemId = await Upload( asset.MetaData.Get( "WorkshopId", 0UL ), Editor.FileSystem.ProjectTemporary.GetFullPath( folderName ), true, item =>
 			{
 				item.SetTitle( clothing.Title );
 
@@ -72,18 +73,19 @@ static class WorkshopUtils
 		}
 		finally
 		{
-			DeleteTemporaryFolder( asset.Name );
+			DeleteTemporaryFolder( folderName );
 		}
 	}
 
 	/// <summary>
-	/// Delete a folder we've built a workshop item's content in
+	/// Delete a folder we've built a workshop item's content in. They're built in .sbox, which isn't mounted -
+	/// in the transient folder the resource and font watchers would load the copies and complain when they go.
 	/// </summary>
 	internal static void DeleteTemporaryFolder( string name )
 	{
-		if ( Editor.FileSystem.Transient.DirectoryExists( name ) )
+		if ( Editor.FileSystem.ProjectTemporary.DirectoryExists( name ) )
 		{
-			Editor.FileSystem.Transient.DeleteDirectory( name, true );
+			Editor.FileSystem.ProjectTemporary.DeleteDirectory( name, true );
 		}
 	}
 

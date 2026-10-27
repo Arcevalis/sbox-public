@@ -514,9 +514,9 @@ public partial class ProjectPublisher
 		var mediaFolderName = $"workshop/{TargetPackageIdent}.media";
 
 		WorkshopUtils.DeleteTemporaryFolder( folderName );
-		FileSystem.Transient.CreateDirectory( folderName );
+		FileSystem.ProjectTemporary.CreateDirectory( folderName );
 
-		var folder = FileSystem.Transient.GetFullPath( folderName );
+		var folder = FileSystem.ProjectTemporary.GetFullPath( folderName );
 
 		try
 		{
@@ -561,8 +561,8 @@ public partial class ProjectPublisher
 
 			if ( previewBytes is not null )
 			{
-				FileSystem.Transient.WriteAllBytes( previewName, previewBytes );
-				preview = FileSystem.Transient.GetFullPath( previewName );
+				FileSystem.ProjectTemporary.WriteAllBytes( previewName, previewBytes );
+				preview = FileSystem.ProjectTemporary.GetFullPath( previewName );
 			}
 
 			workshopStage = WorkshopStage.Submitting;
@@ -636,8 +636,8 @@ public partial class ProjectPublisher
 			workshopItem = null;
 			WorkshopUtils.DeleteTemporaryFolder( folderName );
 
-			if ( FileSystem.Transient.FileExists( previewName ) )
-				FileSystem.Transient.DeleteFile( previewName );
+			if ( FileSystem.ProjectTemporary.FileExists( previewName ) )
+				FileSystem.ProjectTemporary.DeleteFile( previewName );
 
 			WorkshopUtils.DeleteTemporaryFolder( mediaFolderName );
 		}
@@ -673,7 +673,8 @@ public partial class ProjectPublisher
 		var media = new List<string>();
 		var screenshots = BackendPackage?.Screenshots ?? Array.Empty<Package.Screenshot>();
 
-		foreach ( var screenshot in screenshots.Where( x => !x.IsVideo ).OrderBy( x => x.Created ) )
+		// In the order they're in on sbox.game
+		foreach ( var screenshot in screenshots.Where( x => !x.IsVideo ) )
 		{
 			var url = screenshot.Url;
 			if ( string.IsNullOrEmpty( url ) ) continue;
@@ -681,11 +682,11 @@ public partial class ProjectPublisher
 			var bytes = await DownloadPreviewImage( url, cancel );
 			if ( bytes is null ) continue;
 
-			FileSystem.Transient.CreateDirectory( folderName );
+			FileSystem.ProjectTemporary.CreateDirectory( folderName );
 			var name = $"{folderName}/{media.Count}.jpg";
-			FileSystem.Transient.WriteAllBytes( name, bytes );
+			FileSystem.ProjectTemporary.WriteAllBytes( name, bytes );
 
-			media.Add( FileSystem.Transient.GetFullPath( name ) );
+			media.Add( FileSystem.ProjectTemporary.GetFullPath( name ) );
 		}
 
 		return media;
