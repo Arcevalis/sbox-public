@@ -3,19 +3,19 @@ using Sandbox.ContentBuild;
 using Sandbox.Engine;
 using System;
 using System.IO;
-using System.Text;
 using System.Threading;
 
 namespace Editor;
 
 /// <summary>
-/// The editor's content build, the same pipeline as SboxBuild build-content: one build over every root the editor
-/// mounts, so a compile that reads another root's output waits for it. It builds everything at startup and again
+/// The editor's content build, the same pipeline as SboxBuild build-content: one build over its writable roots,
+/// so a compile that reads another root's output waits for it. Retail editors consume shipped engine content without
+/// rebuilding it. It builds everything at startup and again
 /// after files change (the asset system counts changes, the frame tick builds them), which rebuilds whatever a
 /// change affects, in order. The asset system compiles single assets itself (a load of a changed one, a tool's
 /// compile); their outputs record what they were built from, so the build takes them as they are rather than
-/// compiling them again. Compiles run one at a time on the main thread, where game resources and managed compilers
-/// live.
+/// compiling them again. Compiles run in content workers, as in SboxBuild, with the tool and project code the editor
+/// has loaded.
 /// </summary>
 internal static class EditorContentBuild
 {
@@ -28,6 +28,12 @@ internal static class EditorContentBuild
 	static RealTimeUntil retryAfter;
 	static HashSet<string> current = new( StringComparer.OrdinalIgnoreCase );
 	static HashSet<string> sharedOutputs = new( StringComparer.OrdinalIgnoreCase );
+	static ResourceCompiler compiler;
+	static string compilerKey;
+	static Task incrementalBuild;
+	static CancellationTokenSource cancellation;
+	static RealTimeSince buildStarted;
+	static PopupToast progress;
 
 	/// <summary>
 	/// Changes usually come in bursts (a save writes several files, a checkout many)
@@ -39,6 +45,11 @@ internal static class EditorContentBuild
 	/// </summary>
 	const float RetryDelay = 2.0f;
 
+	/// <summary>
+	/// Content workers at once. Each is a resource compiler with the editor's managed code and a GPU device (~1.3 GB).
+	/// </summary>
+	const int Workers = 4;
+
 	public static bool IsBuilding => building;
 
 	/// <summary>
@@ -46,8 +57,12 @@ internal static class EditorContentBuild
 	/// </summary>
 	public static void Startup( Project project )
 	{
+		EditorContentBuild.project = null;
+		StopBuild();
+		// ContentBuild has no engine dependency, but its editor tasks must survive play-mode context resets.
+		Sandbox.Tasks.ExpirableSynchronizationContext.AllowPersistentTaskMethods( typeof( ContentBuilder ).Assembly );
 		EditorContentBuild.project = project;
-		Update( true );
+		Update( true ).GetAwaiter().GetResult();
 	}
 
 	/// <summary>
@@ -58,7 +73,14 @@ internal static class EditorContentBuild
 	[EditorEvent.Frame]
 	static void Frame()
 	{
-		if ( project is null || building ) return;
+		if ( project is null ) return;
+		if ( building )
+		{
+			if ( incrementalBuild is { IsCompleted: false } && buildStarted > 1 )
+				progress ??= new PopupToast { Title = "Compiling assets", Icon = "build" };
+			if ( progress?.GetCancel().IsCancellationRequested == true ) cancellation?.Cancel();
+			return;
+		}
 
 		if ( pruneOrphans )
 		{
@@ -74,16 +96,19 @@ internal static class EditorContentBuild
 			sinceChange = 0;
 		}
 
-		if ( epoch != builtEpoch && sinceChange > Debounce && retryAfter ) Update( false );
+		if ( epoch != builtEpoch && sinceChange > Debounce && retryAfter ) incrementalBuild = Update( false );
 	}
 
 	/// <summary>
 	/// One build over every mounted root, then everything the asset system needs to know about it: each source's
 	/// verdict and the files it published, which reloads what's loaded. Nothing compiles itself on load meanwhile.
 	/// </summary>
-	static void Update( bool startup )
+	static async Task Update( bool startup )
 	{
 		building = true;
+		buildStarted = 0;
+		cancellation = new CancellationTokenSource();
+		var generation = codeGeneration;
 		IAssetSystem.SuspendOnDemandCompiles( true );
 
 		try
@@ -98,20 +123,22 @@ internal static class EditorContentBuild
 			// A single asset compiled by the asset system holds the roots' locks, as this build does
 			IAssetSystem.SetContentRootLocks( string.Join( "\n", roots.Select( ContentBuilder.LockFile ) ) );
 
-			var compiler = new EditorAssetCompiler();
-			var report = ContentBuilder.Build( new BuildRequest
+			var request = new BuildRequest
 			{
 				Roots = roots,
+				ReadOnlyMounts = Sandbox.Application.IsRetail ? ContentRoots.Engine( EngineFileSystem.Root.GetFullPath( "/" ) )
+					.Where( x => !roots.Any( r => string.Equals( r.Path, x.Path, StringComparison.OrdinalIgnoreCase ) ) )
+					.Select( x => (x.Mod, x.Path) ).ToList() : [],
 
 				// Game resources anywhere generate their textures into the open project's transient folder
 				OutputRoots = new Dictionary<string, string> { ["transient"] = Path.Combine( project.GetRootPath(), ".sbox", "transient" ) },
 
 				// The engine's shipped transients, which every project but the menu mounts after its own
-				OutputFallbacks = project.Config.Ident == "menu" ? new Dictionary<string, string>() : new Dictionary<string, string> { ["transient"] = EngineFileSystem.Root.GetFullPath( "addons/menu/transients" ) },
+				OutputFallbacks = project.Config.Ident == "menu" ? new Dictionary<string, string>() : new Dictionary<string, string> { ["transient"] = EngineFileSystem.Root.GetFullPath( "addons/menu/Transients" ) },
 
 				// What each job publishes is known before the next frame runs, so its file events aren't changes
 				Published = paths => IAssetSystem.RegisterBuildOutputs( string.Join( "\n", paths ) ),
-				MaxJobs = 1,
+				MaxJobs = Workers,
 
 				// Only startup waits for another build, with the splash screen up; the editor never freezes on one
 				LockTimeout = startup ? TimeSpan.FromMinutes( 30 ) : TimeSpan.Zero,
@@ -119,24 +146,36 @@ internal static class EditorContentBuild
 				{
 					EditorSplashScreen.SetMessage( $"Waiting for another content build of {root}" );
 					IToolsDll.Current?.Spin();
-				} : null,
-				JobFinished = startup ? source =>
+				}
+				: null,
+				JobFinished = source =>
 				{
-					EditorSplashScreen.SetMessage( $"Compiled {source}" );
-					IToolsDll.Current?.Spin();
-				} : null,
-			}, compiler );
+					if ( startup )
+					{
+						EditorSplashScreen.SetMessage( $"Compiled {source}" );
+						IToolsDll.Current?.Spin();
+					}
+					else if ( progress is not null ) progress.Subtitle = $"Compiled {source}";
+				},
+			};
+
+			var assetCompiler = Compiler( request.Mounts );
+			var report = startup
+				? ContentBuilder.Build( request, assetCompiler, cancellation.Token )
+				: await ContentBuilder.BuildAsync( request, assetCompiler, cancellation.Token );
 
 			Report( report, roots, startup );
 
-			if ( report.Error is not null || report.Cancelled || compiler.ReloadPending )
+			if ( report.Error is not null || report.Cancelled )
 			{
-				retryAfter = RetryDelay;
+				// An explicit cancel waits for another edit; a lock conflict or hotload retries automatically.
+				if ( progress?.GetCancel().IsCancellationRequested == true && generation == codeGeneration ) builtEpoch = epoch;
+				else retryAfter = RetryDelay;
 				return;
 			}
 
 			Publish( report, epoch );
-			builtEpoch = epoch;
+			if ( generation == codeGeneration ) builtEpoch = epoch;
 			pruneOrphans |= report.Changed.Count > 0;
 		}
 		catch ( Exception e )
@@ -146,6 +185,10 @@ internal static class EditorContentBuild
 		}
 		finally
 		{
+			progress?.Dispose();
+			progress = null;
+			cancellation.Dispose();
+			cancellation = null;
 			IAssetSystem.SuspendOnDemandCompiles( false );
 			building = false;
 		}
@@ -187,65 +230,101 @@ internal static class EditorContentBuild
 	}
 
 	/// <summary>
-	/// Everything the editor mounts and can write to, in mount order: engine roots, libraries, the project.
+	/// Writable roots in mount order: engine roots in development builds, then libraries and the project.
 	/// </summary>
 	static List<ContentRoot> Roots( Project project ) => ContentRoots.WithProjects(
-		ContentRoots.Engine( EngineFileSystem.Root.GetFullPath( "/" ) ),
+		Sandbox.Application.IsRetail ? [] : ContentRoots.Engine( EngineFileSystem.Root.GetFullPath( "/" ) ),
 		LibrarySystem.All.Select( x => x.Project ).Append( project ).Where( x => x.HasAssetsPath() )
 			.Select( x => (x.Config.FullIdent, x.GetAssetsPath(), x.GetRootPath()) ) );
-}
-
-/// <summary>
-/// Compiles in the editor through the resource compiler, which hands game resources and managed
-/// compilers over to managed code as usual.
-/// </summary>
-internal sealed class EditorAssetCompiler : IAssetCompiler
-{
-	readonly AssetTypeTable types = new( EngineFileSystem.Root.GetFullPath( "bin/assettypes.txt" ) );
 
 	/// <summary>
-	/// A compile didn't run because something it may read hadn't reloaded yet.
+	/// The tool and project assemblies the workers load: this editor's own copy of the ones it compiled and loaded.
 	/// </summary>
-	public bool ReloadPending { get; private set; }
+	static string Compilers => Path.Combine( Path.GetTempPath(), "sbox-compilers", $"editor-{Environment.ProcessId}" );
 
 	/// <summary>
-	/// The engine's types as SboxBuild sees them, plus game resources, which only the editor compiles.
+	/// Hotloads so far: the workers have the editor's code as it was at one of them.
 	/// </summary>
-	public AssetKind Classify( string sourceExtension, out string outputExtension )
+	static int codeGeneration;
+
+	/// <summary>
+	/// The workers for these mounts and the code the editor has loaded now. They stay between builds; other mounts, or
+	/// a hotload, take new ones.
+	/// </summary>
+	static ResourceCompiler Compiler( IReadOnlyList<(string Mod, string Path)> mounts )
 	{
-		var kind = types.Classify( sourceExtension, out outputExtension );
+		var key = string.Join( "\n", mounts.Select( x => $"{x.Mod}|{x.Path}" ).Append( $"{codeGeneration}" ) );
+		if ( key == compilerKey ) return compiler;
 
-		// A texture can be a managed generator that copies another texture's compiled pixels; describing an
-		// ordinary one costs nothing
-		if ( kind == AssetKind.Compiled && string.Equals( sourceExtension, ".vtex", StringComparison.OrdinalIgnoreCase ) ) return AssetKind.Described;
-		if ( kind != AssetKind.None ) return kind;
+		// The old workers go before the assemblies they loaded
+		StopWorkers();
+		DeleteLeftovers();
 
-		var type = AssetType.FromExtension( sourceExtension.TrimStart( '.' ) );
-		if ( type is null || !type.IsGameResource ) return AssetKind.None;
+		Directory.CreateDirectory( Compilers );
+		foreach ( var old in Directory.GetFiles( Compilers ) ) File.Delete( old );
+		foreach ( var assembly in ToolsDll.LoadedAssemblies.Where( x => x.CompiledAssemblyBytes is not null ) )
+			File.WriteAllBytes( Path.Combine( Compilers, $"{assembly.Assembly.GetName().Name}.dll" ), assembly.CompiledAssemblyBytes );
 
-		// Its compiler declares the compiled outputs it reads (an embedded texture copying another), so a
-		// describe reports them without generating anything
-		outputExtension = $".{type.FileExtension}_c";
-		return AssetKind.Described;
+		compilerKey = key;
+		// The editor has a GPU, and its projects' image generators can copy compiled textures
+		compiler = new ResourceCompiler( EngineFileSystem.Root.GetFullPath( "bin/managed/contentworker.exe" ), new AssetTypeTable( EngineFileSystem.Root.GetFullPath( "bin/assettypes.txt" ) ), mounts, Compilers ) { MaxWorkers = Workers, Answer = ContentCompilerHost.Answer, RenderDevice = true };
+		return compiler;
 	}
 
-	public CompileResult Compile( CompileJob job, CancellationToken token )
+	/// <summary>
+	/// Code changed (compilers and resource types may have come or gone): the next build runs on new workers with it.
+	/// What a changed compiler already made stays as it is; sources compiled from now on run the new code.
+	/// </summary>
+	[EditorEvent.Hotload]
+	static void CodeChanged()
 	{
-		// A compile here can read loaded resources (a texture another copies), so what was just published reloads first.
-		// One still waiting (its inputs are being written) fails the job, and the whole build is tried again shortly.
-		if ( job.Mode == JobMode.Compile && !IAssetSystem.ServiceReloadsNow() )
+		codeGeneration++;
+		builtEpoch = -1;
+		if ( incrementalBuild is { IsCompleted: false } ) cancellation?.Cancel();
+	}
+
+	/// <summary>
+	/// The folders of editors that are gone without deleting theirs (closed with their workers still letting go of it).
+	/// </summary>
+	static void DeleteLeftovers()
+	{
+		var parent = Path.GetDirectoryName( Compilers );
+		if ( !Directory.Exists( parent ) ) return;
+
+		foreach ( var folder in Directory.GetDirectories( parent, "editor-*" ) )
 		{
-			ReloadPending = true;
-			return new CompileResult( false, "Something it may read is still waiting to reload", [], [], [], [], [] );
+			if ( !int.TryParse( Path.GetFileName( folder )["editor-".Length..], out var id ) || id <= 0 || Running( id ) ) continue;
+			try { Directory.Delete( folder, true ); } catch ( IOException ) { } catch ( UnauthorizedAccessException ) { }
 		}
-
-		using var report = IResourceCompilerSystem.GenerateResourceFileForBuild( job.Source, job.Staging, (int)job.Mode );
-		var text = Encoding.UTF8.GetString( report.ToArray() );
-		return BuildReportParser.Parse( text.Split( '\n' ), true, "" );
 	}
 
-	public IReadOnlyList<uint?> Fingerprints( IReadOnlyList<SpecialDependency> dependencies ) => dependencies
-		.Select( x => IResourceCompilerSystem.CalculateSpecialDependencyFingerprint( x.Compiler, x.Name, x.Data ) )
-		.Select( x => x < 0 ? (uint?)null : (uint)x )
-		.ToArray();
+	static bool Running( int processId )
+	{
+		try { using var process = System.Diagnostics.Process.GetProcessById( processId ); return !process.HasExited; }
+		catch ( ArgumentException ) { return false; }
+	}
+
+	[Event( "app.exit" )]
+	static void Shutdown()
+	{
+		project = null;
+		StopBuild();
+		StopWorkers();
+	}
+
+	static void StopBuild()
+	{
+		cancellation?.Cancel();
+		if ( incrementalBuild is not null ) Sandbox.Tasks.SyncContext.RunBlocking( incrementalBuild );
+		incrementalBuild = null;
+	}
+
+	static void StopWorkers()
+	{
+		compiler?.Finished();
+		compiler = null;
+		compilerKey = null;
+
+		if ( Directory.Exists( Compilers ) ) Directory.Delete( Compilers, true );
+	}
 }

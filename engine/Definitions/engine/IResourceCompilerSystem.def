@@ -38,26 +38,33 @@ native static accessor g_pResourceCompilerSystem as IResourceCompilerSystem
 		return outputData;
 	}
 
-	// Content build: compiles one asset into outRoot without compiling its associates (mode 0), only reports
-	// what it reads (1), or reports what its current output was built from (2). Returns the build report.
-	inline CUtlBuffer GenerateResourceFileForBuild( string path, string outRoot, int mode )
+	// Compiles one asset where it is, as the editor's asset system does: what it reads first, and only what's out of date
+	inline bool CompileFile( string path )
 	{
-		CUtlBuffer *report = new CUtlBuffer( 0, 0, CUtlBuffer::TEXT_BUFFER );
-		report->PutString( "buildreport\t1\n" );
 		ResourceCompileSettings_t compileSettings;
-		compileSettings.m_nCompileMode = mode == 2 ? COMPILE_AS_NEEDED : COMPILE_PARENTS_AND_CHILDREN_BUT_ASSOCIATES_AS_NEEDED;
-		compileSettings.m_pOverrideGameRoot = outRoot;
-		compileSettings.m_pBuildReport = report;
-		compileSettings.m_bPrerequisitesBuiltByCaller = true;
-		compileSettings.m_bDescribeOnly = mode == 1;
-		compileSettings.m_bAdoptOnly = mode == 2;
-		bool bSuccess = g_pResourceCompilerSystem->GenerateResourceFile( path, compileSettings );
-		report->PutString( bSuccess ? "result\t1\n" : "result\t0\n" );
-		return report;
+		return g_pResourceCompilerSystem->GenerateResourceFile( path, compileSettings );
 	}
 
-	// Content build: the current fingerprint of a special dependency, or -1 if it can't be calculated
-	inline long CalculateSpecialDependencyFingerprint( string compiler, string name, uint userData )
+	bool RunBuildJob( string mode, string source, string staging, string report );
+	string GetLoadedAfterBuildJob();
+
+	// The main extension of the engine asset type a file extension is one of, or null
+	inline string FindAssetTypeExtension( string ext )
+	{
+		bool bIsImage = false;
+		return g_pResourceCompilerSystem->FindAssetTypeExtension( ext, &bIsImage );
+	}
+
+	// An engine asset type that compiles to nothing of its own (an image)
+	inline bool IsImageExtension( string ext )
+	{
+		bool bIsImage = false;
+		g_pResourceCompilerSystem->FindAssetTypeExtension( ext, &bIsImage );
+		return bIsImage;
+	}
+
+	// A special dependency's current fingerprint, or -1 if it can't be calculated here
+	inline long SpecialDependencyFingerprint( string compiler, string name, uint userData )
 	{
 		bool bCalculated = false;
 		uint32 nFingerprint = g_pResourceCompilerSystem->CalculateSpecialDependencyFingerprint( compiler, name, userData, &bCalculated );

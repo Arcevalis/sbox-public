@@ -321,12 +321,8 @@ public static partial class AssetSystem
 	internal static void InitializeCompilerForFilename( IResourceCompilerContext context, string filename )
 	{
 		var ext = System.IO.Path.GetExtension( filename )[1..].ToLowerInvariant();
-		var assetType = AssetType.FromExtension( ext );
 
-		if ( assetType is null )
-			return;
-
-		if ( assetType.IsGameResource == false )
+		if ( !IsGameResource( ext ) )
 			return;
 
 		context.SetCompiler( $"ManagedResourceCompiler" );

@@ -26,7 +26,7 @@ public interface IAssetCompiler
 	IReadOnlyList<uint?> Fingerprints( IReadOnlyList<SpecialDependency> dependencies );
 
 	/// <summary>
-	/// The build is over: let go of anything kept between its jobs (worker processes).
+	/// Let go of anything kept between jobs (worker processes). Whoever made the compiler says when.
 	/// </summary>
 	void Finished() { }
 }
@@ -61,10 +61,10 @@ public enum JobMode
 }
 
 /// <param name="Root">The root the source is in.</param>
-/// <param name="Mounts">Every root of the build, in mount order, for a compiler that has to mount them itself.</param>
+/// <param name="Mounts">What the build mounts (<see cref="BuildRequest.Mounts"/>), for a compiler that has to mount it itself.</param>
 /// <param name="Source">Absolute path of the source file.</param>
 /// <param name="Staging">Empty directory the compile writes into.</param>
-public sealed record CompileJob( ContentRoot Root, IReadOnlyList<ContentRoot> Mounts, string Source, string Staging, IReadOnlyList<string> CompilerArgs, JobMode Mode = JobMode.Compile );
+public sealed record CompileJob( ContentRoot Root, IReadOnlyList<(string Mod, string Path)> Mounts, string Source, string Staging, IReadOnlyList<string> CompilerArgs, JobMode Mode = JobMode.Compile );
 
 /// <param name="Outputs">Absolute paths of everything written, under the staging directory.</param>
 /// <param name="Inputs">Every file read, with the checksum the compile saw, including optional ones that didn't exist.</param>

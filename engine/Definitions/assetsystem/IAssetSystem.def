@@ -28,7 +28,6 @@ native static accessor g_pAssetSystem as IAssetSystem
 	int GetContentChangeEpoch();
 	bool EnsureAssetCurrentForLoad( IAsset asset );
 	void RegisterBuildOutputs( string paths );
-	bool ServiceReloadsNow();
 	void SetContentRootLocks( string lockFiles );
 
 	void LoadWorkingSetsAndTags();

@@ -45,6 +45,11 @@ public sealed partial class AssetTypeTable
 		}
 	}
 
+	/// <summary>
+	/// A native compiler compiles sources with this extension, whatever this builder makes of it.
+	/// </summary>
+	public bool Contains( string sourceExtension ) => types.ContainsKey( sourceExtension );
+
 	public AssetKind Classify( string sourceExtension, out string outputExtension )
 	{
 		var found = types.TryGetValue( sourceExtension, out var type );

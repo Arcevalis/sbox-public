@@ -18,6 +18,12 @@ public sealed class BuildRequest
 	public IReadOnlyList<ContentRoot> Roots { get; init; } = [];
 
 	/// <summary>
+	/// Shipped content available to compilers, mounted before the writable roots. Not inventoried, compiled,
+	/// locked or recorded by this build: installed editors consume engine content and build their projects.
+	/// </summary>
+	public IReadOnlyList<(string Mod, string Path)> ReadOnlyMounts { get; init; } = [];
+
+	/// <summary>
 	/// Other writable roots a compile may write into, by mod name: the editor's transient folder ("transient"),
 	/// where game resources put the textures they generate. Files there are named after their recipe and
 	/// shared by every root's assets that make them, so they are recorded by mod (a missing one rebuilds its
@@ -33,6 +39,17 @@ public sealed class BuildRequest
 	public IReadOnlyDictionary<string, string> OutputFallbacks { get; init; } = new Dictionary<string, string>();
 
 	/// <summary>
+	/// What a compile mounts, by mod name, each shadowing the ones before: the roots, then each output root after
+	/// its fallback, so what is written there wins over what was shipped.
+	/// </summary>
+	public IReadOnlyList<(string Mod, string Path)> Mounts =>
+	[
+		.. ReadOnlyMounts,
+		.. Roots.Select( x => (x.Mod, x.Path) ),
+		.. OutputRoots.SelectMany( x => OutputFallbacks.TryGetValue( x.Key, out var fallback ) ? [(x.Key, fallback), (x.Key, x.Value)] : new[] { (x.Key, x.Value) } ),
+	];
+
+	/// <summary>
 	/// Absolute paths of sources, or folders of them, to build with whatever they read; null builds every
 	/// root and removes outputs of sources that are gone.
 	/// </summary>
@@ -42,7 +59,7 @@ public sealed class BuildRequest
 	public IReadOnlyList<string> CompilerArgs { get; init; } = [];
 
 	/// <summary>
-	/// Compiles at once. 1 compiles on the calling thread, which the editor needs.
+	/// Compiles at once. 1 hands them out one at a time, from the calling thread.
 	/// </summary>
 	public int MaxJobs { get; init; } = Environment.ProcessorCount;
 	public Action<string> JobFinished { get; init; }
@@ -160,11 +177,23 @@ public static class ContentBuilder
 		public bool Final => State is State.Clean or State.Committed or State.Failed or State.Blocked;
 	}
 
+	/// <summary>
+	/// Builds with a compiler that may keep workers for the next build: whoever made it calls <see cref="IAssetCompiler.Finished"/>.
+	/// </summary>
 	public static BuildReport Build( BuildRequest request, IAssetCompiler compiler, CancellationToken token = default )
 	{
-		using var run = new Run( request, compiler, token );
-		try { return run.Execute(); }
-		finally { compiler.Finished(); }
+		using var run = new Run( request, compiler, token, false );
+		return run.Execute().GetAwaiter().GetResult();
+	}
+
+	/// <summary>
+	/// The same build, yielding while compilers run. Planning, publication and callbacks resume on the caller's
+	/// synchronization context, so the editor can keep ticking without moving engine calls to worker threads.
+	/// </summary>
+	public static async Task<BuildReport> BuildAsync( BuildRequest request, IAssetCompiler compiler, CancellationToken token = default )
+	{
+		using var run = new Run( request, compiler, token, true );
+		return await run.Execute();
 	}
 
 	/// <summary>
@@ -252,7 +281,7 @@ public static class ContentBuilder
 		}
 	}
 
-	sealed class Run( BuildRequest request, IAssetCompiler compiler, CancellationToken token ) : IDisposable
+	sealed class Run( BuildRequest request, IAssetCompiler compiler, CancellationToken token, bool asynchronous ) : IDisposable
 	{
 		readonly BuildReport report = new();
 
@@ -263,12 +292,13 @@ public static class ContentBuilder
 		readonly List<RootState> roots = request.Roots.Select( x => new RootState( x, request.OutputRoots, request.OutputFallbacks ) ).ToList();
 		readonly Dictionary<(RootState, string), Node> nodes = new( new NodeKey() );
 		readonly Dictionary<SpecialDependency, uint?> fingerprints = [];
+		readonly IReadOnlyList<(string Mod, string Path)> mounts = request.Mounts;
 		readonly Dictionary<string, string> arguments = ParseArguments( request.CompilerArgs );
 		readonly List<(string Source, string Visible)> hidden = [];
 		long clock;
 		int jobs;
 
-		public BuildReport Execute()
+		public async Task<BuildReport> Execute()
 		{
 			foreach ( var root in roots )
 			{
@@ -325,11 +355,11 @@ public static class ContentBuilder
 				foreach ( var selected in request.Select ?? roots.Select( x => x.Def.Path ).ToList() ) Select( selected );
 				Phase( "inventory" );
 
-				Plan();
+				await Plan();
 				Phase( "describe and adopt" );
 				if ( token.IsCancellationRequested ) { report.Cancelled = true; return report; }
 
-				Schedule();
+				await Schedule();
 				Settle();
 				Phase( "compile and publish" );
 				return report;
@@ -468,14 +498,14 @@ public static class ContentBuilder
 		/// Finds what every node reads: from a fresh description if its own inputs changed, otherwise from
 		/// its record. Producers found are added and planned too, so a selection pulls in what it needs.
 		/// </summary>
-		void Plan()
+		async Task Plan()
 		{
 			for ( var pending = nodes.Values.ToList(); pending.Count > 0; pending = nodes.Values.Where( x => !x.Planned ).ToList() )
 			{
 				LoadFingerprints( pending );
 
 				var describe = pending.Where( x => x.Kind == AssetKind.Described && (SelfDirty( x ) ?? Shadowed( x )) is not null ).ToList();
-				var results = ForEach( describe, node => Compile( Job( node, JobMode.Describe ) ) );
+				var results = await RunJobs( describe, node => Compile( Job( node, JobMode.Describe ) ) );
 				var described = new Dictionary<Node, IReadOnlyList<PrerequisiteRead>>();
 				for ( var i = 0; i < describe.Count; i++ )
 				{
@@ -486,7 +516,7 @@ public static class ContentBuilder
 					else Fail( describe[i], "describe failed", results[i].Log );
 				}
 
-				Adopt( pending, described );
+				await Adopt( pending, described );
 
 				foreach ( var node in pending )
 				{
@@ -521,10 +551,10 @@ public static class ContentBuilder
 		/// fresh description, or its record) is one of those inputs, so it was read as it is now. Anything else
 		/// compiles once, which records what it read.
 		/// </summary>
-		void Adopt( List<Node> pending, Dictionary<Node, IReadOnlyList<PrerequisiteRead>> described )
+		async Task Adopt( List<Node> pending, Dictionary<Node, IReadOnlyList<PrerequisiteRead>> described )
 		{
 			var candidates = request.Force ? [] : pending.Where( x => x.State == State.Waiting && (x.Record is null || RebuiltOutside( x )) && File.Exists( x.Root.Resolve( x.Output ) ) && (x.Kind != AssetKind.Described || described.ContainsKey( x ) || x.Record is not null) ).ToList();
-			var results = ForEach( candidates, node => Compile( Job( node, JobMode.Adopt ) ) );
+			var results = await RunJobs( candidates, node => Compile( Job( node, JobMode.Adopt ) ) );
 
 			var adopted = new List<Node>();
 			for ( var i = 0; i < candidates.Count; i++ )
@@ -550,7 +580,7 @@ public static class ContentBuilder
 				reads.AddRange( checkedReads.Where( x => !reads.Any( r => string.Equals( r.File, x, StringComparison.OrdinalIgnoreCase ) ) && !outputs.Contains( root.Key( x ), StringComparer.OrdinalIgnoreCase ) ).Select( x => (ProducerOfOutput( x ), x) ) );
 				foreach ( var producer in reads.Select( x => x.Producer ).Where( x => x is not null && x != node ) ) node.Prerequisites.Add( producer );
 
-				var prerequisites = reads.Select( x => new RecordedPrerequisite( x.File, File.Exists( x.File ) ? Hashing.File( x.File ) : "0", x.Producer?.Output ?? "" ) ).ToList();
+				var prerequisites = reads.Select( x => new RecordedPrerequisite( x.File, File.Exists( x.File ) ? Hashing.File( x.File ) : "0", ReadOutput( x.Producer, x.File ) ) ).ToList();
 				var record = NewRecord( node, result, outputs.ToDictionary( x => x, x => Hashing.Stamp( root.Locate( x ) ), StringComparer.OrdinalIgnoreCase ), prerequisites );
 
 				try { root.Store.Publish( node.Source, record.Job, record, new Dictionary<string, string>(), [] ); }
@@ -570,6 +600,10 @@ public static class ContentBuilder
 		(Node Producer, string File) Read( PrerequisiteRead read ) => Producer( read.Source ) is { } producer
 			? (producer, Path.GetFullPath( producer.Root.Resolve( producer.Output ) ))
 			: (null, read.Compiled is null ? null : Path.GetFullPath( read.Compiled ));
+
+		string ReadOutput( Node producer, string file ) => producer?.Output ?? request.ReadOnlyMounts
+			.Select( x => Path.GetRelativePath( x.Path, file ).Replace( '\\', '/' ) )
+			.FirstOrDefault( x => !Path.IsPathRooted( x ) && x != ".." && !x.StartsWith( "../" ) ) ?? "";
 
 		/// <summary>
 		/// An output it owns isn't what its record says this build published, and something it was built from
@@ -600,8 +634,8 @@ public static class ContentBuilder
 		};
 
 		/// <summary>
-		/// Removes what was built from sources that no longer exist. A source this host doesn't build (the
-		/// editor builds game resources, SboxBuild doesn't) still exists, and its outputs stay.
+		/// Removes what was built from sources that no longer exist. A source this build doesn't compile (a
+		/// shader, a map) still exists, and its outputs stay.
 		/// </summary>
 		void RemoveDeletedSources( RootState root )
 		{
@@ -645,31 +679,35 @@ public static class ContentBuilder
 			for ( var i = 0; i < missing.Count; i++ ) fingerprints[missing[i]] = current[i];
 		}
 
-		void Schedule()
+		async Task Schedule()
 		{
 			var running = new Dictionary<Task<CompileResult>, (Node Node, CompileJob Job)>();
 			try
 			{
-				ScheduleUntilDone( running );
+				await ScheduleUntilDone( running );
 			}
 			catch
 			{
 				// Settling a job went wrong: the compiles still running stop before the build lets go of its roots
 				abort.Cancel();
-				try { Task.WaitAll( [.. running.Keys] ); }
-				catch ( AggregateException ) { }
+				try
+				{
+					if ( asynchronous ) await Task.WhenAll( running.Keys );
+					else Task.WaitAll( [.. running.Keys] );
+				}
+				catch ( Exception ) { }
 				foreach ( var (_, job) in running.Values ) DeleteStaging( job.Staging );
 				throw;
 			}
 		}
 
-		void ScheduleUntilDone( Dictionary<Task<CompileResult>, (Node Node, CompileJob Job)> running )
+		async Task ScheduleUntilDone( Dictionary<Task<CompileResult>, (Node Node, CompileJob Job)> running )
 		{
 			var queue = new List<Node>();
 			while ( true )
 			{
 				// Producers a compile turned out to read are planned like the rest before they run
-				if ( nodes.Values.Any( x => !x.Planned ) ) Plan();
+				if ( nodes.Values.Any( x => !x.Planned ) ) await Plan();
 
 				// Everything whose prerequisites are settled is current, blocked or queued; settling one can
 				// make others ready, so repeat until nothing changes
@@ -706,7 +744,7 @@ public static class ContentBuilder
 					report.Jobs.Add( node.Name );
 
 					var job = Job( node, JobMode.Compile );
-					var task = request.MaxJobs <= 1 ? Task.FromResult( Compile( job, keep: true ) ) : Task.Run( () => Compile( job, keep: true ) );
+					var task = !asynchronous && request.MaxJobs <= 1 ? Task.FromResult( Compile( job, keep: true ) ) : Task.Run( () => Compile( job, keep: true ) );
 					running[task] = (node, job);
 				}
 
@@ -723,7 +761,8 @@ public static class ContentBuilder
 					continue;
 				}
 
-				var done = Task.WhenAny( running.Keys ).Result;
+				var next = Task.WhenAny( running.Keys );
+				var done = asynchronous ? await next : next.GetAwaiter().GetResult();
 				var (finished, finishedJob) = running[done];
 				running.Remove( done );
 
@@ -740,7 +779,13 @@ public static class ContentBuilder
 		/// </summary>
 		static readonly Dictionary<string, double> TypicalSeconds = new( StringComparer.OrdinalIgnoreCase )
 		{
-			[".vmat"] = 3.9, [".ogg"] = 4, [".mp3"] = 2, [".vtex"] = 1.4, [".vmdl"] = 0.8, [".vanmgrph"] = 0.6, [".wav"] = 0.2,
+			[".vmat"] = 3.9,
+			[".ogg"] = 4,
+			[".mp3"] = 2,
+			[".vtex"] = 1.4,
+			[".vmdl"] = 0.8,
+			[".vanmgrph"] = 0.6,
+			[".wav"] = 0.2,
 		};
 
 		Dictionary<string, double> recordedSeconds;
@@ -771,7 +816,7 @@ public static class ContentBuilder
 			// Short: compiled paths under it have to fit the native MAX_PATH. Unique while the root is locked.
 			var staging = Path.Combine( node.Root.Def.StateDirectory, "staging", $"{Interlocked.Increment( ref jobs ):x}" );
 			Directory.CreateDirectory( staging );
-			return new CompileJob( node.Root.Def, request.Roots, Path.Combine( node.Root.Def.Path, node.Source ), staging, request.CompilerArgs, mode );
+			return new CompileJob( node.Root.Def, mounts, Path.Combine( node.Root.Def.Path, node.Source ), staging, request.CompilerArgs, mode );
 		}
 
 		/// <summary>
@@ -795,6 +840,9 @@ public static class ContentBuilder
 				}
 			}
 		}
+
+		Task<List<CompileResult>> RunJobs( List<Node> items, Func<Node, CompileResult> run ) =>
+			asynchronous && items.Count > 0 ? Task.Run( () => ForEach( items, run ) ) : Task.FromResult( ForEach( items, run ) );
 
 		List<CompileResult> ForEach( List<Node> items, Func<Node, CompileResult> run )
 		{
@@ -883,7 +931,7 @@ public static class ContentBuilder
 				var file = Path.GetFullPath( producer is not null ? producer.Root.Resolve( producer.Output ) : read.Compiled ?? read.Source + "_c" );
 				if ( producer is null && node.Root.Key( file ) is { } key && own.Contains( key ) ) continue;
 
-				reads.Add( (producer, new RecordedPrerequisite( file, hashOf( file ), producer?.Output ?? "" )) );
+				reads.Add( (producer, new RecordedPrerequisite( file, hashOf( file ), ReadOutput( producer, file ) )) );
 			}
 			return reads;
 		}
@@ -970,7 +1018,8 @@ public static class ContentBuilder
 				if ( output is null ) return $"{prerequisite.File} is outside every root of this build";
 				if ( output.Length == 0 ) continue;
 
-				var resolved = roots.LastOrDefault( x => x.SourceOf.ContainsKey( output ) )?.Resolve( output );
+				var resolved = roots.LastOrDefault( x => x.SourceOf.ContainsKey( output ) )?.Resolve( output )
+					?? mounts.Reverse().Select( x => Path.GetFullPath( Path.Combine( x.Path, output ) ) ).FirstOrDefault( File.Exists );
 				if ( !string.Equals( resolved, Path.GetFullPath( prerequisite.File ), StringComparison.OrdinalIgnoreCase ) ) return $"{output} now resolves to {resolved ?? "nothing"}";
 			}
 			return null;
@@ -982,7 +1031,7 @@ public static class ContentBuilder
 		string Dirty( Node node )
 		{
 			if ( request.Force ) return "forced";
-			if ( ( SelfDirty( node ) ?? Shadowed( node ) ) is { } reason ) return reason;
+			if ( (SelfDirty( node ) ?? Shadowed( node )) is { } reason ) return reason;
 
 			foreach ( var (key, stamp) in node.Record.Outputs )
 			{
@@ -1006,7 +1055,13 @@ public static class ContentBuilder
 		{
 			foreach ( var prerequisite in node.Record.Prerequisites )
 			{
-				var current = File.Exists( prerequisite.File ) ? Hashing.File( prerequisite.File ) : "0";
+				var file = new FileInfo( prerequisite.File );
+				var producer = ProducerOfOutput( prerequisite.File );
+				var stamp = producer?.Record?.Outputs.GetValueOrDefault( producer.Output );
+				// The producer already records these bytes. Reuse that hash only while the file still matches
+				// its stamp; external edits and reads without a producer still check the actual contents.
+				var current = !file.Exists ? "0" : stamp is not null && file.Length == stamp.Size && file.LastWriteTimeUtc.Ticks == stamp.Time
+					? stamp.Hash : Hashing.File( prerequisite.File );
 				if ( current != prerequisite.Hash ) return $"{prerequisite.File} changed";
 			}
 
