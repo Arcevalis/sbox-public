@@ -7,9 +7,8 @@ using Sandbox.ContentBuild;
 namespace ContentBuild;
 
 /// <summary>
-/// Sandbox.ContentBuild with resourcecompiler.exe, its records and staging under the fixture's parent.
-/// Several jobs at once by default, so ordering mistakes show up as races; one job compiles on the
-/// calling thread, as the editor does.
+/// Sandbox.ContentBuild with content workers, its records and staging under the fixture's parent.
+/// Several jobs at once by default, so ordering mistakes show up as races; or one at a time.
 /// </summary>
 public sealed class ManagedBuilder : IContentBuilder
 {
@@ -20,7 +19,20 @@ public sealed class ManagedBuilder : IContentBuilder
 
 	internal static readonly AssetTypeTable Types = new( Path.Combine( ContentFixture.Engine, "bin", "assettypes.txt" ) );
 
-	public static ResourceCompiler Compiler() => new( Path.Combine( ContentFixture.Engine, "bin", "win64", "resourcecompiler.exe" ), Types );
+	internal static string Worker => Path.Combine( ContentFixture.Engine, "bin", "managed", "contentworker.exe" );
+
+	/// <summary>
+	/// A build with workers of its own, stopped when it's done. They have no render device, as on a build machine.
+	/// </summary>
+	internal static BuildReport Build( BuildRequest request, string compilers = null, CancellationToken token = default )
+	{
+		var compiler = new ResourceCompiler( Worker, Types, request.Mounts, compilers )
+		{
+			MaxWorkers = Math.Max( 1, request.MaxJobs ),
+		};
+		try { return ContentBuilder.Build( request, compiler, token ); }
+		finally { compiler.Finished(); }
+	}
 
 	static string State( ContentFixture fixture ) => Path.Combine( fixture.Parent, "state" );
 
@@ -29,6 +41,9 @@ public sealed class ManagedBuilder : IContentBuilder
 		var request = new BuildRequest
 		{
 			Roots = [new ContentRoot( fixture.Mod, fixture.Root, State( fixture ) )],
+
+			// Where game resources generate their textures, as SboxBuild's builds and the editor's have one
+			OutputRoots = new Dictionary<string, string> { ["transient"] = Path.Combine( fixture.Parent, "transient" ) },
 			Select = options.Select?.Select( fixture.Path ).ToList(),
 			Force = options.Force,
 			CompilerArgs = options.CompilerArgs,
@@ -37,8 +52,9 @@ public sealed class ManagedBuilder : IContentBuilder
 			BeforeCommit = BeforeCommit,
 		};
 
-		var compiler = Compiler();
-		var report = ContentBuilder.Build( request, compiler, token );
+		// Incremental checks share workers, as successive editor builds do. Each fixture owns its pool.
+		fixture.Compiler ??= new ResourceCompiler( Worker, Types, request.Mounts, null ) { MaxWorkers = Math.Max( 1, MaxJobs ) };
+		var report = ContentBuilder.Build( request, fixture.Compiler, token );
 
 		var failed = new List<string>( report.Failed );
 		failed.AddRange( report.Blocked );
@@ -48,6 +64,9 @@ public sealed class ManagedBuilder : IContentBuilder
 
 	public void Clean( ContentFixture fixture )
 	{
+		// Clean-build comparisons also start with fresh compiler processes.
+		fixture.Compiler?.Finished();
+		fixture.Compiler = null;
 		if ( Directory.Exists( State( fixture ) ) ) Directory.Delete( State( fixture ), true );
 	}
 }

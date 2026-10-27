@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Sandbox.ContentBuild;
 
 namespace ContentBuild;
 
@@ -15,11 +16,96 @@ namespace ContentBuild;
 /// Engine roots are built too, so run SboxBuild build-content first or the first open compiles what engine
 /// content needs.
 /// </summary>
-[TestClass]
+[TestClass, DoNotParallelize]
 public class EditorStartupContentBuild
 {
 	const string Blood = "core/decals/blood/blood_splatter_01.decal";
 	const string BloodColor = "decals/blood/decal_blood_splatter_01_color.png";
+
+	[TestMethod, TestCategory( "Slow" )]
+	public void ProjectBuildReadsShippedMaterialWithoutItsSourcesOrBuildRecords()
+	{
+		using var shipped = new ContentFixture();
+		shipped.CopyShipped( Sources.ImageA, "materials/color.tga" );
+		shipped.Write( "materials/shipped.vmat", Sources.Material( "TextureColor", "materials/color.tga" ) );
+		Assert.IsTrue( shipped.Build( new ManagedBuilder() ).Result.Success );
+		shipped.Delete( "materials/color.tga" );
+		shipped.Delete( "materials/shipped.vmat" );
+		Directory.Delete( Path.Combine( shipped.Parent, "state" ), true );
+		shipped.Write( "materials/unused.vmat", "invalid leftover source" );
+		var before = shipped.Outputs();
+
+		using var project = new ContentFixture();
+		project.Write( "models/box.vmdl", Sources.Box( "materials/shipped.vmat" ) );
+		var request = new BuildRequest
+		{
+			Roots = [new ContentRoot( project.Mod, project.Root, Path.Combine( project.Parent, "state" ) )],
+			ReadOnlyMounts = [(shipped.Mod, shipped.Root)],
+			MaxJobs = 1
+		};
+		var cold = ManagedBuilder.Build( request );
+		Assert.IsTrue( cold.Success, cold.Error + cold.Log.ToString() );
+		CollectionAssert.AreEqual( new[] { "models/box.vmdl" }, cold.Jobs.ToArray() );
+		Assert.AreEqual( 0, cold.Adopted.Count );
+		var warm = ManagedBuilder.Build( request );
+		Assert.IsTrue( warm.Success, warm.Error + warm.Log.ToString() );
+		Assert.AreEqual( 0, warm.Jobs.Count );
+		Assert.IsFalse( Directory.Exists( Path.Combine( shipped.Parent, "state" ) ) );
+		CollectionAssert.AreEquivalent( before.ToArray(), shipped.Outputs().ToArray() );
+	}
+
+	[TestMethod, TestCategory( "Slow" )]
+	[DataRow( false )]
+	[DataRow( true )]
+	public void EditorContinuesRunningWhileAnIncrementalCompilerWaits( bool closeWhileCompiling )
+	{
+		if ( Environment.GetEnvironmentVariable( "SBOX_EDITOR_TESTS" ) is null )
+			Assert.Inconclusive( "Opens an editor: set SBOX_EDITOR_TESTS=1 to run" );
+
+		using var project = new EditorProject();
+		var entered = Path.Combine( project.Dir, "entered" );
+		var release = Path.Combine( project.Dir, "release" );
+		var timedOut = Path.Combine( project.Dir, "timed-out" );
+		var output = Path.Combine( project.Assets, "graphs", "a.lvg_c" );
+		var code = LiveGraphSource.Replace( "protected override Task<bool> Compile()", "protected override async Task<bool> Compile()" )
+			.Replace( "return Task.FromResult( true );", $$"""
+				if ( !Context.Describing && json["Wait"] is not null )
+				{
+					System.IO.File.WriteAllText( @"{{entered}}", "entered" );
+					var timer = System.Diagnostics.Stopwatch.StartNew();
+					while ( !System.IO.File.Exists( @"{{release}}" ) && timer.Elapsed.TotalSeconds < 15 )
+						await Task.Delay( 25 );
+					if ( !System.IO.File.Exists( @"{{release}}" ) )
+					{
+						System.IO.File.WriteAllText( @"{{timedOut}}", "timed out" );
+						throw new System.Exception( "Editor did not tick while compiling" );
+					}
+				}
+				return true;
+				""" );
+		Directory.CreateDirectory( Path.Combine( project.Dir, "Editor" ) );
+		File.WriteAllText( Path.Combine( project.Dir, "Editor", "LiveGraph.cs" ), code );
+		project.Write( "graphs/a.lvg", "{ \"Name\": \"original\" }" );
+
+		var live = project.Open( $$"""
+			System.IO.File.WriteAllText( @"{{project.Assets}}\graphs\a.lvg", "{ \"Name\": \"edited\", \"Wait\": true }" );
+			var timer = System.Diagnostics.Stopwatch.StartNew();
+			while ( !System.IO.File.Exists( @"{{entered}}" ) && timer.Elapsed.TotalSeconds < 90 ) await Task.Delay( 25 );
+			if ( !System.IO.File.Exists( @"{{entered}}" ) ) return "compiler never entered";
+			if ( {{(closeWhileCompiling ? "true" : "false")}} ) return "closing during compile";
+			// This continuation needs the editor's main thread, while the worker is waiting for us.
+			System.IO.File.WriteAllText( @"{{release}}", "released by editor" );
+			while ( timer.Elapsed.TotalSeconds < 100 )
+			{
+				if ( System.Text.Encoding.UTF8.GetString( System.IO.File.ReadAllBytes( @"{{output}}" ) ).Contains( "edited" ) ) return "editor released compiler and output updated";
+				await Task.Delay( 25 );
+			}
+			return "output did not update";
+			""" );
+		StringAssert.Contains( live.Live, closeWhileCompiling ? "closing during compile" : "editor released compiler and output updated", live.ToString() );
+		Assert.IsFalse( File.Exists( timedOut ), "Closing the editor cancels its active compile instead of waiting for the compiler timeout" );
+		if ( closeWhileCompiling ) StringAssert.Contains( System.Text.Encoding.UTF8.GetString( File.ReadAllBytes( output ) ), "original" );
+	}
 
 	[TestMethod, TestCategory( "Slow" )]
 	public void StartupBuildsWhatTheProjectLoads()
@@ -92,14 +178,186 @@ public class EditorStartupContentBuild
 		// A sound's .meta is an input of its compile even before it exists: writing one while the editor is open
 		// rebuilds the sound, after a startup that left the .meta files registration writes current
 		project.Copy( "core/sounds/ambience/stings/sting-frog-1.wav", "sounds/frog.wav" );
-		var meta = Path.Combine( project.Assets, "sounds", "frog.wav.meta" );
-		var live = project.Open( $$"""
-			System.IO.File.WriteAllText( @"{{meta}}", "{ \"visemes\": [] }" );
-			await Task.Delay( 5000 );
-			return "written";
-			""" );
+		var live = project.Open( EditMetaAndWait( project, "{ \"visemes\": [] }" ) );
 		live.Assert( compiles: 1, failed: 1 );
+		StringAssert.Contains( live.Live, "rebuilt in", live.ToString() );
 		StringAssert.Contains( live.Live, "Content build: 1 compiles", live.ToString() );
+	}
+
+	/// <summary>
+	/// A sound's .meta edited twice in an open editor: each edit is one build that compiles the sound again.
+	/// </summary>
+	[TestMethod, TestCategory( "Slow" )]
+	public void SoundMetaEditedWhileOpenRebuildsTheSound()
+	{
+		if ( Environment.GetEnvironmentVariable( "SBOX_EDITOR_TESTS" ) is null )
+			Assert.Inconclusive( "Opens an editor: set SBOX_EDITOR_TESTS=1 to run" );
+
+		using var project = new EditorProject();
+		project.Copy( "core/sounds/ambience/stings/sting-frog-1.wav", "sounds/frog.wav" );
+		var live = project.Open( EditMetaAndWait( project, "{ \"visemes\": [] }", "{ \"visemes\": [], \"subtitle\": \"frog\" }" ) );
+
+		StringAssert.Contains( live.Summary, $"Content local.{EditorProject.Ident}: 1 compiles, 0 failed", live.ToString() );
+		Assert.AreEqual( 2, Regex.Matches( live.Live, "rebuilt in" ).Count, live.ToString() );
+		Assert.AreEqual( 2, Regex.Matches( live.Live, @"Content build: 1 compiles, 0 adopted, 0 failed" ).Count, live.ToString() );
+		Assert.AreEqual( 2, Regex.Matches( live.Live, @"Content build: \d+ compiles" ).Count, live.ToString() );
+	}
+
+	/// <summary>
+	/// A project's own compiler, its code edited in an open editor: what it compiled stays as it is, and a source written
+	/// after the hotload compiles with the new code (the build's workers have it).
+	/// </summary>
+	[TestMethod, TestCategory( "Slow" )]
+	public void ProjectCompilerEditedWhileOpenCompilesNewSourcesWithTheNewCode()
+	{
+		if ( Environment.GetEnvironmentVariable( "SBOX_EDITOR_TESTS" ) is null )
+			Assert.Inconclusive( "Opens an editor: set SBOX_EDITOR_TESTS=1 to run" );
+
+		using var project = new EditorProject();
+		var code = Path.Combine( project.Dir, "Editor", "LiveGraph.cs" );
+		Directory.CreateDirectory( Path.GetDirectoryName( code ) );
+		File.WriteAllText( code, LiveGraphSource.Replace( "MARKER", "compiler 1" ) );
+		project.Write( "graphs/a.lvg", """{ "Name": "a" }""" );
+		var a = Path.Combine( project.Assets, "graphs", "a.lvg_c" );
+		var b = Path.Combine( project.Assets, "graphs", "b.lvg_c" );
+
+		var live = project.Open( $$"""
+			bool Marked( string path, string marker ) => System.IO.File.Exists( path ) && System.Text.Encoding.UTF8.GetString( System.IO.File.ReadAllBytes( path ) ).Contains( marker );
+			var before = Marked( @"{{a}}", "compiler 1" );
+			var written = System.IO.File.GetLastWriteTimeUtc( @"{{a}}" );
+
+			// New code, given time to hotload, then a new source
+			System.IO.File.WriteAllText( @"{{code}}", {{System.Text.Json.JsonSerializer.Serialize( LiveGraphSource.Replace( "MARKER", "compiler 2" ) )}} );
+			await Task.Delay( 20000 );
+			System.IO.File.WriteAllText( @"{{project.Assets}}\graphs\b.lvg", "{ \"Name\": \"b\" }" );
+			var timer = System.Diagnostics.Stopwatch.StartNew();
+			while ( !Marked( @"{{b}}", "compiler 2" ) && timer.ElapsedMilliseconds < 120000 )
+				await Task.Delay( 500 );
+			await Task.Delay( 1000 );
+			var kept = System.IO.File.GetLastWriteTimeUtc( @"{{a}}" ) == written && Marked( @"{{a}}", "compiler 1" );
+			return $"built with 1 {before}, kept {kept}, new source with 2 {Marked( @"{{b}}", "compiler 2" )}";
+			""" );
+
+		StringAssert.Contains( live.Summary, $"Content local.{EditorProject.Ident}: 1 compiles, 0 failed", live.ToString() );
+		StringAssert.Contains( live.Live, "built with 1 True, kept True, new source with 2 True", live.ToString() );
+		Assert.AreEqual( 1, Regex.Matches( live.Live, @"Content build: \d+ compiles" ).Count, live.ToString() );
+		Assert.AreEqual( 1, Regex.Matches( live.Live, @"Content build: 1 compiles, 0 adopted, 0 failed" ).Count, live.ToString() );
+	}
+
+	/// <summary>
+	/// A project's own compiler, its code edited while the startup build runs (the compiler edits it itself, then two
+	/// jobs keep the build going while the editor hotloads it): once startup is done, a source written then compiles with
+	/// the new code.
+	/// </summary>
+	[TestMethod, TestCategory( "Slow" )]
+	public void ProjectCompilerEditedDuringStartupCompilesNewSourcesWithTheNewCode()
+	{
+		if ( Environment.GetEnvironmentVariable( "SBOX_EDITOR_TESTS" ) is null )
+			Assert.Inconclusive( "Opens an editor: set SBOX_EDITOR_TESTS=1 to run" );
+
+		using var project = new EditorProject();
+		var code = Path.Combine( project.Dir, "Editor", "LiveGraph.cs" );
+		Directory.CreateDirectory( Path.GetDirectoryName( code ) );
+		File.WriteAllText( code, SelfEditingGraphSource.Replace( "CODE", code ).Replace( "MARKER", "compiler 1" ) );
+		project.Write( "graphs/a.lvg", """{ "Name": "a", "Edit": true, "Delay": 20000 }""" );
+		project.Write( "graphs/b.lvg", """{ "Name": "b", "Delay": 50000 }""" );
+		var c = Path.Combine( project.Assets, "graphs", "c.lvg_c" );
+
+		var live = project.Open( $$"""
+			bool Marked( string path ) => System.IO.File.Exists( path ) && System.Text.Encoding.UTF8.GetString( System.IO.File.ReadAllBytes( path ) ).Contains( "compiler 2" );
+			await Task.Delay( 20000 );
+			System.IO.File.WriteAllText( @"{{project.Assets}}\graphs\c.lvg", "{ \"Name\": \"c\" }" );
+			var timer = System.Diagnostics.Stopwatch.StartNew();
+			while ( !Marked( @"{{c}}" ) && timer.ElapsedMilliseconds < 120000 )
+				await Task.Delay( 500 );
+			return $"new source with 2 {Marked( @"{{c}}" )} after {timer.ElapsedMilliseconds} ms";
+			""" );
+
+		StringAssert.Contains( live.Summary, $"Content local.{EditorProject.Ident}: 2 compiles, 0 failed", live.ToString() );
+		StringAssert.Contains( File.ReadAllText( code ), "compiler 2", "the startup compile didn't edit the compiler" );
+		StringAssert.Contains( live.Live, "new source with 2 True", live.ToString() );
+	}
+
+	/// <summary>
+	/// LiveGraph's compiler, whose code (at CODE) is "compiler 1" until its first compile of an asset with "Edit" makes it
+	/// "compiler 2". Under compiler 1 each compile takes the asset's "Delay".
+	/// </summary>
+	const string SelfEditingGraphSource = """
+		using Sandbox;
+		using Sandbox.Resources;
+		using System.Threading.Tasks;
+
+		[AssetType( Name = "Live Graph", Extension = "lvg" )]
+		public class LiveGraph : GameResource
+		{
+		}
+
+		[ResourceIdentity( "lvg" )]
+		public class LiveGraphCompiler : ResourceCompiler
+		{
+			protected override async Task<bool> Compile()
+			{
+				var json = Context.ReadSourceAsJson();
+				json["Marker"] = "MARKER";
+				Context.Data.Write( Context.ScanJson( json.ToJsonString() ) );
+
+				if ( "MARKER".EndsWith( "1" ) )
+				{
+					if ( json["Edit"] is not null )
+						System.IO.File.WriteAllText( @"CODE", System.IO.File.ReadAllText( @"CODE" ).Replace( "compiler " + "1", "compiler " + "2" ) );
+					await Task.Delay( json["Delay"].GetValue<int>() );
+				}
+				return true;
+			}
+		}
+		""";
+
+	const string LiveGraphSource = """
+		using Sandbox;
+		using Sandbox.Resources;
+		using System.Threading.Tasks;
+
+		[AssetType( Name = "Live Graph", Extension = "lvg" )]
+		public class LiveGraph : GameResource
+		{
+		}
+
+		[ResourceIdentity( "lvg" )]
+		public class LiveGraphCompiler : ResourceCompiler
+		{
+			protected override Task<bool> Compile()
+			{
+				var json = Context.ReadSourceAsJson();
+				json["Marker"] = "MARKER";
+				Context.Data.Write( Context.ScanJson( json.ToJsonString() ) );
+				return Task.FromResult( true );
+			}
+		}
+		""";
+
+	/// <summary>
+	/// Writes each text as the sound's .meta in turn, waiting (up to 30s) for the build to publish the sound again.
+	/// </summary>
+	static string EditMetaAndWait( EditorProject project, params string[] texts )
+	{
+		var meta = Path.Combine( project.Assets, "sounds", "frog.wav.meta" );
+		var output = Path.Combine( project.Assets, "sounds", "frog.vsnd_c" );
+		var edits = string.Join( "\n", texts.Select( x => $"results.Add( await Edit( {System.Text.Json.JsonSerializer.Serialize( x )} ) );" ) );
+		return $$"""
+			var results = new System.Collections.Generic.List<string>();
+			async Task<string> Edit( string text )
+			{
+				var before = System.IO.File.GetLastWriteTimeUtc( @"{{output}}" );
+				var timer = System.Diagnostics.Stopwatch.StartNew();
+				System.IO.File.WriteAllText( @"{{meta}}", text );
+				while ( System.IO.File.GetLastWriteTimeUtc( @"{{output}}" ) == before && timer.ElapsedMilliseconds < 30000 )
+					await Task.Delay( 250 );
+				return System.IO.File.GetLastWriteTimeUtc( @"{{output}}" ) == before ? "not rebuilt" : $"rebuilt in {timer.ElapsedMilliseconds} ms";
+			}
+			{{edits}}
+			await Task.Delay( 1000 );
+			return string.Join( ", ", results );
+			""";
 	}
 
 	/// <summary>
@@ -147,6 +405,48 @@ public class EditorStartupContentBuild
 		StringAssert.Contains( live.Live, "Content build: 2 compiles", live.ToString() );
 		StringAssert.Contains( live.Live, "source changed True", live.ToString() );
 		StringAssert.Contains( live.Live, "copy current True", live.ToString() );
+	}
+
+	/// <summary>
+	/// A game resource whose source stops compiling still opens as it last compiled, so its editor can fix it, as on
+	/// master; building it still fails and publishes nothing.
+	/// </summary>
+	[TestMethod, TestCategory( "Slow" )]
+	public void GameResourceThatFailsToCompileOpensAsItLastCompiled()
+	{
+		if ( Environment.GetEnvironmentVariable( "SBOX_EDITOR_TESTS" ) is null )
+			Assert.Inconclusive( "Opens an editor: set SBOX_EDITOR_TESTS=1 to run" );
+
+		using var project = new EditorProject();
+		foreach ( var image in new[] { "color", "normal", "RMO", "height" } )
+			project.Copy( $"core/decals/blood/decal_blood_splatter_01_{image}.png", $"decals/blood/decal_blood_splatter_01_{image}.png" );
+		project.Copy( Blood, "decals/blood.decal" );
+
+		// Its colour texture as loaded, with where that comes from
+		const string open = """
+			var registered = ResourceLibrary.TryGet<DecalDefinition>( "decals/blood.decal", out _ );
+			var opened = Editor.AssetSystem.FindByPath( "decals/blood.decal" ).TryLoadResource<DecalDefinition>( out var decal );
+			await Task.Delay( 1000 );
+			var texture = decal?.ColorTexture;
+			var compiled = texture?.EmbeddedResource?.CompiledPath;
+			var exists = compiled is not null && FileSystem.Mounted.FileExists( compiled + "_c" );
+			return $"opened {opened} color {texture?.IsValid() == true} texture {texture?.ResourcePath} compiled {compiled} exists {exists} registered before {registered}";
+			""";
+
+		var built = project.Open( open );
+		StringAssert.Contains( built.Summary, $"Content local.{EditorProject.Ident}: 1 compiles, 0 failed", built.ToString() );
+		var compiled = Path.Combine( project.Assets, "decals", "blood.decal_c" );
+		var lastGood = File.ReadAllBytes( compiled );
+
+		// Its embedded textures name a generator that doesn't exist
+		var source = Path.Combine( project.Assets, "decals", "blood.decal" );
+		project.Write( "decals/blood.decal", File.ReadAllText( source ).Replace( "\"imagefile\"", "\"nosuchgenerator\"" ) );
+
+		var broken = project.Open( open );
+		// Describing it fails already (no such generator), so it fails without a compile job
+		StringAssert.Contains( broken.Summary, $"Content local.{EditorProject.Ident}: 0 compiles, 1 failed", broken.ToString() );
+		CollectionAssert.AreEqual( lastGood, File.ReadAllBytes( compiled ), "the failed compile published" );
+		StringAssert.Contains( broken.Live, "opened True color True", $"{broken}\nwhen it compiled: {built.Live}" );
 	}
 
 	sealed class EditorProject : IDisposable

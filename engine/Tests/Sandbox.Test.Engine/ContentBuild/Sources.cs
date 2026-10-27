@@ -251,7 +251,7 @@ static class Sources
 		"data"u8.CopyTo( bytes.AsSpan( 36 ) );
 		BitConverter.TryWriteBytes( bytes.AsSpan( 40 ), samples * 2 );
 		for ( var i = 0; i < samples; i++ )
-			BitConverter.TryWriteBytes( bytes.AsSpan( 44 + i * 2 ), (short)( Math.Sin( 2 * Math.PI * hz * i / rate ) * 8000 ) );
+			BitConverter.TryWriteBytes( bytes.AsSpan( 44 + i * 2 ), (short)(Math.Sin( 2 * Math.PI * hz * i / rate ) * 8000) );
 
 		Directory.CreateDirectory( Path.GetDirectoryName( fixture.Path( rel ) ) );
 		File.WriteAllBytes( fixture.Path( rel ), bytes );

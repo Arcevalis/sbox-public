@@ -588,8 +588,7 @@ public abstract class ContentBuildScenarios
 	[TestMethod]
 	public void CompiledFileWithoutSourceIsKept() => Scenario( fx =>
 	{
-		// Compiled by the editor (a game resource) and shipped as is
-		fx.CopyShipped( "core/sounds/core.voip.sound", "sounds/core.voip.sound" );
+		// Shipped compiled, without its source
 		fx.CopyShipped( "core/sounds/core.voip.sound_c", "sounds/core.voip.sound_c" );
 		var shipped = fx.Read( "sounds/core.voip.sound_c" );
 		MaterialWithTexture( fx, "materials/a.vmat", "materials/a_color.tga", Sources.ImageA );
@@ -736,8 +735,9 @@ public abstract class ContentBuildScenarios
 
 /// <summary>
 /// Sandbox.ContentBuild with several compiles at once, as SboxBuild runs it.
+/// The full incremental/clean-build matrix runs on master; focused worker and managed compiler checks also run on PRs.
 /// </summary>
-[TestClass]
+[TestClass, DoNotParallelize, TestCategory( "Slow" )]
 public class ManagedContentBuild : ContentBuildScenarios
 {
 	protected override IContentBuilder Builder { get; } = new ManagedBuilder();
@@ -800,12 +800,12 @@ public class ManagedContentBuild : ContentBuildScenarios
 	}
 
 	/// <summary>
-	/// What the editor's asset system does to compile one asset by itself: resourcecompiler straight into the
-	/// root, compiling what it needs first, with no build report and no record.
+	/// What the editor's asset system does to compile one asset by itself: the resource compiler, with the editor's
+	/// managed compilers, straight into the root, compiling what it needs first, with no build report and no record.
 	/// </summary>
 	static string CompileInPlace( ContentFixture fx, string rel )
 	{
-		var info = new System.Diagnostics.ProcessStartInfo( Path.Combine( ContentFixture.Engine, "bin", "win64", "resourcecompiler.exe" ) )
+		var info = new System.Diagnostics.ProcessStartInfo( ManagedBuilder.Worker )
 		{
 			WorkingDirectory = fx.Root,
 			RedirectStandardOutput = true,
@@ -813,7 +813,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 			UseShellExecute = false,
 			CreateNoWindow = true,
 		};
-		foreach ( var arg in new[] { "-skiprendersystem", "-testmode", "-ignorecontentasserts", "-searchpaths", $"{fx.Mod}|{fx.Root}", "-i", fx.Path( rel ) } )
+		foreach ( var arg in new[] { "-testmode", "-ignorecontentasserts", "-searchpaths", $"{fx.Mod}|{fx.Root}", "-compile", fx.Path( rel ) } )
 			info.ArgumentList.Add( arg );
 
 		using var process = System.Diagnostics.Process.Start( info );
@@ -967,7 +967,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 			Directory.CreateDirectory( Path.GetDirectoryName( Path.Combine( lib.Path, rel ) ) );
 			File.WriteAllText( Path.Combine( lib.Path, rel ), text.ReplaceLineEndings( "\r\n" ) );
 		}
-		BuildReport Build() => ContentBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 }, ManagedBuilder.Compiler() );
+		BuildReport Build() => ManagedBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 } );
 
 		Directory.CreateDirectory( Path.Combine( lib.Path, "materials" ) );
 		File.Copy( Path.Combine( ContentFixture.Engine, Sources.ImageA ), Path.Combine( lib.Path, "materials/libm_color.tga" ) );
@@ -1017,7 +1017,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 		// Its edit info still validates, so only the record's hash tells
 		using var fx = BuiltTexture( Builder, out var good, out var nonStreaming );
 		Assert.IsTrue( nonStreaming < good.Length, "The texture has streamed data" );
-		File.WriteAllBytes( fx.Path( "textures/t.vtex_c" ), good[..( ( nonStreaming + good.Length ) / 2 )] );
+		File.WriteAllBytes( fx.Path( "textures/t.vtex_c" ), good[..((nonStreaming + good.Length) / 2)] );
 
 		var run = fx.Build( Builder );
 
@@ -1030,7 +1030,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 	public void OutputCutShortInsideItsEditInfoIsNotAdopted()
 	{
 		using var fx = BuiltTextureWithoutRecord( Builder, out var good, out var nonStreaming );
-		File.WriteAllBytes( fx.Path( "textures/t.vtex_c" ), good[..( nonStreaming - 1 )] );
+		File.WriteAllBytes( fx.Path( "textures/t.vtex_c" ), good[..(nonStreaming - 1)] );
 
 		var run = fx.Build( Builder );
 
@@ -1047,7 +1047,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 		using var fx = new ContentFixture();
 		var lib = new ContentRoot( fx.Mod + "lib", Path.Combine( fx.Parent, "lib" ), Path.Combine( fx.Parent, "libstate" ) );
 		var roots = new[] { lib, new ContentRoot( fx.Mod, fx.Root, Path.Combine( fx.Parent, "state" ) ) };
-		BuildReport Build() => ContentBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 }, ManagedBuilder.Compiler() );
+		BuildReport Build() => ManagedBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 } );
 		void WriteLib( string text ) => File.WriteAllText( Path.Combine( lib.Path, "materials/m.vmat" ), text.ReplaceLineEndings( "\r\n" ) );
 		string ProjM = $"{fx.Mod}:materials/m.vmat", Box = $"{fx.Mod}:models/box.vmdl";
 
@@ -1086,7 +1086,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 		File.Copy( Path.Combine( ContentFixture.Engine, Sources.SoundA ), Path.Combine( lib.Path, "sounds/s.wav" ) );
 		fx.CopyShipped( "addons/menu/Assets/sounds/box_open.mp3", "sounds/s.mp3" );
 
-		var report = ContentBuilder.Build( new BuildRequest { Roots = [lib, new ContentRoot( fx.Mod, fx.Root, Path.Combine( fx.Parent, "state" ) )], MaxJobs = 4 }, ManagedBuilder.Compiler() );
+		var report = ManagedBuilder.Build( new BuildRequest { Roots = [lib, new ContentRoot( fx.Mod, fx.Root, Path.Combine( fx.Parent, "state" ) )], MaxJobs = 4 } );
 
 		Assert.IsTrue( report.Success, report.Log.ToString() );
 		CollectionAssert.AreEqual( new[] { $"{fx.Mod}:sounds/s.mp3" }, report.Jobs.ToArray(), report.Log.ToString() );
@@ -1102,7 +1102,7 @@ public class ManagedContentBuild : ContentBuildScenarios
 		using var fx = new ContentFixture();
 		var engine = new ContentRoot( fx.Mod, fx.Root, Path.Combine( fx.Parent, "state" ) );
 		var project = new ContentRoot( fx.Mod + "proj", Path.Combine( fx.Parent, "proj" ), Path.Combine( fx.Parent, "projstate" ) );
-		BuildReport Build( params ContentRoot[] roots ) => ContentBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 }, ManagedBuilder.Compiler() );
+		static BuildReport Build( params ContentRoot[] roots ) => ManagedBuilder.Build( new BuildRequest { Roots = roots, MaxJobs = 4 } );
 
 		MaterialWithTexture( fx, "materials/x.vmat", "materials/x_color.tga", Sources.ImageA );
 		fx.Write( "models/m.vmdl", Sources.Box( "materials/x.vmat" ) );
@@ -1185,11 +1185,17 @@ public class ManagedContentBuild : ContentBuildScenarios
 		AssertWroteExactly( fx.Build( Builder ) );
 	}
 
+	/// <summary>
+	/// A prepared copy of a shipped root: the menu's sources and compiled outputs, built once with the current compilers,
+	/// then its build records removed. The build that finds those outputs without records adopts every one as it is,
+	/// writing nothing, and the build after that has nothing to do. (Outputs the repository has built with older compiler
+	/// code are the preparing build's to bring up to date, not the adoption's.)
+	/// </summary>
 	[TestMethod, TestCategory( "Slow" )]
-	public void ShippedRootIsAdoptedAsIs()
+	public void PreparedShippedRootIsAdoptedUnchanged()
 	{
-		// A copy of the menu root as the repository has it, compiled outputs included, built for the first time
-		using var fx = new ContentFixture();
+		// Its outputs name its mod (a scene's shared generated textures), so the copy keeps it
+		using var fx = new ContentFixture( "menu" );
 		var shipped = Path.Combine( ContentFixture.Engine, "addons", "menu", "Assets" );
 		foreach ( var file in Directory.EnumerateFiles( shipped, "*", SearchOption.AllDirectories ) )
 		{
@@ -1199,18 +1205,41 @@ public class ManagedContentBuild : ContentBuildScenarios
 			File.SetLastWriteTimeUtc( fx.Path( rel ), File.GetLastWriteTimeUtc( file ) );
 		}
 
+		// With the textures its scenes generated, which the content build put in the menu's transient folder
+		var shippedTransients = Path.Combine( ContentFixture.Engine, "addons", "menu", "Transients" );
+		foreach ( var file in Directory.Exists( shippedTransients ) ? Directory.EnumerateFiles( shippedTransients, "*", SearchOption.AllDirectories ) : [] )
+		{
+			var copy = Path.Combine( fx.Parent, "transient", Path.GetRelativePath( shippedTransients, file ) );
+			Directory.CreateDirectory( Path.GetDirectoryName( copy ) );
+			File.Copy( file, copy );
+			File.SetLastWriteTimeUtc( copy, File.GetLastWriteTimeUtc( file ) );
+		}
+
+		// Preparing: the current compilers bring what the repository has up to date
+		AssertSucceeded( fx.Build( Builder ) );
+		var transient = Path.Combine( fx.Parent, "transient" );
+		Dictionary<string, string> Transients() => Directory.Exists( transient )
+			? Directory.EnumerateFiles( transient, "*", SearchOption.AllDirectories ).ToDictionary( x => x, x => Convert.ToHexString( System.Security.Cryptography.SHA1.HashData( File.ReadAllBytes( x ) ) ) )
+			: [];
+		var transients = Transients();
+
+		// Adopting: the same outputs, with no records
+		Builder.Clean( fx );
 		var run = fx.Build( Builder );
 
 		AssertSucceeded( run );
-		Assert.AreEqual( 0, run.Changed.Length, $"Changed shipped outputs: {run}\n{run.Result.Log}" );
+		Assert.AreEqual( 0, run.Written.Length + run.Changed.Length + run.Removed.Length, $"Adoption rewrote outputs:\n{run}\n{run.Result.Log}" );
+		CollectionAssert.AreEquivalent( transients.ToList(), Transients().ToList(), "Adoption rewrote generated textures" );
+
 		Assert.AreEqual( 0, fx.Build( Builder ).Result.Jobs.Count );
 	}
 }
 
 /// <summary>
-/// Sandbox.ContentBuild one compile at a time on the calling thread, the way editor startup runs it.
+/// Sandbox.ContentBuild one job at a time (MaxJobs 1), still in content workers. The live editor is tested by
+/// EditorStartupContentBuild.
 /// </summary>
-[TestClass]
+[TestClass, DoNotParallelize, TestCategory( "Slow" )]
 public class ManagedInlineContentBuild : ContentBuildScenarios
 {
 	protected override IContentBuilder Builder { get; } = new ManagedBuilder { MaxJobs = 1 };

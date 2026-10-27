@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Threading;
+using Sandbox.ContentBuild;
 
 namespace ContentBuild;
 
@@ -19,23 +20,27 @@ public sealed class ContentFixture : IDisposable
 	public string Mod { get; }
 	public string Parent { get; }
 	public string Root { get; }
+	internal ResourceCompiler Compiler { get; set; }
 
-	public ContentFixture()
+	/// <param name="mod">The root's mod, when the content in it is another root's that names its own (a copy of a shipped root).</param>
+	public ContentFixture( string mod = null )
 	{
-		Mod = "cbt" + Guid.NewGuid().ToString( "N" )[..8];
-		Parent = System.IO.Path.Combine( System.IO.Path.GetTempPath(), "sbox-contentbuild", Mod );
+		var id = "cbt" + Guid.NewGuid().ToString( "N" )[..8];
+		Mod = mod ?? id;
+		Parent = System.IO.Path.Combine( System.IO.Path.GetTempPath(), "sbox-contentbuild", id );
 		Root = System.IO.Path.Combine( Parent, Mod );
 		Directory.CreateDirectory( Root );
 	}
 
 	public void Dispose()
 	{
+		Compiler?.Finished();
 		if ( Environment.GetEnvironmentVariable( "CONTENTBUILD_KEEP" ) is not null ) return;
 		try { Directory.Delete( Parent, true ); } catch ( IOException ) { } catch ( UnauthorizedAccessException ) { }
 
-		// The asset system caches each mod it scans
+		// The asset system caches each mod it scans (one of its own; another root's cache isn't ours to delete)
 		var cache = System.IO.Path.Combine( Engine, ".source2", $"assets.{Mod}.cache" );
-		if ( File.Exists( cache ) ) File.Delete( cache );
+		if ( Mod.StartsWith( "cbt", StringComparison.Ordinal ) && File.Exists( cache ) ) File.Delete( cache );
 	}
 
 	public string Path( string rel ) => System.IO.Path.Combine( Root, rel );
@@ -128,8 +133,8 @@ public sealed class ContentFixture : IDisposable
 	public void AssertMatchesCleanBuild( IContentBuilder builder )
 	{
 		var incremental = Outputs();
-		foreach ( var rel in incremental.Keys ) File.Delete( Path( rel ) );
 		builder.Clean( this );
+		foreach ( var rel in incremental.Keys ) File.Delete( Path( rel ) );
 
 		var clean = Build( builder );
 		Assert.IsTrue( clean.Success, $"Clean build failed: {clean}\n{clean.Result.Log}" );

@@ -10,28 +10,53 @@ using System.Threading.Tasks;
 namespace ContentBuild;
 
 /// <summary>
-/// resourcecompiler workers take one job after another; each job must come out as it would from a fresh process.
+/// Content workers take one job after another; each job must come out as it would from a fresh process.
 /// Every test runs a sequence through one long-lived worker and compares each job with the same job run alone in a
 /// new process: the same files with the same bytes, and the same reported facts.
 /// </summary>
-[TestClass]
+[TestClass, DoNotParallelize]
 public class CompilerWorkerTests
 {
-	static ResourceCompiler Compiler( int workers = 1 ) => new( Path.Combine( ContentFixture.Engine, "bin", "win64", "resourcecompiler.exe" ), ManagedBuilder.Types ) { MaxWorkers = workers };
+	internal static ResourceCompiler Compiler( IReadOnlyList<ContentRoot> mounts, int workers = 1, string compilers = null ) => new( ManagedBuilder.Worker, ManagedBuilder.Types, Mounts( mounts ), compilers ) { MaxWorkers = workers };
+
+	static List<(string Mod, string Path)> Mounts( IReadOnlyList<ContentRoot> roots ) => roots.Select( x => (x.Mod, x.Path) ).ToList();
 
 	static ContentRoot Root( ContentFixture fx ) => new( fx.Mod, fx.Root, Path.Combine( fx.Parent, "state" ) );
 
 	/// <summary>
+	/// A shader's version, which every material using it records, asked twice of one worker (as the editor keeps its
+	/// workers): the second answer is the shader as it is then, not as the worker first saw it (missing).
+	/// </summary>
+	[TestMethod, TestCategory( "Slow" )]
+	public void ShaderVersionIsReadAgainEachTimeItIsAsked()
+	{
+		using var fx = new ContentFixture();
+		var root = Root( fx );
+		var compiler = Compiler( [root] );
+		try
+		{
+			static SpecialDependency Shader( string name ) => new( "CompileMaterial", 0, name, 0 );
+			var missing = compiler.Fingerprints( [Shader( "shaders/cbt_fixture.shader" )] )[0];
+			var generic = compiler.Fingerprints( [Shader( "shaders/generic.shader" )] )[0];
+			Assert.AreNotEqual( missing, generic, "a missing shader has no version of its own" );
+
+			fx.CopyShipped( "core/shaders/generic.shader_c", "shaders/cbt_fixture.shader_c" );
+			Assert.AreEqual( generic, compiler.Fingerprints( [Shader( "shaders/cbt_fixture.shader" )] )[0], "the shader compiled since it was first asked about" );
+		}
+		finally { compiler.Finished(); }
+	}
+
+	/// <summary>
 	/// A job's outputs (path under its staging, bytes) and facts, with its staging written as a placeholder.
 	/// </summary>
-	sealed record Outcome( bool Success, string Facts, Dictionary<string, byte[]> Files, string Log );
+	internal sealed record Outcome( bool Success, string Facts, Dictionary<string, byte[]> Files, string Log );
 
-	static Outcome Run( ResourceCompiler compiler, ContentRoot root, IReadOnlyList<ContentRoot> mounts, string rel, JobMode mode = JobMode.Compile, CancellationToken token = default )
+	internal static Outcome Run( ResourceCompiler compiler, ContentRoot root, IReadOnlyList<ContentRoot> mounts, string rel, JobMode mode = JobMode.Compile, CancellationToken token = default )
 	{
 		var staging = Directory.CreateTempSubdirectory( "sbox-worker-test" ).FullName;
 		try
 		{
-			var result = compiler.Compile( new CompileJob( root, mounts, Path.Combine( root.Path, rel ), staging, [], mode ), token );
+			var result = compiler.Compile( new CompileJob( root, Mounts( mounts ), Path.Combine( root.Path, rel ), staging, [], mode ), token );
 			string Clean( string s ) => s.Replace( '\\', '/' ).Replace( staging.Replace( '\\', '/' ), "<staging>", StringComparison.OrdinalIgnoreCase );
 			string[] lines =
 			[
@@ -52,14 +77,14 @@ public class CompilerWorkerTests
 		}
 	}
 
-	static Outcome Fresh( ContentRoot root, IReadOnlyList<ContentRoot> mounts, string rel, JobMode mode = JobMode.Compile )
+	internal static Outcome Fresh( ContentRoot root, IReadOnlyList<ContentRoot> mounts, string rel, JobMode mode = JobMode.Compile, string compilers = null )
 	{
-		var compiler = Compiler();
+		var compiler = Compiler( mounts, compilers: compilers );
 		try { return Run( compiler, root, mounts, rel, mode ); }
 		finally { compiler.Finished(); }
 	}
 
-	static void AssertSame( Outcome fresh, Outcome reused, string what )
+	internal static void AssertSame( Outcome fresh, Outcome reused, string what )
 	{
 		Assert.IsTrue( fresh.Success, $"{what}: {fresh.Log}" );
 		Assert.AreEqual( fresh.Success, reused.Success, $"{what}: {reused.Log}" );
@@ -71,9 +96,13 @@ public class CompilerWorkerTests
 
 	static void Build( ContentFixture fx, ContentRoot root )
 	{
-		var compiler = Compiler( 4 );
-		var report = ContentBuilder.Build( new BuildRequest { Roots = [root], MaxJobs = 4 }, compiler );
-		Assert.IsTrue( report.Success, report.Log.ToString() );
+		var compiler = Compiler( [root], 4 );
+		try
+		{
+			var report = ContentBuilder.Build( new BuildRequest { Roots = [root], MaxJobs = 4 }, compiler );
+			Assert.IsTrue( report.Success, report.Log.ToString() );
+		}
+		finally { compiler.Finished(); }
 	}
 
 	static void WriteMaterial( ContentFixture fx, string material, string image, string shader = "shaders/complex.shader" )
@@ -82,7 +111,7 @@ public class CompilerWorkerTests
 		fx.Write( material, Sources.Material( shader, ["TextureColor", image] ) );
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void MixedJobsInOneWorkerMatchFreshProcesses()
 	{
 		using var fx = new ContentFixture();
@@ -107,19 +136,19 @@ public class CompilerWorkerTests
 			("models/idle.vmdl", JobMode.Compile),
 		};
 
-		var reused = Compiler();
+		var reused = Compiler( [root] );
 		try
 		{
 			foreach ( var (rel, mode) in jobs )
 				AssertSame( Fresh( root, [root], rel, mode ), Run( reused, root, [root], rel, mode ), $"{mode} {rel}" );
 
-			Assert.AreEqual( 1, reused.Launches );
+			Assert.AreEqual( 1, reused.Launches, string.Join( "; ", reused.Ended ) );
 			Assert.AreEqual( 0, reused.Ended.Count, string.Join( "; ", reused.Ended ) );
 		}
 		finally { reused.Finished(); }
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void ReadsRebuiltBetweenJobsAreReadAgain()
 	{
 		// The animation reads its base model's compiled skeleton through the resident resource cache, and the model reads
@@ -135,7 +164,7 @@ public class CompilerWorkerTests
 		Build( fx, root );
 		File.Copy( fx.Path( "models/box.vmdl_c" ), Path.Combine( fx.Parent, "box.vmdl_c.old" ) );
 
-		var reused = Compiler();
+		var reused = Compiler( [root] );
 		try
 		{
 			Run( reused, root, [root], "models/idle.vmdl" );
@@ -161,7 +190,7 @@ public class CompilerWorkerTests
 		finally { reused.Finished(); }
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void OldFormatModelDescribedThenCompiledMatchesFresh()
 	{
 		// Describing it compiles it, children included, into staging; the compile after it must not see those
@@ -171,13 +200,13 @@ public class CompilerWorkerTests
 		WriteMaterial( fx, "materials/models/editor/scripted_sequence.vmat", "materials/legacy_color.tga" );
 		Build( fx, root );
 
-		var reused = Compiler();
+		var reused = Compiler( [root] );
 		try
 		{
 			AssertSame( Fresh( root, [root], "models/legacy.vmdl", JobMode.Describe ), Run( reused, root, [root], "models/legacy.vmdl", JobMode.Describe ), "describe" );
 			AssertSame( Fresh( root, [root], "models/legacy.vmdl" ), Run( reused, root, [root], "models/legacy.vmdl" ), "compile after describe" );
 
-			// Its collision takes the material's surface property, which model compiles keep per material name
+			// Its collision takes the material's surface property, which a model compile reads once per material name
 			fx.Write( "materials/models/editor/scripted_sequence.vmat", Sources.Material( "shaders/complex.shader", ["TextureColor", "materials/legacy_color.tga", "PhysicsSurfaceProperties", "wood"] ) );
 			Build( fx, root );
 			AssertSame( Fresh( root, [root], "models/legacy.vmdl" ), Run( reused, root, [root], "models/legacy.vmdl" ), "compile after the material's surface changed" );
@@ -186,26 +215,29 @@ public class CompilerWorkerTests
 		finally { reused.Finished(); }
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void ModelsWithMorphsInOneWorkerMatchFreshProcesses()
 	{
-		// Flex controller names are interned for the life of a process; a worker starts each job without the last's
+		// Flex controller names are interned case-insensitively for one model compile, shared by its morph sets: one
+		// model's names never take another's casing, in whatever order a worker compiles them
 		var citizen = ContentRoots.Engine( ContentFixture.Engine );
 		var root = citizen.Single( x => x.Mod == "citizen" );
 		const string a = "models/citizen_clothes/hair/hair_tight_ponytail/Models/hair_tight_ponytail_brown.vmdl";
 		const string b = "models/citizen_clothes/hat/Beanie/Models/beanie.vmdl";
 
-		var reused = Compiler();
+		var reused = Compiler( citizen );
 		try
 		{
-			Run( reused, root, citizen, a );
+			var freshA = Fresh( root, citizen, a );
+			AssertSame( freshA, Run( reused, root, citizen, a ), "first model with morphs" );
 			AssertSame( Fresh( root, citizen, b ), Run( reused, root, citizen, b ), "second model with morphs" );
+			AssertSame( freshA, Run( reused, root, citizen, a ), "first model again" );
 			Assert.AreEqual( 1, reused.Launches );
 		}
 		finally { reused.Finished(); }
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void LostWorkerIsReplacedAndItsJobRunsAgain()
 	{
 		using var fx = new ContentFixture();
@@ -213,7 +245,7 @@ public class CompilerWorkerTests
 		Sources.WriteWav( fx, "sounds/a.wav", 440 );
 		Sources.WriteWav( fx, "sounds/b.wav", 550 );
 
-		var reused = Compiler();
+		var reused = Compiler( [root] );
 		try
 		{
 			Run( reused, root, [root], "sounds/a.wav" );
@@ -226,14 +258,14 @@ public class CompilerWorkerTests
 		finally { reused.Finished(); }
 	}
 
-	[TestMethod]
+	[TestMethod, TestCategory( "Slow" )]
 	public void TimedOutOrCancelledJobFailsAloneAndTheNextGetsANewWorker()
 	{
 		using var fx = new ContentFixture();
 		var root = Root( fx );
 		Sources.WriteWav( fx, "sounds/a.wav", 440 );
 
-		var reused = new ResourceCompiler( Path.Combine( ContentFixture.Engine, "bin", "win64", "resourcecompiler.exe" ), ManagedBuilder.Types ) { MaxWorkers = 1, Timeout = TimeSpan.FromMilliseconds( 1 ) };
+		var reused = new ResourceCompiler( ManagedBuilder.Worker, ManagedBuilder.Types, Mounts( [root] ), null ) { MaxWorkers = 1, Timeout = TimeSpan.FromMilliseconds( 1 ) };
 		try
 		{
 			var timedOut = Run( reused, root, [root], "sounds/a.wav" );
@@ -242,7 +274,7 @@ public class CompilerWorkerTests
 		}
 		finally { reused.Finished(); }
 
-		var cancelled = Compiler();
+		var cancelled = Compiler( [root] );
 		try
 		{
 			using var cancel = new CancellationTokenSource();
@@ -260,7 +292,7 @@ public class CompilerWorkerTests
 		var root = Root( fx );
 		Sources.WriteWav( fx, "sounds/a.wav", 440 );
 
-		var missing = new ResourceCompiler( Path.Combine( fx.Parent, "missing.exe" ), ManagedBuilder.Types ) { MaxWorkers = 2 };
+		var missing = new ResourceCompiler( Path.Combine( fx.Parent, "missing.exe" ), ManagedBuilder.Types, Mounts( [root] ), null ) { MaxWorkers = 2 };
 		var outcomes = new System.Collections.Concurrent.ConcurrentBag<bool>();
 		Parallel.For( 0, 6, _ =>
 		{
@@ -273,11 +305,37 @@ public class CompilerWorkerTests
 		missing.Finished();
 	}
 
-	[TestMethod]
-	public void RootsWithTheSameMountsShareWorkersUnderTheCap()
+	[TestMethod, TestCategory( "Slow" )]
+	public void WorkerWithoutARenderDeviceCompilesWithTheEmptyRenderSystem()
+	{
+		// As on a build machine with no GPU: not a device that failed to start, the empty render system, which the
+		// worker was asked for. Native compiles need nothing more.
+		using var fx = new ContentFixture();
+		var root = Root( fx );
+		Sources.WriteTga( fx, "textures/t.tga", 8, 8 );
+		fx.Write( "textures/t.vtex", Sources.Texture( "textures/t.tga" ) );
+		Sources.WriteWav( fx, "sounds/a.wav", 440 );
+
+		var compiler = Compiler( [root] );
+		try
+		{
+			Assert.IsTrue( Run( compiler, root, [root], "textures/t.vtex" ).Success );
+			Assert.IsTrue( Run( compiler, root, [root], "sounds/a.wav" ).Success );
+
+			using var worker = Process.GetProcessById( compiler.IdleProcessIds.Single() );
+			var modules = worker.Modules.Cast<ProcessModule>().Select( x => x.ModuleName.ToLowerInvariant() ).ToList();
+			Assert.IsTrue( modules.Any( x => x.StartsWith( "rendersystemempty" ) ), string.Join( ", ", modules ) );
+			Assert.IsFalse( modules.Any( x => x.StartsWith( "rendersystemvulkan" ) ), string.Join( ", ", modules ) );
+		}
+		finally { compiler.Finished(); }
+	}
+
+	[TestMethod, TestCategory( "Slow" )]
+	public void RootsOfABuildShareWorkersUnderTheCap()
 	{
 		// One worker in all: both roots' jobs go to it, as a fresh process of their own root would build them, from two
-		// threads taking turns; a job with other mounts replaces it
+		// threads taking turns; a job with other mounts (the roots the other way round, as another project mounts them)
+		// replaces it
 		using var fx = new ContentFixture();
 		var a = Root( fx );
 		var b = new ContentRoot( fx.Mod + "b", Path.Combine( fx.Parent, "b" ), Path.Combine( fx.Parent, "bstate" ) );
@@ -290,7 +348,7 @@ public class CompilerWorkerTests
 		File.WriteAllText( Path.Combine( b.Path, "materials/m.vmat" ), Sources.Material( "shaders/complex.shader", ["TextureColor", "materials/m_color.tga"] ) );
 		File.WriteAllText( Path.Combine( b.Path, "models/box.vmdl" ), Sources.Box( "materials/m.vmat" ) );
 
-		var reused = Compiler();
+		var reused = Compiler( [a, b] );
 		try
 		{
 			var results = new System.Collections.Concurrent.ConcurrentBag<Outcome>();
@@ -302,11 +360,13 @@ public class CompilerWorkerTests
 			AssertSame( Fresh( b, [a, b], "materials/m.vmat" ), Run( reused, b, [a, b], "materials/m.vmat" ), "another root's material in a shared worker" );
 			AssertSame( Fresh( b, [a, b], "models/box.vmdl" ), Run( reused, b, [a, b], "models/box.vmdl" ), "another root's model in a shared worker" );
 			Assert.AreEqual( 1, reused.Launches );
+			Assert.AreEqual( 0, reused.Ended.Count, string.Join( "; ", reused.Ended ) );
 
-			Run( reused, a, [a], "sounds/a.wav" );
+			// The same name in both roots, mounted the other way round
+			fx.CopyShipped( Sources.ImageB, "materials/m_color.tga" );
+			AssertSame( Fresh( b, [b, a], "materials/m.vmat" ), Run( reused, b, [b, a], "materials/m.vmat" ), "a job with the roots the other way round" );
 			Assert.AreEqual( 2, reused.Launches );
 			Assert.AreEqual( 1, reused.Evicted );
-			Assert.AreEqual( 0, reused.Ended.Count, string.Join( "; ", reused.Ended ) );
 		}
 		finally { reused.Finished(); }
 	}

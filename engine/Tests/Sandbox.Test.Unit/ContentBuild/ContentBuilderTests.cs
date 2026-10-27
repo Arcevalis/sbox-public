@@ -160,13 +160,13 @@ public class ContentBuilderTests
 		{
 			if ( path.StartsWith( '*' ) )
 			{
-				var found = job.Mounts.Reverse().FirstOrDefault( x => File.Exists( Path.Combine( x.Path, path[1..] ) ) ) ?? job.Root;
-				return Path.Combine( found.Path, path[1..] );
+				var found = job.Mounts.Reverse().Select( x => x.Path ).FirstOrDefault( x => File.Exists( Path.Combine( x, path[1..] ) ) || File.Exists( Path.Combine( x, path[1..] + "_c" ) ) ) ?? job.Root.Path;
+				return Path.Combine( found, path[1..] );
 			}
 
 			var colon = path.IndexOf( ':' );
-			var root = colon < 0 ? job.Root : job.Mounts.Single( x => x.Mod == path[..colon] );
-			return Path.Combine( root.Path, path[(colon + 1)..] );
+			var root = colon < 0 ? job.Root.Path : job.Mounts.Last( x => x.Mod == path[..colon] ).Path;
+			return Path.Combine( root, path[(colon + 1)..] );
 		}
 
 		static InputFact Input( string path ) => new( path, File.Exists( path ), File.Exists( path ) ? Hashing.Checksum( path ) : 0 );
@@ -211,6 +211,122 @@ public class ContentBuilderTests
 
 	static void AssertJobs( BuildReport report, params string[] expected ) =>
 		CollectionAssert.AreEquivalent( expected, report.Jobs.ToArray(), $"Jobs: {string.Join( ", ", report.Jobs )}\n{report.Log}" );
+
+	[TestMethod]
+	public void ShippedMountsNeedNoSourcesOrBuildStateAndProjectOverridesWin()
+	{
+		using var fx = new Fixture();
+		var shipped = Path.Combine( fx.Dir, "shipped" );
+		Directory.CreateDirectory( shipped );
+		var output = Path.Combine( shipped, "a.vtex_c" );
+		File.WriteAllText( output, "shipped red" );
+		// A leftover source with missing dependencies must not be compiled or adopted on an installed editor.
+		File.WriteAllText( Path.Combine( shipped, "unused.vmat" ), "fail" );
+		fx.Write( "b.vmat", "reads *a.vtex" );
+		BuildReport Build() => ContentBuilder.Build( new BuildRequest
+		{
+			Roots = [new ContentRoot( "unit", fx.Root, fx.State )],
+			ReadOnlyMounts = [("shipped", shipped)]
+		}, fx.Compiler );
+
+		var cold = Build();
+		Assert.IsTrue( cold.Success, cold.Log.ToString() );
+		AssertJobs( cold, "b.vmat" );
+		StringAssert.Contains( fx.Read( "b.vmat_c" ), "shipped red" );
+		AssertJobs( Build() );
+		File.WriteAllText( output, "shipped blue" );
+		AssertJobs( Build(), "b.vmat" );
+		StringAssert.Contains( fx.Read( "b.vmat_c" ), "shipped blue" );
+		Assert.AreEqual( 2, Directory.GetFiles( shipped, "*", SearchOption.AllDirectories ).Length );
+		Assert.AreEqual( 0, Directory.GetDirectories( shipped ).Length );
+
+		// The project's copy takes precedence over shipped content, and removing it restores the shipped copy.
+		fx.Write( "a.vtex", "project green" );
+		AssertJobs( Build(), "a.vtex", "b.vmat" );
+		StringAssert.Contains( fx.Read( "b.vmat_c" ), "project green" );
+		File.Delete( Path.Combine( fx.Root, "a.vtex" ) );
+		AssertJobs( Build(), "b.vmat" );
+		StringAssert.Contains( fx.Read( "b.vmat_c" ), "shipped blue" );
+	}
+
+	[TestMethod]
+	public void UnchangedPrerequisiteDoesNotNeedItsContentsRead()
+	{
+		using var fx = new Fixture();
+		fx.Write( "a.vtex", "red" );
+		fx.Write( "b.vmat", "reads a.vtex" );
+		Assert.IsTrue( fx.Build().Success );
+
+		// File metadata remains readable, but hashing the bytes would fail on Windows.
+		using ( var held = new FileStream( Path.Combine( fx.Root, "a.vtex_c" ), FileMode.Open, FileAccess.Read, FileShare.None ) )
+		{
+			var warm = fx.Build();
+			Assert.IsTrue( warm.Success, warm.Log.ToString() );
+			AssertJobs( warm );
+		}
+
+		// A changed producer still rebuilds its reader, even though the old output had a reusable stamp.
+		fx.Write( "a.vtex", "blue" );
+		AssertJobs( fx.Build(), "a.vtex", "b.vmat" );
+		StringAssert.Contains( fx.Read( "b.vmat_c" ), "blue" );
+	}
+
+	[TestMethod]
+	[DataRow( JobMode.Describe )]
+	[DataRow( JobMode.Adopt )]
+	[DataRow( JobMode.Compile )]
+	public void AsyncBuildYieldsAndPublishesOnCallingThread( JobMode mode )
+	{
+		using var fx = new Fixture();
+		fx.Write( "a.vmat", "red" );
+		if ( mode == JobMode.Adopt ) fx.Write( "a.vmat_c", "old" );
+		using var release = new ManualResetEventSlim();
+		var caller = Environment.CurrentManagedThreadId;
+		var calls = 0;
+		void WaitForEditor()
+		{
+			Assert.AreNotEqual( caller, Environment.CurrentManagedThreadId );
+			Assert.IsTrue( release.Wait( TimeSpan.FromSeconds( 10 ) ), "The caller must be able to run while a compiler waits" );
+		}
+		if ( mode == JobMode.Describe ) fx.Compiler.Describer = _ => { WaitForEditor(); return new( true, "", [], [], [], [], [] ); };
+		if ( mode == JobMode.Adopt ) fx.Compiler.Adopter = _ => { WaitForEditor(); return new( false, "stale", [], [], [], [], [] ); };
+		if ( mode == JobMode.Compile ) fx.Compiler.During = _ => WaitForEditor();
+
+		Sandbox.Tasks.AsyncPump.RunSynchronously( async () =>
+		{
+			var request = new BuildRequest
+			{
+				Roots = [new ContentRoot( "unit", fx.Root, fx.State )],
+				MaxJobs = 1,
+				Published = _ => { Assert.AreEqual( caller, Environment.CurrentManagedThreadId ); calls++; },
+				JobFinished = _ => Assert.AreEqual( caller, Environment.CurrentManagedThreadId )
+			};
+			var build = ContentBuilder.BuildAsync( request, fx.Compiler );
+			Assert.IsFalse( build.IsCompleted );
+			SynchronizationContext.Current.Post( _ => release.Set(), null );
+			var report = await build;
+			Assert.IsTrue( report.Success, report.Log.ToString() );
+			Assert.AreEqual( 1, calls );
+		} );
+	}
+
+	[TestMethod]
+	public async Task AsyncCancellationReleasesRootsAndKeepsLastGoodOutput()
+	{
+		using var fx = new Fixture();
+		fx.Write( "a.vtex", "red" );
+		Assert.IsTrue( fx.Build().Success );
+		var original = fx.Read( "a.vtex_c" );
+		fx.Write( "a.vtex", "blue" );
+		using var cancel = new CancellationTokenSource();
+		fx.Compiler.During = _ => cancel.Cancel();
+		var report = await ContentBuilder.BuildAsync( new BuildRequest { Roots = [new ContentRoot( "unit", fx.Root, fx.State )] }, fx.Compiler, cancel.Token );
+		Assert.IsTrue( report.Cancelled );
+		Assert.AreEqual( original, fx.Read( "a.vtex_c" ) );
+		fx.Compiler.During = null;
+		AssertJobs( fx.Build( lockTimeout: TimeSpan.Zero ), "a.vtex" );
+		StringAssert.Contains( fx.Read( "a.vtex_c" ), "blue" );
+	}
 
 	[TestMethod]
 	public void NoOpBuildStartsNoJobs()
@@ -339,7 +455,7 @@ public class ContentBuilderTests
 	{
 		var root = new ContentRoot( "unit", fx.Root, fx.State );
 		var staging = Path.Combine( fx.Dir, $"outside-{Guid.NewGuid():N}" );
-		var result = fx.Compiler.Compile( new CompileJob( root, [root], Path.Combine( fx.Root, rel ), staging, [] ), default );
+		var result = fx.Compiler.Compile( new CompileJob( root, [(root.Mod, root.Path)], Path.Combine( fx.Root, rel ), staging, [] ), default );
 		foreach ( var staged in result.Outputs )
 			File.Copy( staged, Path.Combine( fx.Root, Path.GetRelativePath( Path.Combine( staging, "unit" ), staged ) ), true );
 	}
@@ -623,7 +739,7 @@ public class ContentBuilderTests
 			fx.Write( "e.vtex", content, "generates gen/e.vtex_c" );
 			var staging = Path.Combine( fx.Dir, $"outside-{Guid.NewGuid():N}" );
 			var root = new ContentRoot( "unit", fx.Root, fx.State );
-			foreach ( var staged in fx.Compiler.Compile( new CompileJob( root, [root], Path.Combine( fx.Root, "e.vtex" ), staging, [] ), default ).Outputs.Where( x => x.StartsWith( Path.Combine( staging, "unit" ) ) ) )
+			foreach ( var staged in fx.Compiler.Compile( new CompileJob( root, [(root.Mod, root.Path)], Path.Combine( fx.Root, "e.vtex" ), staging, [] ), default ).Outputs.Where( x => x.StartsWith( Path.Combine( staging, "unit" ) ) ) )
 				File.Copy( staged, Path.Combine( fx.Root, Path.GetRelativePath( Path.Combine( staging, "unit" ), staged ) ), true );
 			fx.Compiler.Transient = Path.Combine( fx.Dir, "shipped" );
 			return ContentBuilder.Build( new BuildRequest
