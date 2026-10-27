@@ -41,13 +41,23 @@ internal class PublishSection : Widget
 {
 	public Layout Header { get; }
 
-	public PublishSection( Widget parent, string title, Color accent, string icon, int? count = null, Pixmap iconImage = null ) : base( parent )
+	/// <summary>
+	/// The header across the top - the rest of the section is under it
+	/// </summary>
+	readonly Widget HeaderArea;
+
+	/// <param name="description">What the section's for, at the right of its title in the header - or null for just the title</param>
+	public PublishSection( Widget parent, string title, Color accent, string icon, string description = null, int? count = null, Pixmap iconImage = null ) : base( parent )
 	{
 		Layout = Layout.Column();
-		Layout.Margin = 12;
+		Layout.Margin = new Sandbox.UI.Margin( 12, 0, 12, 12 );
 		Layout.Spacing = 10;
 		Layout.Alignment = TextFlag.Top;
-		Header = Layout.AddRow();
+
+		HeaderArea = Layout.Add( new Widget( this ) );
+		HeaderArea.Layout = Layout.Row();
+		HeaderArea.Layout.Margin = new Sandbox.UI.Margin( 0, 6, 0, 6 );
+		Header = HeaderArea.Layout;
 		Header.Spacing = 8;
 		if ( iconImage is not null || !string.IsNullOrEmpty( icon ) )
 		{
@@ -74,12 +84,46 @@ internal class PublishSection : Widget
 			badge.SetStyles( $"background-color: {Theme.Text.WithAlpha( 0.08f ).Hex}; color: {Theme.Text.Hex}; border-radius: 10px; padding: 2px 8px;" );
 		}
 		Header.AddStretchCell();
+
+		// On the title's line, over on the right
+		if ( !string.IsNullOrEmpty( description ) )
+			Header.Add( new Label( description ) { Color = Theme.TextControl.WithAlpha( 0.5f ), Alignment = TextFlag.RightCenter } );
+	}
+
+	/// <summary>
+	/// Something small and secondary - a hint under a field, what something will look like
+	/// </summary>
+	public static Label AddNote( Layout layout, string text ) => layout.Add( new Label( text ) { WordWrap = true, Color = Theme.TextControl.WithAlpha( 0.5f ) } );
+
+	/// <summary>
+	/// A row lined up with a <see cref="ControlSheet"/>'s - the label in its label column, and the returned
+	/// column where its control would be
+	/// </summary>
+	public static Layout AddRow( Layout layout, string label )
+	{
+		var row = layout.Add( new Widget( null ) );
+		row.Layout = Layout.Row();
+		row.Layout.Margin = new Sandbox.UI.Margin( 6, 2, 4, 0 );
+
+		row.Layout.Add( new Label( label )
+		{
+			FixedWidth = 144,
+			MinimumHeight = Theme.RowHeight,
+			ContentMargins = 4,
+			Alignment = TextFlag.LeftTop,
+			Color = Theme.TextControl.WithAlpha( 0.7f )
+		} );
+
+		var value = row.Layout.AddColumn( 1 );
+		value.Spacing = 4;
+		return value;
 	}
 
 	protected override void OnPaint()
 	{
+		Paint.Antialiasing = true;
 		Paint.SetPen( Theme.Text.WithAlpha( 0.10f ), 1 );
 		Paint.SetBrush( Theme.ControlBackground.WithAlpha( 0.32f ) );
-		Paint.DrawRect( LocalRect.Shrink( 1 ), 4 );
+		Paint.DrawRect( LocalRect.Shrink( 1 ), 6 );
 	}
 }

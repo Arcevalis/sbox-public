@@ -96,6 +96,7 @@ internal partial class NetworkSystem
 			MapName = Networking.MapName,
 			EngineVersion = 234,
 			GamePackage = Application.GamePackage?.GetIdent( false, true ) ?? "",
+			GameWorkshopVersion = Application.GamePackage is { InstallsFromWorkshop: true } game ? Workshop.GetInstalledVersion( game.WorkshopId ) : 0,
 			Map = Application.Map,
 			Host = new ChannelInfo { Id = Connection.Local.Id },
 			HostSteamId = Connection.Local.SteamId,

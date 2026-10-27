@@ -84,9 +84,14 @@ public static class MenuHelpers
 		if ( package.IsRemote )
 			package = await Package.FetchAsync( package.FullIdent, false ) ?? package;
 
-		// Your party isn't what it's made for - say so, and only go on if you want to
-		if ( !fitChecked && !ConfirmPartyFit( package, () => PlayGame( package, mapPackage, via, source, fitChecked: true ) ) )
-			return;
+		// Your party isn't what it's made for - say so, and only go on if you want to. On your own it always is, so
+		// its workshop item's only asked about for a party.
+		if ( !fitChecked && MenuProject.PlayerModes.PartySize > 1 )
+		{
+			var workshop = await MenuUtility.FetchWorkshopItemAsync( MenuUtility.KnownWorkshopId( package ) );
+			if ( !ConfirmPartyFit( package, () => PlayGame( package, mapPackage, via, source, fitChecked: true ), workshop ) )
+				return;
+		}
 
 		// VR-only game but not in VR
 		if ( package.Info.IsVrOnly && !Application.IsVR )
@@ -206,12 +211,13 @@ public static class MenuHelpers
 
 	/// <summary>
 	/// Whether your party's what the game's made for - true to go straight on. If it isn't, pops up why,
-	/// with Play anyway (which runs <paramref name="playAnyway"/>) and Return, and gives false.
+	/// with Play anyway (which runs <paramref name="playAnyway"/>) and Return, and gives false. Its
+	/// <paramref name="workshop"/> item says how it's played, for one on the workshop.
 	/// </summary>
-	public static bool ConfirmPartyFit( Package package, Action playAnyway )
+	public static bool ConfirmPartyFit( Package package, Action playAnyway, WorkshopItemDetails workshop = null )
 	{
 		var size = MenuProject.PlayerModes.PartySize;
-		var modes = MenuProject.PlayerModes.For( package );
+		var modes = MenuProject.PlayerModes.For( package, workshop );
 		var (fit, why) = modes.FitFor( size );
 		if ( fit != MenuProject.PlayerModes.FitKind.Poor ) return true;
 
@@ -301,6 +307,16 @@ public static class MenuHelpers
 		var minutes = (int)time.TotalMinutes;
 		if ( minutes < 1 ) return "Under a minute";
 		return $"{minutes} minute{(minutes == 1 ? "" : "s")}";
+	}
+
+	/// <summary>
+	/// A size in bytes to read - "201.63 MB", with a space before the unit and the unit in capitals
+	/// </summary>
+	public static string FormatSize( long bytes )
+	{
+		var formatted = bytes.FormatBytes();
+		var suffixLength = bytes >= 1024 ? 2 : 1;
+		return $"{formatted[..^suffixLength]} {formatted[^suffixLength..].ToUpperInvariant()}";
 	}
 
 	/// <summary>

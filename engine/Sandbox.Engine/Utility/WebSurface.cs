@@ -295,6 +295,29 @@ public sealed class WebSurface : IDisposable
 	{
 		currentUrl = x.PchURL;
 		PageTitle = x.PchPageTitle;
+
+		OnPageLoaded?.Invoke( x.PchURL );
+	}
+
+	/// <summary>
+	/// A page has finished loading - its url. Internal, like <see cref="ExecuteJavascript"/>: a page can be one with the
+	/// user's session in it.
+	/// </summary>
+	internal Action<string> OnPageLoaded { get; set; }
+
+	/// <summary>
+	/// Run script in the page that's loaded. Internal on purpose - game code mustn't run script in pages, the menu's
+	/// sbox.game pages have the user's session.
+	/// </summary>
+	internal void ExecuteJavascript( string script )
+	{
+		if ( BrowserId == 0 )
+		{
+			_initQueue += () => ExecuteJavascript( script );
+			return;
+		}
+
+		steamHTMLSurface.ExecuteJavascript( BrowserId, script );
 	}
 
 	public string Cursor { get; private set; }
