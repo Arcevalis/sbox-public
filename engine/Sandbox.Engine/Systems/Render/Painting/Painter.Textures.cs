@@ -1,5 +1,6 @@
 using Sandbox.Rendering;
 using Sandbox.UI;
+using System.ComponentModel;
 
 namespace Sandbox;
 
@@ -9,6 +10,9 @@ public readonly ref partial struct Painter
 	/// Draws text with the current TextStyle, opacity, transform and clip.
 	/// </summary>
 	public void Text( string text, Rect rect ) => DrawText( text, rect, TextStyle );
+
+	[EditorBrowsable( EditorBrowsableState.Never )] // binary compat, old signature
+	public void Texture( Texture texture, Rect rect, Color? tint ) => Texture( texture, rect, tint, FilterMode.Bilinear );
 
 	/// <summary>
 	/// Draws a texture within the given rectangle. Sampling defaults to bilinear, matching Fill.Image.
