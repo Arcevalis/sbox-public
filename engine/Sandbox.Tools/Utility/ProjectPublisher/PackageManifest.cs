@@ -251,7 +251,7 @@ public partial class ProjectPublisher
 
 				foreach ( var path in AllAssetPaths( project ) )
 				{
-					await IncludeFiles( path, publishingOptions.Resources, cancel, matchAssetAliases: true, legacyRules: !publishingOptions.PublishUsedAssetsOnly );
+					await IncludeFiles( path, publishingOptions.Resources, cancel, allowSourceFiles: IncludeSourceFiles, matchAssetAliases: true, legacyRules: !publishingOptions.PublishUsedAssetsOnly );
 				}
 			}
 
@@ -582,6 +582,8 @@ public partial class ProjectPublisher
 				if ( file.EndsWith( ".cs", StringComparison.OrdinalIgnoreCase ) ) return false;
 				if ( file.EndsWith( ".razor", StringComparison.OrdinalIgnoreCase ) ) return false;
 				if ( file.EndsWith( ".fbx", StringComparison.OrdinalIgnoreCase ) ) return false;
+				// Editor sidecars can map a compiled resource GUID back to its raw source path.
+				if ( file.EndsWith( ".meta", StringComparison.OrdinalIgnoreCase ) ) return false;
 			}
 
 			if ( DissallowedExtensions.Any( x => file.EndsWith( x, StringComparison.OrdinalIgnoreCase ) ) )

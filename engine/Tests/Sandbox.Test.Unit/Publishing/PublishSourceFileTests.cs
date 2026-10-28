@@ -32,6 +32,47 @@ public class PublishSourceFileTests
 	}
 
 	[TestMethod]
+	[DataRow( false )]
+	[DataRow( true )]
+	public void ResourceRulesExcludeMetadataUnlessPublishingSources( bool usedOnly )
+	{
+		var directory = Path.Combine( Path.GetTempPath(), $"publish_metadata_{Guid.NewGuid():N}" );
+		var assetsPath = Path.Combine( directory, "Assets" );
+		string[] files = ["sounds/jump.wav", "sounds/jump.wav.meta", "sounds/jump.vsnd_c",
+			"music/track.ogg", "music/track.ogg.META", "music/track.vsnd_c", "textures/icon.png.meta"];
+		try
+		{
+			foreach ( var file in files )
+			{
+				var absolute = Path.Combine( assetsPath, file );
+				Directory.CreateDirectory( Path.GetDirectoryName( absolute ) );
+				File.WriteAllText( absolute, "test" );
+			}
+			var project = new Project( new DirectoryInfo( directory ) ) { Config = new Sandbox.DataModel.ProjectConfig() };
+			project.Config.Type = "game";
+			project.Config.SetMeta( "StartupScene", "" );
+			project.Config.PublishUsedAssetsOnly = usedOnly;
+			project.Config.Resources = "/sounds/*\n/music/*\n/textures/icon.png.meta";
+			foreach ( var preview in new[] { false, true } )
+				foreach ( var sources in new[] { false, true } )
+				{
+					var manifest = new ProjectPublisher.PackageManifest { IncludeSourceFiles = sources };
+					Sandbox.Tasks.AsyncPump.RunSynchronously( () => manifest.BuildFromAssets( project, previewOnly: preview ) );
+					CollectionAssert.AreEqual( Array.Empty<string>(), manifest.Errors.ToArray() );
+					var expected = files.Where( x => sources || !x.EndsWith( ".meta", StringComparison.OrdinalIgnoreCase ) ).ToArray();
+					CollectionAssert.AreEquivalent( expected, manifest.Assets.Select( x => x.Name ).ToArray(), $"usedOnly={usedOnly}, preview={preview}, sources={sources}" );
+				}
+			var sourceExport = new ProjectPublisher.PackageManifest();
+			Sandbox.Tasks.AsyncPump.RunSynchronously( () => sourceExport.BuildFromSource( project ) );
+			Assert.IsTrue( sourceExport.Assets.Any( x => x.Name.EndsWith( "jump.wav.meta", StringComparison.OrdinalIgnoreCase ) ) );
+		}
+		finally
+		{
+			Directory.Delete( directory, true );
+		}
+	}
+
+	[TestMethod]
 	[DataRow( "exact", true )]
 	[DataRow( "wildcard", true )]
 	[DataRow( "folder", true )]
