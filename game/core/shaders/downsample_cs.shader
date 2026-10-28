@@ -56,7 +56,7 @@ CS
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
 	bool WantsSRGB()
 	{
-		return D_DOWNSAMPLE_METHOD == DownsampleMethod::GaussianBlur || D_DOWNSAMPLE_METHOD == DownsampleMethod::GaussianBorder || D_DOWNSAMPLE_METHOD == DownsampleMethod::GGX;
+		return D_DOWNSAMPLE_METHOD == DownsampleMethod::GaussianBlur || D_DOWNSAMPLE_METHOD == DownsampleMethod::GGX;
 	}
 
 	//---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -66,8 +66,10 @@ CS
 		SamplerState sampler = D_DOWNSAMPLE_METHOD == DownsampleMethod::GaussianBorder ? BilinearBorder : BilinearClamp;
 
 		float4 color = max( MipLevel0.SampleLevel( sampler, ( pixelCoord + 0.5f ) * InvTextureSize, 0 ), 0.0f );
-		// Average linear colour in sRGB gamma
-		color.rgb = SrgbLinearToGamma( color.rgb );
+		// GaussianBorder is handed a premultiplied UI layer in whatever encoding the layer stores, and like CSS blurs
+		// the stored values as they are. The rest are handed linear colour and average it in sRGB gamma
+		if ( D_DOWNSAMPLE_METHOD != DownsampleMethod::GaussianBorder )
+			color.rgb = SrgbLinearToGamma( color.rgb );
 		return color;
 	}
 
