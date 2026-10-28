@@ -80,6 +80,12 @@ public sealed class CitizenPreview : Panel
 	/// </summary>
 	RealTimeUntil _settleUntil;
 	bool _settling;
+
+	/// <summary>
+	/// Keeps the startup screen up until we've first appeared, so we don't pop in after it has faded.
+	/// </summary>
+	IDisposable _startupHold;
+	static bool _appearedOnce;
 	bool _dressed;
 
 	/// <summary>
@@ -96,6 +102,10 @@ public sealed class CitizenPreview : Panel
 
 	public override void Tick()
 	{
+		// The first time, the startup screen waits for us to appear
+		if ( !_appearedOnce && !_built && _startupHold is null && (LocalUser || !string.IsNullOrWhiteSpace( _avatarJson )) )
+			_startupHold = MenuUtility.HoldStartupScreen( "Preparing your character" );
+
 		base.Tick();
 
 		if ( !_built && (LocalUser || !string.IsNullOrWhiteSpace( _avatarJson )) )
@@ -204,6 +214,10 @@ public sealed class CitizenPreview : Panel
 				_dressed = true;
 				_settleUntil = SettleSeconds;
 
+				// Shown straight away when playing the intro, so they've appeared
+				if ( !_settling )
+					Appeared();
+
 				// Line up on their head once the pose has played - the same moment they're shown, or a
 				// beat longer if they're striking it for real
 				_headFramed = !HeadOffset.HasValue;
@@ -217,6 +231,12 @@ public sealed class CitizenPreview : Panel
 		catch ( Exception e )
 		{
 			Log.Warning( $"Couldn't dress citizen preview: {e.Message}" );
+		}
+		finally
+		{
+			// However dressing ended, if they never got dressed there's nothing for the startup screen to wait for
+			if ( !_dressed )
+				ReleaseStartupHold();
 		}
 	}
 
@@ -238,11 +258,24 @@ public sealed class CitizenPreview : Panel
 		_camera.WorldPosition = position.WithZ( eyes.Position.z + HeadOffset.Value );
 	}
 
+	void Appeared()
+	{
+		_appearedOnce = true;
+		ReleaseStartupHold();
+	}
+
+	void ReleaseStartupHold()
+	{
+		_startupHold?.Dispose();
+		_startupHold = null;
+	}
+
 	void UpdateSettle()
 	{
 		if ( !_settling || !_dressed || _settleUntil > 0 ) return;
 
 		_settling = false;
+		Appeared();
 
 		if ( _renderer.IsValid() )
 			_renderer.PlaybackRate = 1;
@@ -450,6 +483,7 @@ public sealed class CitizenPreview : Panel
 	public override void OnDeleted()
 	{
 		_cancel?.Cancel();
+		ReleaseStartupHold();
 		base.OnDeleted();
 	}
 }

@@ -465,6 +465,11 @@ public static partial class MenuUtility
 		}, null );
 	}
 
+	/// <summary>
+	/// Keep the startup screen up, showing this status, while something is about to appear, so it doesn't pop in
+	/// once the startup screen has faded. Dispose the returned hold once it's there.
+	/// </summary>
+	public static IDisposable HoldStartupScreen( string status ) => StartupScreen.HoldFor( status );
 }
 
 /// <summary>
