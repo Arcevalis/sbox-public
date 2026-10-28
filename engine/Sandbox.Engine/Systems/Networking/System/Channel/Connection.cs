@@ -345,12 +345,17 @@ public abstract partial class Connection : BytePack.ISerializer
 	}
 
 	/// <summary>
-	/// Virtual override point — exists so <see cref="MockConnection"/> can intercept the raw
-	/// <see cref="ByteStream"/> for routing through the host before encoding happens.
+	/// Encode and send a message. Peers behind the host get it through the host before it's encoded.
 	/// All other code should prefer calling <see cref="Send(NetPacket, NetFlags)"/> with an already-encoded packet.
 	/// </summary>
-	internal virtual void SendStream( ByteStream stream, NetFlags flags = NetFlags.Reliable )
+	internal void SendStream( ByteStream stream, NetFlags flags = NetFlags.Reliable )
 	{
+		if ( RelayFor( flags ) && (!HasPendingSends || (flags & NetFlags.Reliable) == 0) )
+		{
+			System?.SendMulticast( [Id], stream.ToSpan(), flags );
+			return;
+		}
+
 		var packet = EncodePacket( stream );
 		Send( packet, flags );
 		packet.Release();
@@ -373,15 +378,21 @@ public abstract partial class Connection : BytePack.ISerializer
 	/// <paramref name="packets"/> so a broadcast can hand the same ones to every recipient. The caller still owns
 	/// <paramref name="encoded"/>.
 	/// </summary>
-	internal virtual void Send( NetPacket encoded, NetFlags flags, ref byte[][] packets )
+	internal void Send( NetPacket encoded, NetFlags flags, ref byte[][] packets )
 	{
 		if ( sendsClosed )
 		{
 			return;
 		}
-		if ( pendingSends.Count > 0 )
+		if ( RelayFor( flags ) && (!HasPendingSends || (flags & NetFlags.Reliable) == 0) )
 		{
-			QueueSend( Task.FromResult( packets ??= CreatePackets( encoded.Span, flags ) ), flags );
+			System?.SendMulticast( [Id], Decode( encoded.Span ), flags );
+			return;
+		}
+		if ( HasPendingSends )
+		{
+			// Keep the complete message so it can be sent through either route when drained.
+			QueueSend( Task.FromResult<byte[][]>( [encoded.Span.ToArray()] ), flags );
 			return;
 		}
 
