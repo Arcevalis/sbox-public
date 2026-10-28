@@ -43,7 +43,7 @@
 
                 @if (!IsWorkshopSource && Result?.Facets is not null)
                 {
-                    foreach (var facet in Result.Facets)
+                    foreach (var facet in Result.Facets.Where( x => !MenuHelpers.IsRatingFacet( x ) ))
                     {
                         <div class="flex-column flex-gap-8">
                             <h2><WithIcon Icon="@facet.Entries.FirstOrDefault()?.Icon" Text="@facet.Title"></WithIcon></h2>
@@ -73,7 +73,7 @@
             }
             else
             {
-                <MenuProject.UI.PackageList @ref=PackageList Surface="search" ShowFilters="@false" Query=@($"type:game sort:{filterOrder} {Filter} {GetQuery()}") Packages=@(IsWorkshopSource ? workshopPackages ?? Array.Empty<Package>() : null) ShowSubscribe=@IsWorkshopSource OnSelected=@Selected OnMenu=@Menu Take=@(200)></MenuProject.UI.PackageList>
+                <MenuProject.UI.PackageList @ref=PackageList Surface="search" ShowFilters="@false" Query=@($"type:game sort:{filterOrder} {Filter} {GetQuery()}") Packages=@(IsWorkshopSource ? workshopPackages ?? Array.Empty<Package>() : null) OnSelected=@Selected OnMenu=@Menu Take=@(200)></MenuProject.UI.PackageList>
             }
         </Body>
     </Page>

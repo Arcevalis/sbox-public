@@ -151,12 +151,6 @@ public class ModalSystem : IModalSystem
 		Push( modal );
 	}
 
-	public void Organization( Package.Organization org )
-	{
-		CloseExisting<OrganizationModal>();
-		Push( new OrganizationModal { Org = org } );
-	}
-
 	public void Review( Package package )
 	{
 		Push( new ReviewModal { Package = package } );

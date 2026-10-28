@@ -89,9 +89,10 @@
         @* The strip, in a box that holds the fade on its right end still while the strip scrolls *@
         <div class="strip">
         <div class="list">
-            @foreach (var screenshot in Shots)
+            @* By where they are in the strip - a workshop item's shots are made fresh each time they're asked for *@
+            @foreach (var (screenshot, index) in Shots.Select( ( x, i ) => (x, i) ))
             {
-                <div class="screenshot @(screenshot == selectedShot ? "selected" : "")" onclick=@(() => SelectScreenshot(screenshot))>
+                <div class="screenshot @(index == SelectedScreenshot ? "selected" : "")" onclick=@(() => SelectScreenshot(index))>
                     <img src="@screenshot.Thumb" />
                     @if (screenshot.IsVideo)
                     {
@@ -250,9 +251,10 @@
         return shot.IsVideo ? (Package.ThumbWide ?? Package.Thumb) : shot.Url;
     }
 
-    void SelectScreenshot(Package.Screenshot screenshot)
+    void SelectScreenshot(int index)
     {
-        SelectedScreenshot = Shots.IndexOf(screenshot);
+        SelectedScreenshot = index;
+        var screenshot = Shots[index];
 
         // Picking a video's asking for it
         if ( screenshot.IsVideo ) _playRequested = true;

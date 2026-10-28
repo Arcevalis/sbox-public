@@ -75,7 +75,7 @@
         @* Not until it's known whose they are - the backend's, or its workshop item's *@
         @if (Modal?.PageLoading == false)
         {
-            <PackageReactions Package=@Package OnWorkshop=@Modal.OnWorkshop Workshop=@Modal.WorkshopItem OnHidden=@(() => Modal?.CloseModal( false )) />
+            <PackageReactions Package=@Package ShowReviews=@false OnWorkshop=@Modal.OnWorkshop Workshop=@Modal.WorkshopItem OnHidden=@(() => Modal?.CloseModal( false )) />
 
             @* Subscribing, by its votes - they're on Steam too *@
             @if (Modal.OnWorkshop)

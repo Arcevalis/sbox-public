@@ -312,6 +312,11 @@ public static class MenuHelpers
 	/// <summary>
 	/// A size in bytes to read - "201.63 MB", with a space before the unit and the unit in capitals
 	/// </summary>
+	/// <summary>
+	/// The backend's 1 to 5 star rating filter - not offered, the rest of its filters are
+	/// </summary>
+	public static bool IsRatingFacet( Package.Facet facet ) => facet.Name.Contains( "rating", StringComparison.OrdinalIgnoreCase ) || facet.Title.Contains( "rating", StringComparison.OrdinalIgnoreCase );
+
 	public static string FormatSize( long bytes )
 	{
 		var formatted = bytes.FormatBytes();
@@ -415,7 +420,6 @@ public static class MenuHelpers
 		menu.AddOption( favourite ? "favorite" : "favorite_border", favourite ? "#menu.games.remove_from_favourites" : "#menu.games.add_to_favourites", () => _ = package.SetFavouriteAsync( !favourite ) );
 
 		menu.AddSpacer();
-		menu.AddOption( "corporate_fare", "#menu.games.view_creator", () => Game.Overlay.ShowOrganizationModal( package.Org ) );
 		menu.AddOption( "rate_review", "#menu.games.review_game", () => Game.Overlay.ShowReviewModal( package ) );
 		menu.AddOption( "flag", "#menu.games.report_game", () => Game.Overlay.ShowReportModal( package.FullIdent ) );
 		menu.AddOption( "block", "#menu.games.hide_game", () => _ = HidePackage( source, package ) );
@@ -529,7 +533,6 @@ public static class MenuHelpers
 
 		menu.AddSpacer();
 		menu.AddOption( "info", "#menu.games.view_map_details", () => Game.Overlay.ShowPackageModal( package.FullIdent ) );
-		menu.AddOption( "corporate_fare", "#menu.games.view_creator", () => Game.Overlay.ShowOrganizationModal( package.Org ) );
 		menu.AddOption( "star", "#menu.games.rate_map", () => Game.Overlay.ShowReviewModal( package ) );
 	}
 

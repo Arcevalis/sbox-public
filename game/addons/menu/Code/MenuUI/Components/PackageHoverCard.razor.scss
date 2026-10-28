@@ -106,28 +106,7 @@ PackageHoverCard
 		}
 	}
 
-	// Who made it and when it was updated - the whole line to itself, cut short only if it really is long
-	.byline
-	{
-		flex-direction: row;
-		align-items: center;
-		margin-top: -4px;
-		overflow: hidden;
-
-		> label
-		{
-			flex-shrink: 1;
-			min-width: 0;
-			font-size: 11.5px;
-			font-weight: 500;
-			color: $front-tertiary;
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
-		}
-	}
-
-	// The genres, then how it's played, under the byline - all just labels, nothing to click
+	// The genres, then how it's played, under the title - all just labels, nothing to click
 	.tags
 	{
 		flex-direction: row;
@@ -565,15 +544,6 @@ PackageHoverCard
 	{
 		width: 38px;
 		height: 12px;
-	}
-
-	.line-bone
-	{
-		width: 92%;
-		height: 10px;
-		margin: 3px 0;
-
-		&.short { width: 55%; }
 	}
 
 	.group-bone

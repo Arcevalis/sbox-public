@@ -10,67 +10,57 @@
    name, version and when, then what's in it by kind - added, improved, fixed, removed, known
    issues - each kind with its own colour. Kinds with nothing in them aren't shown at all.
 
-   Embedded (on the Overview, under the gallery) it's just the newest card, and nothing at all for a
-   game that's never published one.
-
    A game can have hundreds, so only the cards near what's on screen are built - the rest keep their
    room as an empty card of the same height (measured once it's been built, guessed from how much is
    in it until then), so the line and the scrollbar don't move as they come and go. *@
 
-<root class="@(Embedded ? "embedded" : "")">
+<root>
 
     @if (!_loaded)
     {
-        @* The shape of an update card while it loads - one on the Overview (only if the game's
-           published any, so a game with none doesn't flash one), two on the Changes tab *@
-        @if (!Embedded || Package?.LatestChangeLists.Length > 0)
-        {
-            <div class="timeline">
-                @for (var i = 0; i < (Embedded ? 1 : 2); i++)
-                {
-                    <div class="update skeleton @(i == 0 ? "latest" : "")">
-                        <div class="rail">
-                            <div class="dot"></div>
-                            <div class="line"></div>
-                        </div>
+        @* The shape of an update card while it loads - two of them *@
+        <div class="timeline">
+            @for (var i = 0; i < 2; i++)
+            {
+                <div class="update skeleton @(i == 0 ? "latest" : "")">
+                    <div class="rail">
+                        <div class="dot"></div>
+                        <div class="line"></div>
+                    </div>
 
-                        <div class="card">
-                            <div class="card-head">
-                                <div class="bone title-bone"></div>
-                                <div class="bone pill-bone"></div>
-                            </div>
-                            <div class="sections">
-                                <div class="bone-section">
-                                    <div class="bone heading-bone"></div>
-                                    <div class="bone line-bone"></div>
-                                    <div class="bone line-bone short"></div>
-                                    <div class="bone line-bone shorter"></div>
-                                </div>
+                    <div class="card">
+                        <div class="card-head">
+                            <div class="bone title-bone"></div>
+                            <div class="bone pill-bone"></div>
+                        </div>
+                        <div class="sections">
+                            <div class="bone-section">
+                                <div class="bone heading-bone"></div>
+                                <div class="bone line-bone"></div>
+                                <div class="bone line-bone short"></div>
+                                <div class="bone line-bone shorter"></div>
                             </div>
                         </div>
                     </div>
-                }
-            </div>
-        }
+                </div>
+            }
+        </div>
     }
     else if (Count == 0)
     {
-        @if (!Embedded)
-        {
-            <div class="state">@(!OnWorkshop ? "#menu.games.this_package_hasn_t_published_any_changelists" : _notesFailed ? "#menu.workshop.change_notes_failed" : "#menu.workshop.no_change_notes")</div>
-        }
+        <div class="state">@(!OnWorkshop ? "#menu.games.this_package_hasn_t_published_any_changelists" : _notesFailed ? "#menu.workshop.change_notes_failed" : "#menu.workshop.no_change_notes")</div>
     }
     else
     {
         <div class="timeline" @ref="Timeline">
-            @for (var i = 0; i < Shown; i++)
+            @for (var i = 0; i < Count; i++)
             {
                 @* A workshop item's change notes are just what was said, when - no title, no kinds of change *@
                 var change = OnWorkshop ? null : _changeLists[i];
                 var note = OnWorkshop ? _notes[i] : default;
                 var created = change?.Created ?? note.Time;
                 var latest = i == 0;
-                var last = i == Shown - 1 && !HasOlderNotes;
+                var last = i == Count - 1 && !HasOlderNotes;
                 var hasTitle = !string.IsNullOrWhiteSpace(change?.Title);
                 var dateText = created.LocalDateTime.ToString("d MMMM yyyy");
 
@@ -141,11 +131,6 @@
 {
     [Parameter] public Package Package { get; set; }
 
-    /// <summary>
-    /// Just the newest, no scrolling of its own - for the Overview.
-    /// </summary>
-    [Parameter] public bool Embedded { get; set; }
-
 
     /// <summary>
     /// Its Steam Workshop item - the timeline's its change notes rather than the backend's changelists. 0 for the backend's.
@@ -156,20 +141,18 @@
 
     int Count => OnWorkshop ? _notes.Count : _changeLists.Length;
 
-    int Shown => Embedded ? Math.Min( Count, 1 ) : Count;
-
     readonly List<WorkshopChangeNote> _notes = new();
     int _notesTotal;
     int _notesPage;
     bool _notesFailed;
     bool _loadingNotes;
 
-    bool HasOlderNotes => OnWorkshop && !Embedded && _notes.Count < _notesTotal;
+    bool HasOlderNotes => OnWorkshop && _notes.Count < _notesTotal;
 
     ImmutableArray<Package.ChangeList> _changeLists = ImmutableArray<Package.ChangeList>.Empty;
     bool _loaded;
 
-    protected override int BuildHash() => System.HashCode.Combine(Package, _loaded, _changeLists.Length, Embedded, Near.Hash, System.HashCode.Combine( WorkshopId, _notes.Count, _notesTotal, _notesFailed, _loadingNotes ));
+    protected override int BuildHash() => System.HashCode.Combine(Package, _loaded, _changeLists.Length, Near.Hash, System.HashCode.Combine( WorkshopId, _notes.Count, _notesTotal, _notesFailed, _loadingNotes ));
 
     //
     // Only the cards near the screen, built - see the top
@@ -178,7 +161,7 @@
     Panel Timeline;
     readonly MenuProject.UI.NearScreen Near = new();
 
-    bool IsBuilt( int i ) => Embedded || Near.IsBuilt( i );
+    bool IsBuilt( int i ) => Near.IsBuilt( i );
 
     string HeightOf( int i ) => Near.HeightOf( i, OnWorkshop ? Estimate( _notes[i] ) : Estimate( _changeLists[i] ) );
 
@@ -214,7 +197,7 @@
     {
         base.Tick();
 
-        if ( Embedded || !_loaded ) return;
+        if ( !_loaded ) return;
 
         // Its card, once it's a real one rather than its room
         if ( Near.Update( this, Timeline, Count, row => row.Children.LastOrDefault( x => !x.IsDeleting ) is { } card && card.HasClass( "card" ) && !card.HasClass( "placeholder" ) ? card : null ) )

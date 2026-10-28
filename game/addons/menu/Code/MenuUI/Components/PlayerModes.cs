@@ -140,7 +140,7 @@ public readonly record struct PlayerModes( bool Solo, bool Multiplayer, bool Coo
 	}
 
 	/// <summary>
-	/// How many it's meant for - "1 player", "2 - 4 players", "4+ players". Null when it doesn't say.
+	/// How many it's meant for - "1 player", "2 to 4 players", "4+ players". Null when it doesn't say.
 	/// </summary>
 	public string PlayersText
 	{
@@ -153,7 +153,7 @@ public readonly record struct PlayerModes( bool Solo, bool Multiplayer, bool Coo
 
 			if ( max <= 0 ) return $"{min}+ players";
 			if ( min == max ) return min == 1 ? "1 player" : $"{min} players";
-			return $"{min} - {max} players";
+			return $"{min} to {max} players";
 		}
 	}
 

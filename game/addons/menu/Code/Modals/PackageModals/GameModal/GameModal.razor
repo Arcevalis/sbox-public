@@ -12,14 +12,16 @@
 @using MenuProject.Modals.PackageModalComponents;
 @using MenuProject.MenuUI.Components.Multiplayer;
 
-<root>
+@* The page and its tabs hidden while a new game's being set up or its sessions are up, in their place -
+   from what's showing every time it's drawn, so the two can't come apart *@
+<root class="@(IsSettingUp || IsBrowsingSessions ? "setting-up" : "")">
 
-    <MegaCard>
+    <MegaCard @ref=Card>
         <Metrics>
-            @* Just report - the rest is in the info column. Reports are the backend's - on the workshop, Steam's are on its page *@
+            @* Just report - the rest is on the Overview. Reports are the backend's - on the workshop, Steam's are on its page *@
             @if ( !OnWorkshop && !PageLoading )
             {
-                <PackageMetrics Package="@Package" ShowRatings="@false" ShowStats="@false"/>
+                <PackageMetrics Package="@Package" />
             }
         </Metrics>
         <Tabs>
@@ -39,36 +41,33 @@
 
             @* A game's tabs - the Overview's the gallery and the newest update under it. Kept while
                setting up, just not shown, so the page is as it was left on the way back *@
-            <PackageTabs @ref=GameTabs Package=@Package Portal=@Portal ShowReviews=@(!OnWorkshop && !PageLoading) ShowUpdates=@(!OnWorkshop && !PageLoading) WorkshopId=@(OnWorkshop ? WorkshopId : 0)>
+            <PackageTabs @ref=GameTabs Package=@Package Portal=@Portal ShowReviews=@false ShowUpdates=@(!OnWorkshop && !PageLoading) WorkshopId=@(OnWorkshop ? WorkshopId : 0)>
                 <Overview>
-                    @* On the workshop it's its item's page - its images, and its description where the latest update would be *@
-                    @* Until it's known which page it is, the gallery's loading - neither one's shown, then swapped for the other *@
-                    @if ( PageLoading )
-                    {
-                        <Media Package=@Package Loaded=@false></Media>
-                    }
-                    else if ( OnWorkshop )
-                    {
-                        <Media Package=@Package Images=@(WorkshopItem?.Images ?? Array.Empty<string>()) YouTubeVideos=@WorkshopItem?.YouTubeVideos Loaded=@true></Media>
-                        <PackageDescription Package=@Package Html=@Sandbox.Html.BBCodeParser.ToHtml( WorkshopItem?.Description ) />
-                    }
-                    else
-                    {
-                        <Media Package=@Package Loaded=@HasFullPackage Failed=@FetchFailed></Media>
-                        <PackageChanges Package=@Package Embedded=@true />
-                    }
+                    <PackageStore Package=@Package Workshop=@WorkshopItem OnWorkshop=@OnWorkshop Loading=@PageLoading Portal=@Portal OnChangelogClicked="@(() => GameTabs?.OpenChanges())">
+                        <Gallery>
+                            @* Its workshop item's images on the workshop. Until it's known which, the gallery's loading -
+                               neither one's shown, then swapped for the other *@
+                            @if ( PageLoading )
+                            {
+                                <Media Package=@Package Loaded=@false></Media>
+                            }
+                            else if ( OnWorkshop )
+                            {
+                                <Media Package=@Package Images=@(WorkshopItem?.Images ?? Array.Empty<string>()) YouTubeVideos=@WorkshopItem?.YouTubeVideos Loaded=@true></Media>
+                            }
+                            else
+                            {
+                                <Media Package=@Package Loaded=@HasFullPackage Failed=@FetchFailed></Media>
+                            }
+                        </Gallery>
+                    </PackageStore>
                 </Overview>
             </PackageTabs>
         </Tabs>
-        <Left>
-            <PackageInfoPanel Portal=@Portal Package="@Package" Loading=@PageLoading OnWorkshop=@OnWorkshop Workshop=@WorkshopItem OnChangelogClicked="@(() => GameTabs?.OpenChanges())" OnReviewsClicked="@(() => GameTabs?.OpenReviews())" />
-
-        </Left>
-
         <Content>
             <PortalTarget @ref=Portal></PortalTarget>
 
-            @if ( Setup is not null )
+            @if ( IsSettingUp && Setup is not null )
             {
                 <GameSetupView Setup=@Setup ReadOnly=@SetupReadOnly Notice=@SetupNotice Error=@SetupError />
             }
@@ -153,6 +152,51 @@
 
     PortalTarget Portal = default;
     PackageTabs GameTabs = default;
+    MegaCard Card;
+
+    /// <summary>
+    /// How tall the Overview made the page, once it's settled - then the page is held there whatever's on it, the
+    /// Overview included, so it doesn't change size going between tabs or while one's loading. Measured once: it
+    /// can't be measured again on the way back to the Overview, which for a frame is still the last tab.
+    /// </summary>
+    float OverviewHeight;
+
+    /// <summary>
+    /// The page's held at <see cref="OverviewHeight"/>
+    /// </summary>
+    bool HeldHeight;
+
+    /// <summary>
+    /// The Overview's height hasn't moved since - it's settled once it's held still a moment
+    /// </summary>
+    RealTimeSince SinceHeightMoved;
+
+    public override void Tick()
+    {
+        base.Tick();
+
+        if ( HeldHeight || !Card.IsValid() || GameTabs is null ) return;
+
+        // Only the Overview, loaded, measures it
+        if ( !GameTabs.OnOverview || IsSettingUp || IsBrowsingSessions || PageLoading )
+        {
+            SinceHeightMoved = 0;
+            return;
+        }
+
+        var height = Card.Box.Rect.Height * Card.ScaleFromScreen;
+        if ( MathF.Abs( height - OverviewHeight ) >= 1 )
+        {
+            OverviewHeight = height;
+            SinceHeightMoved = 0;
+            return;
+        }
+
+        if ( OverviewHeight <= 0 || SinceHeightMoved < 0.25f ) return;
+
+        HeldHeight = true;
+        Card.Style.Height = Length.Pixels( OverviewHeight );
+    }
 
     /// <summary>
     /// Looking through who's playing it, in the page's place like setting up a game - its servers and
@@ -165,7 +209,6 @@
         if ( IsSettingUp ) CloseSetup();
 
         IsBrowsingSessions = true;
-        SetClass( "setting-up", true );
         StateHasChanged();
     }
 
@@ -175,7 +218,6 @@
     public void CloseSessions()
     {
         IsBrowsingSessions = false;
-        SetClass( "setting-up", IsSettingUp );
         StateHasChanged();
     }
 
@@ -210,8 +252,9 @@
         var maxMembers = draft?.MaxMembers ?? (partyActions && PartyView.Exists ? PartyView.MaxMembers : 0);
         Setup = null;
         IsSettingUp = true;
+        // Setting one up from the sessions list leaves it - back from setting up is the game's page
+        IsBrowsingSessions = false;
         InitializePartySetup( partyActions, draft );
-        SetClass( "setting-up", true );
         StateHasChanged();
 
         try
@@ -264,7 +307,6 @@
         SetupDownload = null;
         IsSettingUp = false;
         Setup = null;
-        SetClass( "setting-up", false );
         StateHasChanged();
     }
 
@@ -336,7 +378,6 @@
     void OnLobbySelected ( LobbyInformation lobby )
     {
         MenuUtility.Connect( lobby.LobbyId );
-        OrganizationModal.LastOpened?.CloseModal( true );
     }
 
     protected override async Task OnParametersSetAsync()

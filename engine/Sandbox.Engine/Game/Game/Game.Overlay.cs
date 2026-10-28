@@ -82,15 +82,11 @@ public static partial class Game
 		}
 
 		/// <summary>
-		/// Opens a modal for the specified organization. 
-		/// This is most likely called from a Package - so get the organization from there.
+		/// Used to open a modal for the specified organization. There isn't one any more - this does nothing.
 		/// </summary>
-		/// <param name="org"></param>
+		[Obsolete( "Organizations no longer have a modal - this does nothing." )]
 		public static void ShowOrganizationModal( Package.Organization org )
 		{
-			using var scope = GlobalContext.MenuScope();
-
-			IModalSystem.Current?.Organization( org );
 		}
 
 		/// <summary>

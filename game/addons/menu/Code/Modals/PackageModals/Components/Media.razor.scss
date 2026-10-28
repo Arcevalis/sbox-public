@@ -21,7 +21,7 @@ Media
 	}
 }
 
-// A 16:9 frame, rounded and outlined like the menu's panels, with a shadow to lift it off the page.
+// A 16:9 frame, rounded and outlined like the menu's panels - no shadow, it showed as a dark smudge under it.
 // The shot sits in it whole; its blurred copy fills round it
 Media > .main
 {
@@ -36,7 +36,6 @@ Media > .main
 	border-radius: $front-radius;
 	border: $front-border-width solid $front-border;
 	background-color: #0B0D14;
-	box-shadow: 0 16px 40px rgba( 0, 0, 0, 0.45 );
 
 	// Only the one shot, so no strip under it - the strip's 3 of its own, so the description sits
 	// the same distance off it
@@ -291,29 +290,12 @@ Media > .main
 	}
 }
 
-// Holds the strip, and the fade over its right end - on this box, not the scrolling strip (a mask
-// on something that scrolls draws it wrong), so the fade stays put while the strip scrolls under.
-// The page's colour behind the gallery, clear to solid
+// Holds the strip - no fade over its end, a thumbnail cut off there says there's more. A fade had to be
+// the colour of whatever's behind the gallery, which isn't the same everywhere it's shown
 Media > .strip
 {
-	position: relative;
 	flex-shrink: 0;
 	max-width: 100%;
-
-	&::after
-	{
-		content: "";
-		position: absolute;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		width: 56px;
-		// Sampled off the page in a screenshot - 17,19,25. A shade lighter and it shows as a pale
-		// block over the empty end of the strip
-		background-image: linear-gradient( to right, rgba( 17, 19, 25, 0 ), rgb( 17, 19, 25 ) );
-		pointer-events: none;
-		z-index: 10;
-	}
 }
 
 // The strip - bigger thumbnails, the one you're on outlined in the menu blue, the rest dimmed and
@@ -325,13 +307,12 @@ Media > .strip > .list
 	gap: 6px;
 	max-width: 100%;
 
-	// No scrollbar - the fade on the right end says there's more
+	// No scrollbar - the last thumbnail cut off at the end says there's more
 	scrollbar-width: none;
 	height: 69px;
 
-	// Room on the right to scroll the last thumbnail out from under the fade, and a little round
-	// the rest for the selected one's outline
-	padding: 3px 56px 3px 3px;
+	// A little round them for the selected one's outline
+	padding: 3px;
 
 	> .screenshot
 	{
