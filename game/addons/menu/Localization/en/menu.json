@@ -880,6 +880,8 @@
     "menu.settings.audio.background.description": "Keeps playing sound while the window isn't focused.",
     "menu.settings.audio.blurb": "Output device, volumes and voice.",
     "menu.settings.audio.device.description": "Where sound is played. Follows Windows' default unless you pick something here.",
+    "menu.settings.audio.game.description": "Sound effects in games - everything on a game's Game mixer.",
+    "menu.settings.audio.game.title": "Game",
     "menu.settings.audio.menu_music.description": "Music in the menu, loading screens and avatar editor.",
     "menu.settings.audio.menu_music.title": "Menu Music",
     "menu.settings.audio.microphone.description": "What voice chat records from. Follows Windows' default unless you pick something here.",

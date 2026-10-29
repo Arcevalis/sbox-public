@@ -834,6 +834,7 @@ public class SettingsCatalog
 		} );
 
 		AddVolume( "audio.volume", "#menu.settings.audio.volume.title", "#menu.settings.audio.volume.description", "volume" );
+		AddVolume( "audio.game", "#menu.settings.audio.game.title", "#menu.settings.audio.game.description", "game_volume" );
 		AddVolume( "audio.music", "#menu.settings.audio.music.title", "#menu.settings.audio.music.description", "music_volume" );
 		AddVolume( "audio.menu_music", "#menu.settings.audio.menu_music.title", "#menu.settings.audio.menu_music.description", "music_volume_menu" );
 		AddVolume( "audio.voice", "#menu.settings.audio.voice.title", "#menu.settings.audio.voice.description", "voip_volume" );
@@ -1109,6 +1110,7 @@ public class SettingsCatalog
 
 		ConsoleSystem.SetValue( "snd_simulation_enable", true );
 		ConsoleSystem.SetValue( "volume", 1.0f );
+		ConsoleSystem.SetValue( "game_volume", 1.0f );
 		ConsoleSystem.SetValue( "music_volume", 1.0f );
 		ConsoleSystem.SetValue( "music_volume_menu", 1.0f );
 		ConsoleSystem.SetValue( "voip_volume", 1.0f );
