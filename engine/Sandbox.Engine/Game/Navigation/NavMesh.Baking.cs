@@ -327,7 +327,7 @@ public sealed partial class NavMesh
 		// Load baked data path from RawFileReference
 		if ( jso["BakedDataPath"] is JsonObject bakedDataObj )
 		{
-			_bakedDataPath = bakedDataObj["path"]?.ToString();
+			_bakedDataPath = FileReference.FromPath( bakedDataObj["path"]?.ToString() ).Path;
 		}
 		else _bakedDataPath = null;
 		IsEnabled = (bool)(jso["Enabled"] ?? false);

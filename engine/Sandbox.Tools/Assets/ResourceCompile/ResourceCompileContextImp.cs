@@ -1,4 +1,4 @@
-﻿using Sandbox.Resources;
+using Sandbox.Resources;
 using System;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -53,17 +53,37 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 
 	public override void AddRuntimeReference( string path )
 	{
-		_context.RegisterReference( path );
+		_context.RegisterReference( GetRuntimeReferencePath( path ) );
 	}
+
+	internal static string GetRuntimeReferencePath( string path ) => Resource.FixPath( path );
 
 	/// <summary>
 	/// Add a reference that is needed to compile this resource, but isn't actually needed once compiled.
 	/// </summary>
 	public override void AddCompileReference( string path, bool optional = false )
 	{
+		var sourcePath = AssetSystem.FindByPath( path )?.AbsoluteSourcePath;
+
 		// INPUT_FILE_DEPENDENCY_OPTIONAL - a missing optional file doesn't fail the
 		// compile, but still recompiles us if it appears or changes later
-		_context.RegisterInputFileDependency( path, optional ? 1 : 0 );
+		foreach ( var filename in ResolveCompileReferencePaths( path, sourcePath, optional ) )
+		{
+			_context.RegisterInputFileDependency( filename, optional ? 1 : 0 );
+		}
+	}
+
+	internal static string[] ResolveCompileReferencePaths( string path, string absoluteSourcePath, bool optional )
+	{
+		var isAbsolute = System.IO.Path.IsPathRooted( path );
+		var filename = !isAbsolute && !string.IsNullOrWhiteSpace( absoluteSourcePath ) ? absoluteSourcePath : path;
+		filename = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( filename );
+
+		// Keep watching the requested optional spelling when a legacy file resolves differently.
+		if ( optional && isAbsolute && !string.Equals( path, filename, StringComparison.Ordinal ) )
+			return new[] { path, filename };
+
+		return new[] { filename };
 	}
 
 	/// <summary>
@@ -74,8 +94,17 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 	{
 		if ( !string.IsNullOrWhiteSpace( path ) )
 		{
-			_context.RegisterAdditionalRelatedFile_Game( path );
+			_context.RegisterAdditionalRelatedFile_Game( GetGameFileReferencePath( path ) );
 		}
+	}
+
+	internal static string GetGameFileReferencePath( string path )
+	{
+		// The native API may also accept physical filenames; only canonicalize logical paths.
+		if ( string.IsNullOrEmpty( path ) || System.IO.Path.IsPathRooted( path ) || path[0] == '\\' || (path.Length > 1 && path[1] == ':') )
+			return path;
+
+		return Sandbox.FileReference.FromPath( path ).Path;
 	}
 
 	public override void AddCompiledReference( string path )
@@ -91,7 +120,9 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 		_context.MarkErrorDuringCompile( error );
 	}
 
-
+	/// <summary>
+	/// Create a child resource
+	/// </summary>
 	public override Child CreateChild( string path )
 	{
 		var childContext = _context.CreateChildContext( path );
@@ -115,11 +146,13 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 			return data;
 		}
 
+		// Raw System.IO needs the disk's real casing, not the lowercase identity.
+		var filename = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( AbsolutePath );
+
 		for ( int i = 0; i < 10; i++ )
 		{
 			try
 			{
-				var filename = AbsolutePath;
 				return System.IO.File.ReadAllBytes( filename );
 			}
 			catch ( System.IO.DirectoryNotFoundException )
@@ -179,6 +212,13 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 		return node.ToJsonString( serializeOptions );
 	}
 
+	internal static Sandbox.FileReference NormalizeFileReference( JsonObject node )
+	{
+		var reference = JsonSerializer.Deserialize<Sandbox.FileReference>( node );
+		node["path"] = reference.Path;
+		return reference;
+	}
+
 	private void RecurseJsonNodes( JsonNode element )
 	{
 		if ( element is null )
@@ -200,7 +240,7 @@ unsafe class ResourceCompileContextImp : ResourceCompileContext, IDisposable
 			//
 			if ( jsonobj["$reference_type"]?.GetValue<string>() == Sandbox.FileReference.ReferenceTypeName )
 			{
-				var reference = JsonSerializer.Deserialize<Sandbox.FileReference>( jsonobj );
+				var reference = NormalizeFileReference( jsonobj );
 				if ( !string.IsNullOrWhiteSpace( reference.Path ) )
 				{
 					AddGameFileReference( reference.Path );

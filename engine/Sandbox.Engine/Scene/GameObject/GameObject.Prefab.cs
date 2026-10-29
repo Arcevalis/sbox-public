@@ -152,8 +152,11 @@ public partial class GameObject
 			return;
 		}
 
-		// Added 12th Dec 2023
-		prefabSource.Path = prefabSource.Path.Replace( ".object", ".prefab", StringComparison.OrdinalIgnoreCase );
+		if ( !string.IsNullOrEmpty( prefabSource.Path ) )
+		{
+			// Added 12th Dec 2023
+			prefabSource.Path = Resource.FixPath( prefabSource.Path.Replace( ".object", ".prefab", StringComparison.OrdinalIgnoreCase ) );
+		}
 
 		_prefabInstanceData = new PrefabInstanceData( prefabSource, this, isNested );
 	}

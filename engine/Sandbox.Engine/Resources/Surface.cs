@@ -34,7 +34,13 @@ public partial class Surface : GameResource
 	/// Filepath of the base surface. Use <see cref="SetBaseSurface">SetBaseSurface</see> and <see cref="GetBaseSurface">GetBaseSurface</see>.
 	/// </summary>
 	[ResourceType( "surface" ), Description( "Fallback surface for empty fields on this surface." )]
-	public string BaseSurface { get; set; }
+	public string BaseSurface
+	{
+		get => _baseSurface;
+		set => _baseSurface = value is null ? null : FixPath( value );
+	}
+
+	string _baseSurface;
 
 	/// <summary>
 	/// Defines the audio properties of this surface for Steam Audio
@@ -94,7 +100,9 @@ public partial class Surface : GameResource
 	/// </summary>
 	public Surface GetBaseSurface()
 	{
-		var baseSurf = All.Where( x => x.Value.ResourcePath == BaseSurface && x.Value != this ).FirstOrDefault().Value;
+		// Defensively normalize legacy or hotloaded logical references.
+		var basePath = FixPath( BaseSurface );
+		var baseSurf = All.Where( x => x.Value.ResourcePath == basePath && x.Value != this ).FirstOrDefault().Value;
 		if ( baseSurf == null && Index != 0 ) return All[0]; // If not found, fallback to default unless we are the default.
 		return baseSurf;
 	}
@@ -104,7 +112,7 @@ public partial class Surface : GameResource
 	/// </summary>
 	public void SetBaseSurface( string name )
 	{
-		BaseSurface = All.Where( x => x.Value.ResourceName == name ).FirstOrDefault().Value.ResourcePath;
+		BaseSurface = All.Where( x => string.Equals( x.Value.ResourceName, name, StringComparison.OrdinalIgnoreCase ) ).FirstOrDefault().Value.ResourcePath;
 	}
 
 	protected override void PostLoad()

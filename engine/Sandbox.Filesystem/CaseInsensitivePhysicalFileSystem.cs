@@ -15,33 +15,13 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	/// </summary>
 	private readonly ConcurrentDictionary<string, DirectoryEntries> _directoryCache = new( StringComparer.Ordinal );
 
-	/// <summary>
-	/// Input path -> resolved path with correct on-disk casing.
-	///
-	/// Keyed exactly, not ignoring case: when two folders differ only by case they both really
-	/// exist, and "code" and "Code" have to be able to resolve to different places.
-	/// </summary>
-	private readonly ConcurrentDictionary<string, string> _resolvedPathCache = new( StringComparer.Ordinal );
-
 	protected override string ConvertPathToInternalImpl( UPath path )
 	{
 		return ResolvePathCasing( base.ConvertPathToInternalImpl( path ) );
 	}
 
 	/// <summary>
-	/// Walk each component of <paramref name="path"/> and resolve it to the casing it has on
-	/// disk. A component that already exists exactly as given is kept as-is, so a path that's
-	/// already correct is never rewritten - that matters when two folders differ only by case,
-	/// because otherwise we'd be free to pick the wrong one.
-	///
-	/// Resolving stops at the first component that doesn't exist and the rest of the path is
-	/// appended untouched, which keeps this usable for paths that are about to be created and
-	/// lets the OS produce a normal "file not found" for paths that never existed.
-	/// </summary>
-	/// <summary>
-	/// Resolve a native path's casing without going through a filesystem instance - for code
-	/// that hands an absolute path straight to System.IO. Shares one instance so the directory
-	/// listings it builds are shared too.
+	/// Resolve an absolute native path for System.IO, preferring its exact disk spelling.
 	/// </summary>
 	internal static string ResolveNativeCasing( string path )
 	{
@@ -55,33 +35,27 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 
 	private string ResolvePathCasing( string path )
 	{
-		if ( path is null || path.Length < 2 )
+		if ( string.IsNullOrEmpty( path ) || !Path.IsPathRooted( path ) || Exists( path ) )
 			return path;
-
-		if ( _resolvedPathCache.TryGetValue( path, out var cached ) )
-			return cached;
 
 		var components = path.Split( '/', StringSplitOptions.RemoveEmptyEntries );
 		var resolved = "/";
 
 		for ( var i = 0; i < components.Length; i++ )
 		{
-			var entries = GetDirectoryEntries( resolved );
-
-			if ( entries is null || !entries.TryResolve( components[i], out var realName ) )
+			if ( !TryResolveComponent( resolved, components[i], out var realName ) )
 			{
-				// Nothing more we can say about this path - keep whatever is left as-is, and
-				// don't cache it, it might well exist by the time we're asked again.
+				// Preserve missing components for callers creating a new path.
 				return Append( resolved, string.Join( '/', components, i, components.Length - i ) );
 			}
 
 			resolved = Append( resolved, realName );
 		}
 
-		_resolvedPathCache.TryAdd( path, resolved );
-
 		return resolved;
 	}
+
+	private static bool Exists( string path ) => File.Exists( path ) || Directory.Exists( path );
 
 	private static string Append( string directory, string name )
 	{
@@ -89,12 +63,46 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	}
 
 	/// <summary>
+	/// Prefer exact disk spelling; refresh stale cached aliases and misses.
+	/// </summary>
+	/// <param name="directory">The real directory to look in.</param>
+	/// <param name="component">The name to resolve.</param>
+	/// <param name="realName">The name as it is spelled on disk, or null if it wasn't found.</param>
+	private bool TryResolveComponent( string directory, string component, out string realName )
+	{
+		if ( Exists( Append( directory, component ) ) )
+		{
+			realName = component;
+			return true;
+		}
+
+		var entries = GetDirectoryEntries( directory );
+
+		if ( entries is not null && entries.TryResolve( component, out realName ) && Exists( Append( directory, realName ) ) )
+			return true;
+
+		entries = GetDirectoryEntries( directory, true );
+
+		if ( entries is not null && entries.TryResolve( component, out realName ) )
+			return true;
+
+		realName = null;
+		return false;
+	}
+
+	/// <summary>
 	/// The names inside <paramref name="directory"/>, or null if it doesn't exist.
 	/// </summary>
-	private DirectoryEntries GetDirectoryEntries( string directory )
+	/// <param name="directory">The real directory path to list.</param>
+	/// <param name="refresh">Read the directory again instead of trusting a cached listing.</param>
+	private DirectoryEntries GetDirectoryEntries( string directory, bool refresh = false )
 	{
-		if ( _directoryCache.TryGetValue( directory, out var entries ) )
-			return entries;
+		if ( refresh )
+			_directoryCache.TryRemove( directory, out _ );
+		else if ( _directoryCache.TryGetValue( directory, out var cached ) )
+			return cached;
+
+		DirectoryEntries entries;
 
 		if ( !Directory.Exists( directory ) )
 			return null;
@@ -123,21 +131,6 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 
 		if ( parent is not null )
 			_directoryCache.TryRemove( parent, out _ );
-
-		InvalidateResolvedPaths( parent ?? resolvedPath );
-	}
-
-	/// <summary>
-	/// Remove resolved-path cache entries whose resolved value passes through
-	/// <paramref name="directoryPrefix"/>.
-	/// </summary>
-	private void InvalidateResolvedPaths( string directoryPrefix )
-	{
-		foreach ( var kvp in _resolvedPathCache )
-		{
-			if ( kvp.Value.StartsWith( directoryPrefix, StringComparison.Ordinal ) )
-				_resolvedPathCache.TryRemove( kvp.Key, out _ );
-		}
 	}
 
 	protected override void CreateDirectoryImpl( UPath path )
@@ -202,7 +195,6 @@ internal sealed class CaseInsensitivePhysicalFileSystem : PhysicalFileSystem
 	internal void InvalidateCache()
 	{
 		_directoryCache.Clear();
-		_resolvedPathCache.Clear();
 	}
 
 	/// <summary>

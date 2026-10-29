@@ -41,7 +41,7 @@ internal static class SceneSource
 	{
 		var path = asset.GetSourceFile( true );
 		var json = ReadJson( path );
-		var blobPath = path + "_d";
+		var blobPath = Asset.ResolveRelatedFilePath( path, "_d" );
 		var blobs = File.Exists( blobPath ) ? File.ReadAllBytes( blobPath ) : [];
 		return SceneFile.FromSource( asset.Path, asset.Guid, json, blobs );
 	}

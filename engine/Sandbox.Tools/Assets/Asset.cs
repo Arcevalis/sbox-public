@@ -99,12 +99,12 @@ public abstract partial class Asset
 	/// <summary>
 	/// This asset is generated in the transient folder. You don't need to see it, or keep it around. It will re-generate from something else.
 	/// </summary>
-	public virtual bool IsTransient => AbsolutePath.Contains( "/.sbox/transient/" ) || AbsolutePath.Contains( "/addons/menu/transients/" );
+	public virtual bool IsTransient => AbsolutePath?.Contains( "/.sbox/transient/" ) == true || AbsolutePath?.Contains( "/addons/menu/transients/" ) == true;
 
 	/// <summary>
 	/// This asset is from the cloud, it's in the cloud folder
 	/// </summary>
-	public virtual bool IsCloud => AbsolutePath.Contains( "/.sbox/cloud/" );
+	public virtual bool IsCloud => AbsolutePath?.Contains( "/.sbox/cloud/" ) == true;
 
 	/// <summary>
 	/// The asset was generated from another asset compile and has no source asset of its own. For example model break gibs .vmdl, .vtex files for materials, etc.
@@ -132,26 +132,121 @@ public abstract partial class Asset
 	/// </summary>
 	public bool Delete()
 	{
-		var path = AbsolutePath;
+		var path = GetRelatedSourcePath();
 		if ( string.IsNullOrEmpty( path ) ) return false;
-
-		if ( path.EndsWith( "_c" ) ) path = path[..^2];
+		var files = GetRelatedFiles();
 
 		{
 			// TODO: Remove this once we have FileSystem.DeferChanges()
 			FileWatch.SuppressWatchers = RealTime.Now + 999;
 
-			// remove all components
-			foreach ( var ext in RelatedFileExts )
+			try
 			{
-				EditorUtility.SendToRecycleBin( AbsolutePath + ext );
-			}
+				foreach ( var related in files )
+					EditorUtility.SendToRecycleBin( related );
 
-			FileWatch.SuppressWatchers = RealTime.Now;
+				// The data tree dies with its source. Missing trees are a no-op.
+				SceneDataFolder.Delete( path );
+			}
+			finally
+			{
+				FileWatch.SuppressWatchers = RealTime.Now;
+			}
 		}
 
 		IsDeleted = true;
 		return true;
+	}
+
+	internal string GetRelatedSourcePath()
+	{
+		var path = GetSourceFile( true );
+		if ( string.IsNullOrEmpty( path ) ) path = AbsolutePath;
+		return path?.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) == true ? path[..^2] : path;
+	}
+
+	internal string GetRelatedFileBasePath( string sourcePath, string ext, bool existingCompiled )
+	{
+		if ( ext != "_c" ) return sourcePath;
+
+		var compiled = GetCompiledFile( true );
+		if ( string.IsNullOrEmpty( compiled ) ) compiled = AbsoluteCompiledPath;
+		if ( compiled?.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) == true ) compiled = compiled[..^2];
+		if ( existingCompiled && !string.IsNullOrEmpty( compiled ) ) return compiled;
+
+		var extension = System.IO.Path.GetExtension( string.IsNullOrEmpty( compiled ) ? Path : compiled );
+		if ( string.IsNullOrEmpty( extension ) ) extension = AssetType?.FileExtension;
+		return string.IsNullOrEmpty( extension ) ? sourcePath : System.IO.Path.ChangeExtension( sourcePath, extension );
+	}
+
+	internal string[] GetRelatedFiles()
+	{
+		var source = GetRelatedSourcePath();
+		if ( string.IsNullOrEmpty( source ) ) return Array.Empty<string>();
+		return RelatedFileExts.SelectMany( ext => GetRelatedFilePaths( GetRelatedFileBasePath( source, ext, true ), ext ) )
+			.Distinct( StringComparer.Ordinal ).ToArray();
+	}
+
+	/// <summary>
+	/// Where a related file lives for deletion. The source itself keeps its disk spelling,
+	/// engine-owned sidecars (_c, _d, .meta) live beside the lowercase identity.
+	/// </summary>
+	internal static string GetRelatedFilePath( string sourcePath, string ext )
+	{
+		if ( string.IsNullOrEmpty( ext ) ) return sourcePath;
+		return AssetSystem.LowercaseAssetFileName( sourcePath ) + ext;
+	}
+
+	/// <summary>
+	/// The on-disk location of a related file: its identity spelling, or the legacy disk
+	/// spelling when the identity file was never written.
+	/// </summary>
+	internal static string ResolveRelatedFilePath( string sourcePath, string ext )
+	{
+		var identity = GetRelatedFilePath( sourcePath, ext );
+		if ( File.Exists( identity ) ) return identity;
+		return GetRelatedFilePaths( sourcePath, ext ).FirstOrDefault() ?? identity;
+	}
+
+	internal static string[] GetRelatedFilePaths( string sourcePath, string ext )
+	{
+		var identity = GetRelatedFilePath( sourcePath, ext );
+		var directory = System.IO.Path.GetDirectoryName( identity );
+		if ( string.IsNullOrEmpty( directory ) ) directory = ".";
+		if ( !Directory.Exists( directory ) )
+		{
+			directory = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( System.IO.Path.GetFullPath( directory ) );
+			identity = System.IO.Path.Combine( directory, System.IO.Path.GetFileName( identity ) );
+		}
+
+		var files = new List<string>();
+		if ( File.Exists( identity ) )
+		{
+			files.Add( identity );
+			if ( string.IsNullOrEmpty( ext ) || !OperatingSystem.IsLinux() ) return files.ToArray();
+		}
+
+		if ( !Directory.Exists( directory ) ) return files.ToArray();
+
+		var filename = System.IO.Path.GetFileName( identity );
+		foreach ( var file in Directory.EnumerateFiles( directory ).OrderBy( x => x, StringComparer.Ordinal ) )
+		{
+			var name = System.IO.Path.GetFileName( file );
+			if ( !string.Equals( name, filename, StringComparison.OrdinalIgnoreCase ) ) continue;
+			if ( files.Count > 0 && string.Equals( name, filename, StringComparison.Ordinal ) ) continue;
+			files.Add( file );
+			if ( string.IsNullOrEmpty( ext ) ) break;
+		}
+
+		return files.ToArray();
+	}
+
+	/// <summary>
+	/// Whether a related file exists at its identity spelling or a legacy disk spelling.
+	/// </summary>
+	internal static bool RelatedFileExists( string sourcePath, string ext )
+	{
+		return System.IO.File.Exists( ResolveRelatedFilePath( sourcePath, ext ) );
 	}
 
 	/// <summary>
@@ -181,8 +276,15 @@ public abstract partial class Asset
 		// using the wrong paths
 		if ( IsCloud || IsTransient ) return null;
 
+		// no metadata for .meta files for fuck sake
+		if ( f.EndsWith( ".meta", StringComparison.OrdinalIgnoreCase ) ) return null;
+
+		// Metadata is engine-owned, like compiled outputs: it lives beside the
+		// lowercase identity, not the source's disk spelling.
+		f = AssetSystem.LowercaseAssetFileName( f );
+
 		// modelname.vmdl_c -> modelname.vmdl
-		if ( f.EndsWith( "_c" ) )
+		if ( f.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) )
 			f = f.Substring( 0, f.Length - 2 );
 
 		// modelname.vmdl -> modelname.vmdl.meta

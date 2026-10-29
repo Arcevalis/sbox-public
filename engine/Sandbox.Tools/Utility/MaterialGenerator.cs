@@ -154,10 +154,32 @@ internal static class MaterialGenerator
 	/// </summary>
 	internal static string GetOrCreateMaterial( TextureSet set, string shaderPath, Dictionary<string, string> suffixMap )
 	{
+		var targetPath = GetOrCreateMaterialSource( set, shaderPath, suffixMap );
+		if ( targetPath is null )
+			return null;
+
+		var asset = AssetSystem.RegisterFile( targetPath );
+		if ( asset is null )
+		{
+			Log.Warning( $"MaterialGenerator: couldn't register '{targetPath}'" );
+			return null;
+		}
+
+		return asset.Path;
+	}
+
+	/// <summary>
+	/// Write the source without involving native asset registration.
+	/// </summary>
+	internal static string GetOrCreateMaterialSource( TextureSet set, string shaderPath, Dictionary<string, string> suffixMap )
+	{
 		if ( set is null || suffixMap is null )
 			return null;
 
-		var targetPath = Path.Combine( set.Directory, $"{set.BaseName}.vmat" );
+		// New outputs use the lowercase identity beside the real texture directory.
+		// An existing material (including legacy mixed-case names) must never be overwritten.
+		var targetPath = Path.Combine( set.Directory, $"{set.BaseName}.vmat" ).LowercaseFileName();
+		targetPath = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( Path.GetFullPath( targetPath ) );
 
 		// make sure that we never generate a material if one already exists
 		if ( !File.Exists( targetPath ) )
@@ -177,14 +199,7 @@ internal static class MaterialGenerator
 			}
 		}
 
-		var asset = AssetSystem.RegisterFile( targetPath );
-		if ( asset is null )
-		{
-			Log.Warning( $"MaterialGenerator: couldn't register '{targetPath}'" );
-			return null;
-		}
-
-		return asset.Path;
+		return targetPath;
 	}
 
 	static string BuildMaterialText( TextureSet set, string shaderPath, Dictionary<string, string> suffixMap )
@@ -202,7 +217,7 @@ internal static class MaterialGenerator
 			if ( !suffixMap.TryGetValue( suffix, out var variable ) )
 				continue;
 
-			textures.Add( $"\t{variable} \"{asset.RelativePath}\"" );
+			textures.Add( $"\t{variable} \"{asset.RelativePath.NormalizeFilename( false )}\"" );
 
 			if ( forceMetalnessFeature && suffix.Equals( "metal", StringComparison.OrdinalIgnoreCase ) )
 				features.Add( "\tF_METALNESS_TEXTURE 1" );
@@ -214,7 +229,7 @@ internal static class MaterialGenerator
 		var builder = new StringBuilder();
 		builder.AppendLine( "Layer0" );
 		builder.AppendLine( "{" );
-		builder.AppendLine( $"\tshader \"{shaderPath}\"" );
+		builder.AppendLine( $"\tshader \"{shaderPath.NormalizeFilename( false )}\"" );
 		builder.AppendLine();
 
 		if ( features.Count > 0 )

@@ -114,7 +114,7 @@ public static class ShaderCompile
 		if ( dumping )
 			return results;
 
-		await System.IO.File.WriteAllBytesAsync( shader.AbsolutePath + "_c", results.CompiledShader );
+		await System.IO.File.WriteAllBytesAsync( shader.CompiledPath, results.CompiledShader );
 
 		return results;
 	}
@@ -152,6 +152,7 @@ public static class ShaderCompile
 
 	internal static async Task<Results> RecompileFromCompiled( string compiledFilePath, ShaderCompileOptions compileOptions, CancellationToken token )
 	{
+		compiledFilePath = CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( compiledFilePath );
 		var result = new Results();
 
 		var embedded = ShaderSource.ReadEmbeddedSource( compiledFilePath );
@@ -265,7 +266,7 @@ public static class ShaderCompile
 
 		fixed ( byte* dataPtr = data )
 		{
-			using CUtlBuffer buffer = IResourceCompilerSystem.GenerateResourceBytes( filename, (IntPtr)dataPtr, data.Length );
+			using CUtlBuffer buffer = IResourceCompilerSystem.GenerateResourceBytes( filename.LowercaseFileName(), (IntPtr)dataPtr, data.Length );
 			return buffer.ToArray();
 		}
 	}

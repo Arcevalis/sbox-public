@@ -80,6 +80,21 @@ public static partial class SandboxSystemExtensions
 	}
 
 	/// <summary>
+	/// Lowercase the file name, keeping directories. Sources keep their case on disk,
+	/// but everything the engine owns beside them (compiled outputs, sidecars, metadata)
+	/// derives from this lowercase identity.
+	/// </summary>
+	public static string LowercaseFileName( this string path )
+	{
+		var directory = Path.GetDirectoryName( path );
+		var filename = Path.GetFileName( path ).ToLowerInvariant();
+
+		return string.IsNullOrEmpty( directory )
+			? filename
+			: Path.Combine( directory, filename );
+	}
+
+	/// <summary>
 	/// Puts a filename into the format /path/filename.ext (from path\FileName.EXT)
 	/// </summary>
 	public static string NormalizeFilename( this string str, bool enforceInitialSlash = true ) => NormalizeFilename( str, enforceInitialSlash, true, '/' );

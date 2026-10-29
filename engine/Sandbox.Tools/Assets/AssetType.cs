@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 
 namespace Editor;
@@ -281,10 +282,15 @@ public class AssetType
 		if ( extension.StartsWith( '.' ) )
 			extension = extension.Trim( '.' );
 
-		if ( extension.EndsWith( "_c" ) )
+		if ( extension.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) )
 			extension = extension.Substring( 0, extension.Length - 2 );
 
-		return string.Equals( extension, FileExtension, StringComparison.InvariantCultureIgnoreCase );
+		if ( string.Equals( extension, FileExtension, StringComparison.OrdinalIgnoreCase ) )
+			return true;
+
+		// Match additional extensions too (e.g. png/tga for the jpg-primary Image type).
+		// Without this, files using a non-primary extension never resolve to a type.
+		return AllFileExtensions.Any( x => string.Equals( extension, x, StringComparison.OrdinalIgnoreCase ) );
 	}
 
 	internal bool CouldBeIdentifiedAs( string name, bool fuzzy = false )
@@ -410,7 +416,7 @@ public class AssetType
 		return null;
 	}
 
-	static Dictionary<string, AssetType> _extensionCache = new();
+	static Dictionary<string, AssetType> _extensionCache = new( System.StringComparer.OrdinalIgnoreCase );
 
 	public static AssetType FromExtension( string extension )
 	{
@@ -434,7 +440,7 @@ public class AssetType
 	internal static AssetType ResolveFromPath( string path )
 	{
 		var extension = System.IO.Path.GetExtension( path ).Trim( '.' );
-		if ( extension.EndsWith( "_c" ) ) extension = extension.Substring( 0, extension.Length - 2 );
+		if ( extension.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) extension = extension.Substring( 0, extension.Length - 2 );
 
 		return FromExtension( extension );
 	}

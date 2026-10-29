@@ -329,10 +329,11 @@ public partial class ProjectPublisher
 				// Collect game-side files (data files to be packaged like navdata)
 				foreach ( var file in asset.GetAdditionalGameFiles() )
 				{
-					var absPath = FileSystem.Mounted.GetFullPath( file );
+					var reference = FileReference.FromPath( file );
+					var absPath = FileSystem.Mounted.GetFullPath( reference.Path );
 					if ( !string.IsNullOrEmpty( absPath ) && System.IO.File.Exists( absPath ) )
 					{
-						await AddFile( absPath, file );
+						await AddFile( absPath, reference.Path );
 					}
 				}
 
