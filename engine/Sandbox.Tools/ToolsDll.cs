@@ -279,11 +279,13 @@ internal class ToolsDll : IToolsDll
 		if ( modifiers.HasFlag( KeyboardModifiers.Alt ) ) keys = "ALT+" + keys;
 		if ( modifiers.HasFlag( KeyboardModifiers.Ctrl ) ) keys = "CTRL+" + keys;
 
+		// OnKey records the delivery in the shared ledger before running this, so the
+		// concurrent Qt event for the same press finds it fresh and suppresses its own invoke.
 		EditorShortcuts.Invoke( keys, true );
 
-		// This is really just here for F5, if we stop the game session and defocus the game window, Qt is going to then run it's event
+		// Note: this also covers F5, where stopping the game session defocuses the
+		// game window and Qt then runs its own event for the same press.
 		// The other option is, do we need to run EditorShortcuts from game mode? What is there other than F5?
-		EditorShortcuts._timeSinceGlobalShortcut = 0;
 	}
 
 	public void Spin()
@@ -352,6 +354,8 @@ internal class ToolsDll : IToolsDll
 			return new( window, playWidget?.SwapChain ?? default, RenderSettings.Instance.VSync );
 		}
 	}
+
+	public Vector2? PlayWidgetMouseOffset => GameMode.PlayWidgetMouseOffset;
 
 	public async Task OnInitializeHost()
 	{

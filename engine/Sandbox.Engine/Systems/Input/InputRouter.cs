@@ -121,6 +121,25 @@ internal static partial class InputRouter
 		}
 	}
 
+	/// <summary>
+	/// Installed by the editor (<c>Editor.GameMode</c>) while a play widget is registered on Linux.
+	/// Called once a frame with whether the game wants the mouse; returns true if the editor has
+	/// taken the pointer itself, in Qt.
+	/// <para>
+	/// It has to, because SDL cannot. An X11 pointer grab redirects pointer events to the grabbing
+	/// client, and on Linux the Qt→SDL bridge is the only thing feeding the engine
+	/// (<c>INPUT-ARCHITECTURE.md</c> §5.2) - so asking SDL to grab starves the very source the game
+	/// depends on. Measured: while <c>sdlRelMode=True</c>, Qt delivered <b>zero</b> mouse moves and
+	/// <c>InputRouter</c> zero events, and both resumed the instant SDL let go.
+	/// </para>
+	/// <para>
+	/// While this returns true, SDL relative mode is never asked for, the cursor is the editor's to
+	/// hide, and the capture watchdog is bypassed - it exists to catch exactly the starvation this
+	/// avoids.
+	/// </para>
+	/// </summary>
+	internal static Func<bool, bool> ManagedMouseCapture { get; set; }
+
 	public static void Frame()
 	{
 		var activeMouse = Contexts.FirstOrDefault( x => x.MouseState != InputContext.InputState.Ignore );
@@ -130,6 +149,13 @@ internal static partial class InputRouter
 		// or from a Panel.CaptureMode - in which case input is sent to the panel/ui
 		bool mouseCaptureMode = activeMouse is not null && activeMouse.MouseState == InputContext.InputState.Game;
 		mouseCaptureMode = mouseCaptureMode || (activeMouse?.MouseCapture ?? false);
+
+		bool wantsCapture = mouseCaptureMode;
+
+		// If the editor has taken the pointer in Qt, trust it: no SDL grab, no watchdog.
+		bool managedCapture = ManagedMouseCapture?.Invoke( wantsCapture ) ?? false;
+
+		mouseCaptureMode = managedCapture ? wantsCapture : AllowMouseCapture( mouseCaptureMode );
 
 		MouseCursorVisible = !mouseCaptureMode && (activeMouse is not null && activeMouse.MouseState == InputContext.InputState.UI);
 
@@ -141,7 +167,31 @@ internal static partial class InputRouter
 			MouseCursorVisible = true;
 		}
 
-		if ( !WindowInput.HasMouseFocus() ) MouseCursorVisible = true;
+		// SDL's mouse focus is not authoritative while the editor owns the pointer - the events
+		// SDL sees are injected, and injection never updates its focus (INPUT-ARCHITECTURE.md §5.3).
+		if ( !managedCapture && !WindowInput.HasMouseFocus() ) MouseCursorVisible = true;
+
+		if ( InputDebug.Enabled )
+		{
+			// Interop calls, so only built when the variable is set
+			var state = $"mouseState={activeMouse?.MouseState.ToString() ?? "none"} panelCapture={activeMouse?.MouseCapture ?? false} " +
+				$"wantsCapture={wantsCapture} allowed={mouseCaptureMode} " +
+				$"watchdog(armed={captureWatchdogArmed},satisfied={captureWatchdogSatisfied},tripped={captureWatchdogTripped}) " +
+				$"hasMouseFocus={WindowInput.HasMouseFocus()} appActive={WindowInput.IsAppActive()} " +
+				$"sdlRelMode={WindowInput.GetRelativeMouseMode()} cursorVisible={MouseCursorVisible}";
+
+			InputDebug.OnChange( "routerdbg", "frame", state, $"events={DeliveredEventCount}" );
+
+			// A steady state logs nothing, so we would not be able to tell a capture that is
+			// delivering from one that has gone silent. Tick the delivery rate once a second
+			// while a capture is wanted - that is the measurement §7 turns on.
+			if ( wantsCapture && timeSinceDeliveryReport > 1.0f )
+			{
+				InputDebug.Event( "routerdbg", $"delivered={DeliveredEventCount - lastReportedEventCount}/s while captured (allowed={mouseCaptureMode})" );
+				lastReportedEventCount = DeliveredEventCount;
+				timeSinceDeliveryReport = 0;
+			}
+		}
 
 		if ( mouseCaptureMode )
 		{
@@ -151,11 +201,11 @@ internal static partial class InputRouter
 				mouseCapturePosition = MouseCursorPosition;
 			}
 
-			WindowInput.SetRelativeMouseMode( true );
+			if ( !managedCapture ) WindowInput.SetRelativeMouseMode( true );
 		}
 		else
 		{
-			WindowInput.SetRelativeMouseMode( false );
+			if ( !managedCapture ) WindowInput.SetRelativeMouseMode( false );
 
 			// restore cursor position
 			if ( mouseCapturePosition is not null )
@@ -167,7 +217,11 @@ internal static partial class InputRouter
 
 		var dockHasMouse = devToolsDock && DevTools.GameDockHasMouse( MouseCursorPosition );
 
-		if ( WindowInput.HasMouseFocus() && PanelWindows.Hovering is null && PanelWindows.CaptureWindow is null )
+		// While the editor holds the pointer it owns the cursor too - it hides it on the Qt widget,
+		// which is the thing actually drawing it. SetCursorStandard is SDL-side and does not reach a
+		// Qt-owned window, which is why the cursor stayed visible with MouseCursorVisible=False.
+		// (!managedCapture is a no-op on Windows, where the editor never takes the pointer in Qt.)
+		if ( !managedCapture && WindowInput.HasMouseFocus() && PanelWindows.Hovering is null && PanelWindows.CaptureWindow is null )
 		{
 			if ( dockHasMouse ) SdlCursors.SetCursor( DevTools.GameDockCursor( MouseCursorPosition ) );
 			else if ( devToolsDock && activeMouse?.MouseState != InputContext.InputState.UI ) SdlCursors.SetCursor( "arrow" );
@@ -204,6 +258,100 @@ internal static partial class InputRouter
 		if ( !DevTools.GameDockOpen ) return mouse;
 		if ( DevTools.GameDockHasMouse( MouseCursorPosition ) ) return null;
 		return mouse?.MouseState == InputContext.InputState.UI ? mouse : null;
+	}
+
+	/// <summary>
+	/// How long a mouse capture may deliver nothing at all before we assume it is broken and let go.
+	/// A working capture produces motion almost immediately, so this only ever fires on a capture
+	/// that has taken the cursor and gone silent.
+	/// </summary>
+	const float CaptureWatchdogSeconds = 2.0f;
+
+	/// <summary>
+	/// How long a tripped watchdog stays tripped before letting capture try again. Long enough that
+	/// a genuinely broken capture is not retried in a tight loop, short enough to recover.
+	/// </summary>
+	const float CaptureRetrySeconds = 10.0f;
+
+	static bool captureWatchdogArmed;
+	static bool captureWatchdogSatisfied;
+	static bool captureWatchdogTripped;
+	static int captureWatchdogEventCount;
+	static RealTimeSince timeSinceCaptureBegan;
+
+	static int lastReportedEventCount;
+	static RealTimeSince timeSinceDeliveryReport;
+
+	/// <summary>
+	/// Guards against mouse capture locking the user out of the editor.
+	/// <para>
+	/// On Linux the editor's input reaches the engine only by way of the Qt→SDL bridge. When the
+	/// game takes the mouse, SDL grabs and confines the pointer, which takes pointer events away
+	/// from Qt - and if nothing is coming back the other way, there is no route left to generate
+	/// the Escape that would release it. The cursor is stuck inside the viewport, the Stop button
+	/// cannot be clicked, and the only way out is to kill the editor.
+	/// </para>
+	/// <para>
+	/// So: if a capture delivers no input at all for <see cref="CaptureWatchdogSeconds"/>, refuse
+	/// it for the rest of this capture request. The game keeps running and the editor stays usable.
+	/// </para>
+	/// </summary>
+	static bool AllowMouseCapture( bool wantsCapture )
+	{
+		// The watchdog below exists to keep the editor usable when a capture goes silent
+		// (the Stop button must stay clickable). In a standalone game client there is no
+		// editor to protect, so never release the game's capture there.
+		if ( !Application.IsEditor ) return wantsCapture;
+
+		if ( !OperatingSystem.IsLinux() ) return wantsCapture;
+
+		// The request dropped - forget everything, so a later capture gets a fresh chance.
+		if ( !wantsCapture )
+		{
+			captureWatchdogArmed = false;
+			captureWatchdogSatisfied = false;
+			captureWatchdogTripped = false;
+			return false;
+		}
+
+		// A trip used to latch for as long as the request stood, and in game view the request never
+		// drops - UISystem holds mouseState=Game for the whole session - so one trip disabled capture
+		// permanently (measured: tripped at +2s, still tripped 18s later). Re-arm periodically so a
+		// capture that becomes viable can engage again.
+		if ( captureWatchdogTripped )
+		{
+			if ( timeSinceCaptureBegan < CaptureRetrySeconds ) return false;
+
+			captureWatchdogArmed = false;
+			captureWatchdogTripped = false;
+		}
+
+		if ( captureWatchdogSatisfied ) return true;
+
+		if ( !captureWatchdogArmed )
+		{
+			captureWatchdogArmed = true;
+			captureWatchdogEventCount = DeliveredEventCount;
+			timeSinceCaptureBegan = 0;
+			return true;
+		}
+
+		// Something arrived, so the capture is delivering. Stop watching it.
+		if ( DeliveredEventCount != captureWatchdogEventCount )
+		{
+			captureWatchdogSatisfied = true;
+			return true;
+		}
+
+		if ( timeSinceCaptureBegan < CaptureWatchdogSeconds )
+			return true;
+
+		captureWatchdogTripped = true;
+
+		Log.Warning( $"Mouse capture delivered no input for {CaptureWatchdogSeconds}s - releasing the cursor so the editor stays usable. " +
+			"The game is still running; F5 stops it, F8 ejects to the editor camera." );
+
+		return false;
 	}
 
 	static void SetCursorPosition( Vector2 pos )

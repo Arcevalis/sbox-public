@@ -1,4 +1,4 @@
-﻿using Editor.Preferences;
+using Editor.Preferences;
 using Sandbox.Network;
 using System.Diagnostics;
 
@@ -87,27 +87,60 @@ partial class ViewportTools
 		window.SwitchPage<PageNetworking>();
 	}
 
-	static void AddUserCommandLineArgs( ProcessStartInfo startInfo, string argumentString )
+	static void AddUserCommandLineArgs( IList<string> args, string argumentString )
 	{
 		if ( string.IsNullOrWhiteSpace( argumentString ) )
 			return;
 
 		foreach ( var arg in argumentString.Split( ' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries ) )
 		{
-			startInfo.ArgumentList.Add( arg );
+			args.Add( arg );
 		}
 	}
 
 	void SpawnDedicatedServer()
 	{
+		var serverArgs = new List<string>
+		{
+			"+game",
+			Project.Current.GetProjectPath()
+		};
+		AddUserCommandLineArgs( serverArgs, EditorPreferences.DedicatedServerCommandLineArgs );
+
+		var serverExe = GameExecutables.FullPath( "sbox-server" );
+
 		using var p = new Process();
-		p.StartInfo.FileName = System.IO.Path.Combine( Environment.CurrentDirectory, OperatingSystem.IsWindows() ? "sbox-server.exe" : "sbox-server" );
 		p.StartInfo.WorkingDirectory = Environment.CurrentDirectory;
 
-		p.StartInfo.ArgumentList.Add( "+game" );
-		p.StartInfo.ArgumentList.Add( Project.Current.GetProjectPath() );
+		if ( OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() )
+		{
+			// Windows allocates a console for console exes on its own; macOS keeps the
+			// previous direct-spawn behavior until it gets its own terminal path.
+			p.StartInfo.FileName = serverExe;
+		}
+		else if ( TerminalLauncher.TryBuildCommand( serverExe, serverArgs, p.StartInfo.WorkingDirectory,
+			out var terminal, out var argv, out var scrubbedNames ) )
+		{
+			// Linux has no OS console window: run the server inside the user's terminal
+			// emulator so its stats overlay and command input behave like the Windows
+			// console. The terminal gets a scrubbed environment (our bundled Qt/native
+			// session variables abort foreign terminals on startup); the inner command
+			// restores them via env so the server keeps its direct-spawn environment.
+			p.StartInfo.FileName = terminal;
+			p.StartInfo.UseShellExecute = false;
+			foreach ( var name in scrubbedNames )
+				p.StartInfo.Environment.Remove( name );
+			foreach ( var arg in argv )
+				p.StartInfo.ArgumentList.Add( arg );
+		}
+		else
+		{
+			Log.Error( "Couldn't start dedicated server: no terminal emulator found (tried $TERMINAL, x-terminal-emulator, gnome-terminal, konsole, xfce4-terminal, xterm). Install one to get a server console." );
+			return;
+		}
 
-		AddUserCommandLineArgs( p.StartInfo, EditorPreferences.DedicatedServerCommandLineArgs );
+		foreach ( var arg in serverArgs )
+			p.StartInfo.ArgumentList.Add( arg );
 
 		p.Start();
 	}

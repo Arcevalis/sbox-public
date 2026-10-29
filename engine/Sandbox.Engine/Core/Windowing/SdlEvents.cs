@@ -65,6 +65,8 @@ internal static class SdlEvents
 			case Sdl.EventType.KeyUp:
 				if ( !WindowInput.HasMouseFocus() ) break;
 				var scanCode = Sandbox.Engine.KeyTranslation.ScanCodeToButtonCode( e.Key.Scancode );
+				if ( InputDebug.Enabled && scanCode == ButtonCode.KEY_ESCAPE )
+					InputDebug.Event( "sdlkeys", $"esc via SDL (down={e.Type == Sdl.EventType.KeyDown})" );
 				var repeat = e.Key.Repeat != 0 && scanCode is not (ButtonCode.KEY_LSHIFT or ButtonCode.KEY_RSHIFT);
 				InputRouter.OnKey( scanCode, Sandbox.Engine.KeyTranslation.KeyCodeToButtonCode( e.Key.Key ), e.Type == Sdl.EventType.KeyDown, repeat );
 				break;
@@ -82,7 +84,18 @@ internal static class SdlEvents
 				else if ( WindowInput.HasMouseFocus() )
 				{
 					ignoreNextRelativeMouseMove = false;
-					InputRouter.OnMousePositionChange( e.Motion.X, e.Motion.Y, e.Motion.XRel, e.Motion.YRel );
+					var x = e.Motion.X;
+					var y = e.Motion.Y;
+
+					// Play widget is a foreign Qt window: SDL reports motion in
+					// top-level-window space, so translate into widget space.
+					if ( IToolsDll.Current?.PlayWidgetMouseOffset is { } offset )
+					{
+						x -= offset.x;
+						y -= offset.y;
+					}
+
+					InputRouter.OnMousePositionChange( x, y, e.Motion.XRel, e.Motion.YRel );
 				}
 				break;
 			case Sdl.EventType.MouseButtonDown:
