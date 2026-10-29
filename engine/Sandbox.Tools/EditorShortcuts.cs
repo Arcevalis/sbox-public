@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace Editor;
 
@@ -24,8 +24,6 @@ public static class EditorShortcuts
 	/// allowing other shortcuts with the same key binding to be tried.
 	/// </summary>
 	public static bool PassShortcut { get; set; }
-
-	internal static RealTimeSince _timeSinceGlobalShortcut = 0f;
 
 	[Event( "editor.created" )]
 	static void EditorCreated( EditorMainWindow _ )
@@ -130,7 +128,15 @@ public static class EditorShortcuts
 			{
 				if ( GetKeys( entry.Identifier ) != keys ) continue;
 
+				// Track held state even for skipped entries: the ejected camera
+				// reads WASD via IsDown while invocation stays suppressed.
 				entry.IsDown = true;
+
+				// While the game is running the game owns the keyboard. Widget-scoped
+				// shortcuts gate on scene-view focus (which the play widget keeps alive),
+				// so skip invoking them or they'd swallow the SDL key event on the Linux Qt->SDL bridge.
+				if ( Game.IsPlaying && entry.Attribute.Type == ShortcutType.Widget )
+					continue;
 
 				if ( hasInvoked ) continue;
 
