@@ -16,7 +16,12 @@ internal sealed class McpWire( Stream input, int maxBytes = 8 * 1024 * 1024 )
 	int length;
 	static readonly UTF8Encoding Encoding = new( false, true );
 
-	internal static string PipeName( int pid, long startTime ) => $"sbox-mcp-{pid}-{startTime:x}";
+	/// <summary>
+	/// Process start times on Linux are synthesized and drift by sub-millisecond amounts
+	/// between reads, so only whole seconds go into the name - both ends still agree, and
+	/// PID reuse within the same second stays as unlikely as it ever was.
+	/// </summary>
+	internal static string PipeName( int pid, long startTime ) => $"sbox-mcp-{pid}-{startTime / TimeSpan.TicksPerSecond:x}";
 
 	internal async Task<string> ReadAsync( CancellationToken cancellation )
 	{

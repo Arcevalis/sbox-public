@@ -34,7 +34,8 @@ internal static class CodeEditorLocator
 
 	/// <summary>
 	/// Starts an editor executable, if we found one. Windows batch launchers (code.cmd, rider.bat)
-	/// can't be started directly, so they go via cmd.
+	/// can't be started directly, so they go via cmd. On Linux/macOS extensionless binaries
+	/// and shell launchers (e.g. rider.sh) run directly via exec.
 	/// </summary>
 	public static void Launch( string executable, string arguments )
 	{

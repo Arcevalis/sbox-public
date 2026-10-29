@@ -27,7 +27,8 @@ public class CustomCodeEditor : ICodeEditor
 
 	/// <summary>
 	/// Returns a friendly name derived from the executable filename.
-	/// e.g. "C:\Program Files\Notepad++\notepad++.exe" → "notepad++"
+	/// e.g. "C:\Program Files\Notepad++\notepad++.exe" → "notepad++",
+	/// "/usr/bin/nvim" → "Nvim"
 	/// </summary>
 	public string Title
 	{
