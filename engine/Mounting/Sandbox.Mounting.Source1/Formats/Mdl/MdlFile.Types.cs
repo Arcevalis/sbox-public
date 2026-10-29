@@ -132,6 +132,13 @@ internal sealed partial class MdlFile
 	}
 
 	[StructLayout( LayoutKind.Sequential, Pack = 1 )]
+	public struct StudioModelGroup
+	{
+		public int LabelIndex;
+		public int NameIndex;
+	}
+
+	[StructLayout( LayoutKind.Sequential, Pack = 1 )]
 	public struct StudioTexture
 	{
 		public int NameIndex;
