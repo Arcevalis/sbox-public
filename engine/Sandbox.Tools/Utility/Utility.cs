@@ -1,4 +1,4 @@
-﻿using Facepunch.ActionGraphs;
+using Facepunch.ActionGraphs;
 using NativeEngine;
 using Sandbox.Engine.Settings;
 using Sandbox.Engine.Shaders;
@@ -161,54 +161,142 @@ public static partial class EditorUtility
 	/// </summary>
 	public static void MoveAssetToDirectory( Asset asset, string directory, bool overwrite = true )
 	{
-		var currentPath = System.IO.Path.GetDirectoryName( asset.AbsolutePath );
+		var source = asset.GetRelatedSourcePath();
+		if ( string.IsNullOrEmpty( source ) ) return;
+		var currentDirectory = Path.GetDirectoryName( Path.GetFullPath( source ) );
+		var targetDirectory = Path.TrimEndingDirectorySeparator( Path.GetFullPath( directory ) );
+		var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		if ( string.Equals( currentDirectory, targetDirectory, comparison ) ) return;
 
-		// fuck me c# - is this how we compare paths
-		var dirA = System.IO.Path.GetFullPath( currentPath ).ToLower().Trim( '/', '\\' );
-		var dirB = System.IO.Path.GetFullPath( directory ).ToLower().Trim( '/', '\\' );
-
-		// already in this directory!
-		if ( dirA == dirB )
-			return;
-
-		string filename = Path.GetFileName( asset.AbsolutePath );
-		MoveAsset( asset, Path.Combine( dirB, filename ) );
+		MoveAsset( asset, Path.Combine( targetDirectory, Path.GetFileName( source ) ), overwrite );
 	}
 
 	public static void RenameDirectory( string directory, string newDirectory, bool recursive = false )
 	{
-		if ( !System.IO.Directory.Exists( directory ) )
+		if ( string.IsNullOrEmpty( directory ) ) return;
+		directory = Path.TrimEndingDirectorySeparator( Path.GetFullPath( directory.NormalizeFilename( false, false ) ) );
+		directory = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( directory );
+		if ( !Directory.Exists( directory ) ) return;
+		newDirectory = Path.TrimEndingDirectorySeparator( Path.GetFullPath( newDirectory.NormalizeFilename( false, false ) ) );
+		if ( string.Equals( directory, newDirectory, StringComparison.Ordinal ) ) return;
+
+		var comparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		var prefix = Path.EndsInDirectorySeparator( directory ) ? directory : directory + Path.DirectorySeparatorChar;
+		if ( newDirectory.StartsWith( prefix, comparison ) ) return;
+
+		bool IsWithin( string path, string parent ) => string.Equals( path, parent, comparison )
+			|| path.StartsWith( Path.EndsInDirectorySeparator( parent ) ? parent : parent + Path.DirectorySeparatorChar, comparison );
+		var commonDirectory = Path.GetDirectoryName( directory );
+		while ( commonDirectory is not null && !IsWithin( newDirectory, commonDirectory ) )
+			commonDirectory = Path.GetDirectoryName( commonDirectory );
+		void CheckAncestors( string path )
+		{
+			if ( string.Equals( path, commonDirectory, comparison ) ) return;
+			for ( var parent = Path.GetDirectoryName( path ); !string.IsNullOrEmpty( parent ) && !string.Equals( parent, commonDirectory, comparison ); parent = Path.GetDirectoryName( parent ) )
+			{
+				if ( Directory.Exists( parent ) && (File.GetAttributes( parent ) & FileAttributes.ReparsePoint) != 0 )
+					throw new IOException( $"Cannot move directories through symbolic link '{parent}'." );
+			}
+		}
+		CheckAncestors( directory );
+		CheckAncestors( newDirectory );
+
+		if ( !OperatingSystem.IsLinux() && string.Equals( directory, newDirectory, StringComparison.OrdinalIgnoreCase ) )
+		{
+			if ( recursive ) return;
+			var temporary = directory + ".rename-" + Guid.NewGuid().ToString( "N" );
+			RenameDirectory( directory, temporary );
+			try
+			{
+				RenameDirectory( temporary, newDirectory );
+			}
+			catch
+			{
+				RenameDirectory( temporary, directory );
+				throw;
+			}
 			return;
-
-		// don't allow moving a folder inside a subfolder of itself!
-		if ( newDirectory.StartsWith( directory, StringComparison.OrdinalIgnoreCase ) )
-			return;
-
-		if ( !System.IO.Directory.Exists( newDirectory ) )
-			System.IO.Directory.CreateDirectory( newDirectory );
-
-
-		var assets = AssetSystem.All.Where( x => x.AbsolutePath.StartsWith( directory.Replace( '\\', '/' ), StringComparison.OrdinalIgnoreCase ) && x.AbsolutePath.Substring( directory.Length ).Contains( '/' ) );
-		foreach ( var asset in assets )
-		{
-			if ( !System.IO.Path.Exists( asset.AbsolutePath ) ) continue;
-			MoveAssetToDirectory( asset, newDirectory );
 		}
 
-		var files = System.IO.Directory.GetFiles( directory, "*", System.IO.SearchOption.TopDirectoryOnly );
-		foreach ( var file in files )
+		var directories = new List<(string Source, string Target)>();
+		var files = new List<(string Source, string Target, bool Owned)>();
+		var pathComparer = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+		var existingEntries = new Dictionary<string, string[]>( pathComparer );
+		var existingNames = new Dictionary<string, HashSet<string>>( pathComparer );
+		string[] ExistingEntries( string target )
 		{
-			var newFile = file.Replace( directory, newDirectory );
-			System.IO.File.Move( file, newFile );
+			if ( existingEntries.TryGetValue( target, out var entries ) ) return entries;
+			entries = Directory.Exists( target ) ? Directory.GetFileSystemEntries( target ) : Array.Empty<string>();
+			existingEntries.Add( target, entries );
+			return entries;
+		}
+		HashSet<string> ExistingNames( string target )
+		{
+			if ( existingNames.TryGetValue( target, out var names ) ) return names;
+			names = new HashSet<string>( ExistingEntries( target ).Select( Path.GetFileName ), StringComparer.OrdinalIgnoreCase );
+			existingNames.Add( target, names );
+			return names;
+		}
+		void Plan( string source, string target )
+		{
+			if ( string.Equals( target, directory, comparison ) || target.StartsWith( prefix, comparison ) )
+				throw new IOException( $"Cannot merge directory into its own source tree '{target}'." );
+			if ( (File.GetAttributes( source ) & FileAttributes.ReparsePoint) != 0 )
+				throw new IOException( $"Cannot merge symbolic link '{source}'." );
+			var parent = Path.GetDirectoryName( target );
+			if ( parent is not null && ExistingEntries( parent ).Any( entry =>
+				string.Equals( Path.GetFileName( entry ), Path.GetFileName( target ), StringComparison.OrdinalIgnoreCase ) &&
+				!pathComparer.Equals( entry, target ) && !pathComparer.Equals( entry, directory ) ) )
+				throw new IOException( $"Directory identity '{target}' conflicts with an existing path." );
+			if ( File.Exists( target ) || (Directory.Exists( target ) && (File.GetAttributes( target ) & FileAttributes.ReparsePoint) != 0) )
+				throw new IOException( $"Cannot move directory to '{target}'." );
+			directories.Add( (source, target) );
+			foreach ( var entry in Directory.EnumerateFileSystemEntries( source ) )
+			{
+				var attributes = File.GetAttributes( entry );
+				if ( (attributes & FileAttributes.ReparsePoint) != 0 )
+					throw new IOException( $"Cannot merge a directory containing symbolic link '{entry}'." );
+				var name = Path.GetFileName( entry );
+				if ( (attributes & FileAttributes.Directory) != 0 ) Plan( entry, Path.Combine( target, name ) );
+				else
+				{
+					var owned = Asset.RelatedFileExts.Skip( 1 ).Any( ext => name.EndsWith( ext, StringComparison.OrdinalIgnoreCase ) );
+					if ( owned ) name = name.ToLowerInvariant();
+					var destination = Path.Combine( target, name );
+					if ( ExistingNames( target ).Contains( name ) ) throw new IOException( $"File identity '{destination}' already exists." );
+					files.Add( (entry, destination, owned) );
+				}
+			}
 		}
 
-		var folders = System.IO.Directory.GetDirectories( directory, "*", System.IO.SearchOption.TopDirectoryOnly );
-		foreach ( var folder in folders )
+		Plan( directory, newDirectory );
+		string FileIdentity( string path ) => Path.Combine( Path.GetDirectoryName( path ) ?? Path.GetPathRoot( path ), Path.GetFileName( path ).ToLowerInvariant() );
+		var directoryIdentities = directories.Select( entry => FileIdentity( entry.Target ) ).ToHashSet( pathComparer );
+		var transfers = files.GroupBy( entry => entry.Target, pathComparer ).Select( group =>
 		{
-			RenameDirectory( folder, folder.Replace( directory, newDirectory ), true );
+			if ( group.Count() > 1 && !group.All( entry => entry.Owned ) )
+				throw new IOException( $"Source files share destination '{group.Key}'." );
+			var winner = group.OrderByDescending( entry => string.Equals( Path.GetFileName( entry.Source ), Path.GetFileName( entry.Target ), StringComparison.Ordinal ) )
+				.ThenBy( entry => entry.Source, StringComparer.Ordinal ).First();
+			if ( winner.Owned && directoryIdentities.Contains( FileIdentity( winner.Target ) ) )
+				throw new IOException( $"Output identity '{winner.Target}' conflicts with a directory." );
+			return (
+				winner.Source,
+				winner.Target,
+				Aliases: group.Where( entry => !string.Equals( entry.Source, winner.Source, StringComparison.Ordinal ) ).Select( entry => entry.Source ).ToArray()
+			);
+		} ).ToArray();
+		foreach ( var entry in directories ) Directory.CreateDirectory( entry.Target );
+		// File-filtered watches need individual rename events, not just a directory event.
+		foreach ( var entry in transfers )
+		{
+			File.Move( entry.Source, entry.Target );
+			foreach ( var alias in entry.Aliases ) File.Delete( alias );
 		}
-
-		if ( !recursive ) System.IO.Directory.Delete( directory, true );
+		if ( !recursive )
+		{
+			foreach ( var entry in directories.AsEnumerable().Reverse() ) Directory.Delete( entry.Source );
+		}
 	}
 
 	/// <summary>
@@ -216,7 +304,9 @@ public static partial class EditorUtility
 	/// </summary>
 	public static bool RenameAsset( Asset asset, string newName, bool overwrite = false )
 	{
-		string newPath = Path.Combine( Path.GetDirectoryName( asset.AbsolutePath ), newName.GetFilenameSafe() );
+		var source = asset.GetRelatedSourcePath();
+		if ( string.IsNullOrEmpty( source ) ) return false;
+		string newPath = Path.Combine( Path.GetDirectoryName( source ), newName.GetFilenameSafe() );
 		return MoveAsset( asset, newPath, overwrite );
 	}
 
@@ -225,46 +315,7 @@ public static partial class EditorUtility
 	/// </summary>
 	public static bool MoveAsset( Asset asset, string path, bool overwrite = false )
 	{
-		path = path?.Trim().NormalizeFilename( false );
-
-		if ( string.IsNullOrEmpty( path ) )
-			return false;
-
-		var oldPath = asset.AbsolutePath;
-
-		if ( oldPath.EndsWith( "_c" ) ) oldPath = oldPath[..^2];
-		if ( path.EndsWith( "_c" ) ) path = path[..^2];
-
-		if ( string.Equals( oldPath, path, StringComparison.OrdinalIgnoreCase ) )
-		{
-			// we're just changing the capitalisation
-			overwrite = true;
-		}
-		else if ( !overwrite )
-		{
-			// check if it's gunna succeed first so we don't end up with a half moved asset
-			foreach ( var ext in Asset.RelatedFileExts )
-			{
-				if ( !File.Exists( path + ext ) ) continue;
-
-				Log.Error( $"Cannot move asset, '{path + ext}' already exists!" );
-				return false;
-			}
-		}
-
-		// TODO: Remove this once we have FileSystem.DeferChanges()
-		FileWatch.SuppressWatchers = RealTime.Now + 999;
-
-		// move all our components: oldpath -> path
-		foreach ( var ext in Asset.RelatedFileExts )
-		{
-			var file = new FileInfo( oldPath + ext );
-			if ( file.Exists ) file.MoveTo( path + ext, overwrite );
-		}
-
-		FileWatch.SuppressWatchers = RealTime.Now;
-
-		return true;
+		return TransferAssetFiles( asset, path, overwrite, move: true );
 	}
 
 	/// <summary>
@@ -272,39 +323,96 @@ public static partial class EditorUtility
 	/// </summary>
 	public static bool CopyAsset( Asset asset, string path, bool overwrite = false )
 	{
-		path = path?.Trim();
+		return TransferAssetFiles( asset, path, overwrite, move: false );
+	}
 
-		if ( string.IsNullOrEmpty( path ) )
-			return false;
+	static bool TransferAssetFiles( Asset asset, string path, bool overwrite, bool move )
+	{
+		path = path?.Trim().NormalizeFilename( false, false );
+		if ( string.IsNullOrEmpty( path ) ) return false;
 
-		var oldPath = asset.AbsolutePath;
+		var oldPath = asset.GetRelatedSourcePath();
+		if ( string.IsNullOrEmpty( oldPath ) ) return false;
+		if ( path.EndsWith( "_c", StringComparison.OrdinalIgnoreCase ) ) path = path[..^2];
 
-		if ( oldPath.EndsWith( "_c" ) ) oldPath = oldPath[..^2];
-		if ( path.EndsWith( "_c" ) ) path = path[..^2];
+		var pathComparison = OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+		bool SamePath( string left, string right ) => string.Equals( Path.GetFullPath( left ), Path.GetFullPath( right ), pathComparison );
+		var sameDirectory = SamePath( Path.GetDirectoryName( Path.GetFullPath( oldPath ) ), Path.GetDirectoryName( Path.GetFullPath( path ) ) );
+		var sameIdentity = sameDirectory && string.Equals( Path.GetFileName( oldPath ), Path.GetFileName( path ), StringComparison.OrdinalIgnoreCase );
+		if ( sameIdentity )
+		{
+			if ( !move ) return false;
+			overwrite = true;
+		}
+
+		var components = Asset.RelatedFileExts.Select( ext =>
+		{
+			var sourceBase = asset.GetRelatedFileBasePath( oldPath, ext, true );
+			var targetBase = asset.GetRelatedFileBasePath( path, ext, false );
+			if ( ext == "_c" && sameDirectory )
+				targetBase = Path.Combine( Path.GetDirectoryName( Path.GetFullPath( sourceBase ) ), Path.GetFileName( targetBase ) );
+			return (
+				Extension: ext,
+				Sources: Asset.GetRelatedFilePaths( sourceBase, ext ),
+				Targets: Asset.GetRelatedFilePaths( targetBase, ext ),
+				Destination: Asset.GetRelatedFilePath( targetBase, ext )
+			);
+		} ).ToArray();
+		if ( !components.Any( x => x.Sources.Length > 0 && (x.Extension == "" || x.Extension == "_c") ) ) return false;
 
 		if ( !overwrite )
 		{
-			// check if it's gunna succeed first so we don't end up with a half copied asset
-			foreach ( var ext in Asset.RelatedFileExts )
+			foreach ( var component in components )
 			{
-				if ( !File.Exists( path + ext ) ) continue;
-
-				Log.Error( $"Cannot copy asset, '{path + ext}' already exists!" );
+				if ( component.Targets.Length == 0 ) continue;
+				Log.Error( $"Cannot {(move ? "move" : "copy")} asset, '{component.Targets[0]}' already exists!" );
 				return false;
 			}
 		}
 
 		// TODO: Remove this once we have FileSystem.DeferChanges()
 		FileWatch.SuppressWatchers = RealTime.Now + 999;
-
-		// copy all our components: oldpath -> path
-		foreach ( var ext in Asset.RelatedFileExts )
+		try
 		{
-			var file = new FileInfo( oldPath + ext );
-			if ( file.Exists ) file.CopyTo( path + ext, overwrite );
-		}
+			foreach ( var component in components )
+			{
+				if ( component.Sources.Length == 0 )
+				{
+					if ( overwrite && !string.IsNullOrEmpty( component.Extension ) )
+					{
+						foreach ( var file in component.Targets ) File.Delete( file );
+					}
+					continue;
+				}
 
-		FileWatch.SuppressWatchers = RealTime.Now;
+				var source = component.Sources[0];
+				var destination = component.Destination;
+				if ( !string.Equals( Path.GetFullPath( source ), Path.GetFullPath( destination ), StringComparison.Ordinal ) )
+				{
+					if ( move ) File.Move( source, destination, overwrite );
+					else File.Copy( source, destination, overwrite );
+				}
+
+				var obsolete = move ? component.Sources.Concat( component.Targets ) : component.Targets;
+				foreach ( var file in obsolete )
+				{
+					if ( !SamePath( file, destination ) ) File.Delete( file );
+				}
+			}
+
+			// Data trees aren't covered by RelatedFileExts: moves relocate the tree
+			// and drop the stale output, copies drop output only when a tree exists.
+			var compiledDestination = components.FirstOrDefault( x => x.Extension == "_c" ).Destination;
+			var dropOutput = move
+				? SceneDataFolder.Relocate( oldPath, path )
+				: Directory.Exists( SceneDataFolder.GetPath( oldPath ) );
+			if ( dropOutput && !string.IsNullOrEmpty( compiledDestination ) && File.Exists( compiledDestination ) )
+				File.Delete( compiledDestination );
+		}
+		finally
+		{
+			FileWatch.SuppressWatchers = RealTime.Now;
+		}
 
 		return true;
 	}
@@ -314,14 +422,9 @@ public static partial class EditorUtility
 	/// </summary>
 	public static void CopyAssetToDirectory( Asset asset, string directory, bool overwrite = true )
 	{
-		var absoluteSource = asset.GetSourceFile( true );
-		var absoluteCompiled = asset.GetCompiledFile( true );
-
-		if ( !string.IsNullOrEmpty( absoluteCompiled ) && System.IO.Path.Exists( absoluteCompiled ) )
-			CopyFileToDirectory( absoluteCompiled, directory, overwrite );
-
-		if ( !string.IsNullOrEmpty( absoluteSource ) && System.IO.Path.Exists( absoluteSource ) )
-			CopyFileToDirectory( absoluteSource, directory, overwrite );
+		var source = asset.GetRelatedSourcePath();
+		if ( string.IsNullOrEmpty( source ) ) return;
+		CopyAsset( asset, Path.Combine( directory, Path.GetFileName( source ) ), overwrite );
 	}
 
 	public static Task<bool> PutAsync( Stream fileStream, string endpoint, Sandbox.Utility.DataProgress.Callback progress = null, CancellationToken token = default )

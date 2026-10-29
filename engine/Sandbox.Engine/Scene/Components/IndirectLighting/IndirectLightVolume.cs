@@ -477,6 +477,12 @@ public sealed partial class IndirectLightVolume : Component, Component.ExecuteIn
 	}
 
 
+	internal static string GetProbeTextureFilename( string objectName, string suffix, Guid id, Guid bakeId )
+	{
+		var name = string.Join( "_", (objectName ?? "DDGIVolume").Split( new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries ) );
+		return $"/ddgi/{name}_{suffix}_{id}_{bakeId:N}.vtex_c".ToLowerInvariant();
+	}
+
 	/// <summary>
 	/// Saves texture to disk and reloads it.
 	/// </summary>
@@ -486,7 +492,7 @@ public sealed partial class IndirectLightVolume : Component, Component.ExecuteIn
 			throw new InvalidOperationException( $"Cannot save invalid {suffix} probe texture." );
 
 		var sceneFolder = Scene.Editor.GetSceneFolder();
-		var filename = $"/ddgi/{GameObject?.Name ?? "DDGIVolume"}_{suffix}_{Id}_{bakeId:N}.vtex_c";
+		var filename = GetProbeTextureFilename( GameObject?.Name, suffix, Id, bakeId );
 
 		var vtexBytes = source.SaveToVtex( format );
 		var path = sceneFolder.WriteFile( filename, vtexBytes );
@@ -711,5 +717,3 @@ public sealed partial class IndirectLightVolume : Component, Component.ExecuteIn
 		await Application.Editor.ForEachAsync( components, "Baking Indirect Light Volumes in Scene", ( x, ct ) => x.BakeProbes( ct ) );
 	}
 }
-
-

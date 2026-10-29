@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+using System;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Editor
@@ -34,7 +35,12 @@ namespace Editor
 		/// </summary>
 		JsonElement? Read()
 		{
-			var info = new System.IO.FileInfo( FilePath );
+			// Meta paths are built from asset names, which keep the case they were authored with,
+			// so the file on disk may only match them where the filesystem is case insensitive.
+			// Ask the physical filesystem which spelling actually exists before touching it.
+			var readPath = System.IO.File.Exists( FilePath ) ? FilePath : Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( System.IO.Path.GetFullPath( FilePath ) );
+
+			var info = new System.IO.FileInfo( readPath );
 			var exists = info.Exists;
 			var writeTime = exists ? info.LastWriteTimeUtc : default;
 			var length = exists ? info.Length : 0;
@@ -51,7 +57,7 @@ namespace Editor
 
 			try
 			{
-				var json = System.IO.File.ReadAllText( FilePath );
+				var json = System.IO.File.ReadAllText( readPath );
 
 				using var document = JsonDocument.Parse( json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip } );
 				var root = document.RootElement.Clone();
@@ -87,18 +93,39 @@ namespace Editor
 
 		void Save( JsonObject obj )
 		{
+			// Serialize in memory first, so a Set that changes nothing skips the
+			// write entirely. Every write bumps mtime and invalidates the native
+			// fingerprint (".meta (file checksum changed)"), which queues a
+			// recompile of all dependents - a no-op rewrite must not do that.
+			byte[] bytes;
+			using ( var stream = new System.IO.MemoryStream() )
+			{
+				using ( Utf8JsonWriter writer = new Utf8JsonWriter( stream, new JsonWriterOptions { Indented = true, SkipValidation = true } ) )
+				{
+					obj.WriteTo( writer );
+				}
+
+				bytes = stream.ToArray();
+			}
+
+			try
+			{
+				if ( System.IO.File.Exists( FilePath ) && System.IO.File.ReadAllBytes( FilePath ).AsSpan().SequenceEqual( bytes ) )
+					return;
+			}
+			catch ( System.IO.IOException )
+			{
+				// Fall through to the write attempt below.
+			}
+
 			const int retries = 10;
 			for ( var i = 0; i < retries; i++ )
 			{
 				try
 				{
-					using ( var stream = System.IO.File.Open( FilePath, System.IO.FileMode.Create ) )
-					{
-						using ( Utf8JsonWriter writer = new Utf8JsonWriter( stream, new JsonWriterOptions { Indented = true, SkipValidation = true } ) )
-						{
-							obj.WriteTo( writer );
-						}
-					}
+					// Write the exact bytes we compared above, so the no-op check and the
+					// write can never disagree about the file's contents.
+					System.IO.File.WriteAllBytes( FilePath, bytes );
 
 					_snapshot = null;
 					return;

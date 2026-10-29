@@ -608,6 +608,8 @@ internal class CloudAssetDirectory : IDisposable
 	/// </summary>
 	internal Package FindPackage( string absolutePath, string relativePath )
 	{
+		// The normalized path is an identity/check key, never a System.IO filename.
+		var physicalPath = absolutePath;
 		absolutePath = absolutePath.NormalizeFilename( true );
 		relativePath = relativePath.NormalizeFilename( true );
 
@@ -618,11 +620,7 @@ internal class CloudAssetDirectory : IDisposable
 		{
 			Log.Warning( $"Was unable to determine package for {relativePath}.. Absolute path: {absolutePath}" );
 
-			try
-			{
-				System.IO.File.Delete( absolutePath );
-			}
-			catch { } // ignore errors, we'll try again next time
+			DeleteOrphanedFile( physicalPath );
 
 			return null;
 		}
@@ -636,6 +634,17 @@ internal class CloudAssetDirectory : IDisposable
 		}
 
 		return null;
+	}
+
+	internal static void DeleteOrphanedFile( string physicalPath )
+	{
+		try
+		{
+			// Prefer the caller's exact spelling, resolving legacy identities only if needed.
+			var path = Sandbox.CaseInsensitivePhysicalFileSystem.ResolveNativeCasing( physicalPath.NormalizeFilename( false, false ) );
+			System.IO.File.Delete( path );
+		}
+		catch { } // ignore errors, we'll try again next time
 	}
 
 	/// <summary>

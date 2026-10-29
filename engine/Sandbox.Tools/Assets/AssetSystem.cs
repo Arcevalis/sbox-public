@@ -1,4 +1,4 @@
-﻿using NativeEngine;
+using NativeEngine;
 using System;
 using System.Collections.Concurrent;
 using System.ComponentModel;
@@ -67,17 +67,35 @@ public static partial class AssetSystem
 	}
 
 
-	static void UpdateAsset( Asset asset )
+	internal static void UpdateAsset( Asset asset )
 	{
+		// The path keys are derived from the asset's identity, which this update can change
+		RemoveAssetPaths( asset );
 		asset.UpdateInternals();
 
-		if ( string.IsNullOrWhiteSpace( asset.Path ) )
+		if ( string.IsNullOrWhiteSpace( asset.Path ) || asset.IsDeleted )
 			return;
 
-		assetsByPath[asset.Path] = asset;
-		assetsByPath[asset.AbsolutePath] = asset;
-		assetsByPath[asset.RelativePath] = asset;
-		assetsByPath[asset.AbsoluteCompiledPath] = asset;
+		foreach ( var path in GetAssetPaths( asset ) )
+		{
+			assetsByPath[path] = asset;
+		}
+	}
+
+	static IEnumerable<string> GetAssetPaths( Asset asset )
+	{
+		return new[] { asset.Path, asset.AbsolutePath, asset.RelativePath, asset.AbsoluteCompiledPath }
+			.Where( path => !string.IsNullOrWhiteSpace( path ) )
+			.Select( path => path.Replace( '\\', '/' ) );
+	}
+
+	internal static void RemoveAssetPaths( Asset asset )
+	{
+		foreach ( var path in GetAssetPaths( asset ) )
+		{
+			// Another asset may already have claimed a reused path.
+			((ICollection<KeyValuePair<string, Asset>>)assetsByPath).Remove( new( path, asset ) );
+		}
 	}
 
 
@@ -94,10 +112,7 @@ public static partial class AssetSystem
 
 		log.Trace( $"Removed: {a}" );
 
-		if ( a.Path is not null ) assetsByPath.TryRemove( a.Path, out _ );
-		if ( a.AbsolutePath is not null ) assetsByPath.TryRemove( a.AbsolutePath, out _ );
-		if ( a.RelativePath is not null ) assetsByPath.TryRemove( a.RelativePath, out _ );
-		if ( a.AbsoluteCompiledPath is not null ) assetsByPath.TryRemove( a.AbsoluteCompiledPath, out _ );
+		RemoveAssetPaths( a );
 
 		// Can it ever come back??
 		UpdateQueue.Remove( a );
@@ -270,11 +285,30 @@ public static partial class AssetSystem
 
 		var ret = Get( asset.GetAssetIndexInt() );
 
+		// The native side never fires AssetAdded for a live registration, so run
+		// the new record through the normal update queue - otherwise its dependency
+		// data is never computed and anything downstream of it (recompile, compiled
+		// output linking) stays broken until the next full scan.
+		UpdateQueue.Add( ret );
+		HasChanges = true;
+
 		// Make sure the ResoureLibrary has proper loaded version, so that properties that target
 		// GameResources do not break child assets if child asset was not loaded with Asset.CreateUI beforehand.
 		ret.TryLoadGameResource( typeof( GameResource ), out _, true );
 
 		return ret;
+	}
+
+	/// <summary>
+	/// Re-run the mod scan - the same pass an editor restart does. Picks up files
+	/// that landed while the editor was running and prunes records whose files
+	/// are gone.
+	/// </summary>
+	[ConCmd( "asset_rescan", Help = "Re-run the asset scan without restarting" )]
+	public static void Rescan()
+	{
+		Log.Info( "Re-running asset scan.." );
+		IAssetSystem.UpdateMods();
 	}
 
 	/// <summary>
@@ -327,6 +361,24 @@ public static partial class AssetSystem
 
 		context.SetCompiler( $"ManagedResourceCompiler" );
 		context.SetExtension( ext );
+	}
+
+	/// <summary>
+	/// Lowercase the file name, keeping directories. Sources keep their case,
+	/// but outputs, references and idents derive from this lowercase identity.
+	/// </summary>
+	internal static string LowercaseAssetFileName( string path ) => path.LowercaseFileName();
+
+	/// <summary>
+	/// Whether the asset's physical source file differs from the lowercase identity
+	/// by case. Native file IO uses the identity spelling, so a mismatch means native
+	/// cannot open the source on a case-sensitive filesystem - managed code must feed
+	/// it from memory instead.
+	/// </summary>
+	internal static bool SourceSpellingDiffersFromIdentity( Asset asset )
+	{
+		var source = asset?.GetSourceFile( true );
+		return !string.IsNullOrEmpty( source ) && !string.Equals( source, LowercaseAssetFileName( source ), StringComparison.Ordinal );
 	}
 
 	/// <summary>
@@ -518,4 +570,3 @@ public static partial class AssetSystem
 		return new EmbeddedAsset( target );
 	}
 }
-

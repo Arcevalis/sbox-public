@@ -235,7 +235,8 @@ public partial class Project
 				foreach ( var file in files )
 				{
 					string ext = Path.GetExtension( file );
-					if ( ext != ".cs" && ext != ".razor" )
+					if ( !string.Equals( ext, ".cs", StringComparison.OrdinalIgnoreCase ) &&
+						!string.Equals( ext, ".razor", StringComparison.OrdinalIgnoreCase ) )
 						continue; // only care about source files
 
 					string path = fs.GetFullPath( file );

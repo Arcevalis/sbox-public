@@ -169,7 +169,9 @@ public sealed partial class Project
 		//
 		try
 		{
-			return Directory.EnumerateFiles( codePath, "*.Server.cs", SearchOption.AllDirectories ).Any();
+			// Match the compiler's suffix recognition, independently of filesystem casing rules.
+			return Directory.EnumerateFiles( codePath, "*", SearchOption.AllDirectories )
+				.Any( path => path.EndsWith( ".Server.cs", StringComparison.OrdinalIgnoreCase ) );
 		}
 		catch ( Exception e )
 		{
